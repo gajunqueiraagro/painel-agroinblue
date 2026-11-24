@@ -7,12 +7,13 @@
  *   · `CartoesDaAprovacao` — o CELULAR (< 900 px): as mesmas linhas da etapa em cartões de 2 linhas (fornecedor + valor · vencimento + o que é
  *     + documento ✓), com a mesma seleção.
  */
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { TextoReservado, reservaDeNumero } from '@/components/ui/regua-tabela';
 import type { LinhaDaDecisao } from '@/components/financeiro-v2/PainelDeDecisao';
 import { decidirAprovacao } from '@/hooks/useAprovacaoDaCpr';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -21,13 +22,19 @@ import { cn } from '@/lib/utils';
 
 export interface LinhaDaEtapa extends LinhaDaDecisao { doc: { nf: boolean; boleto: boolean } }
 
+const RESERVA_DO_TOTAL = `999 selecionados · R$ ${reservaDeNumero(7)},99`;
+
 /** abaixo desta largura, a etapa vira cartões (o mock do celular) */
 export const LARGURA_DOS_CARTOES = 900;
 
 const ddmm = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 
-export function BarraDaAprovacao({ clienteId, selecionadas, onFeito, className }: {
+export function BarraDaAprovacao({ clienteId, selecionadas, onFeito, className, legenda, reservarAprovar }: {
   clienteId: string; selecionadas: readonly { id: string; valor: number }[]; onFeito: () => void; className?: string;
+  /** APROVAR-PAGAMENTOS-V3 — a legenda das siglas da forma, depois do total (a tela própria; a CPR não passa) */
+  legenda?: ReactNode;
+  /** APROVAR-PAGAMENTOS-V3 — o "Aprovar N" com lugar reservado também SEM legenda (o celular da tela própria: marcar não empurra o "Recusar…") */
+  reservarAprovar?: boolean;
 }) {
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -52,12 +59,17 @@ export function BarraDaAprovacao({ clienteId, selecionadas, onFeito, className }
 
   return (
     <div className={cn('flex shrink-0 items-center gap-2 border-t-2 border-t-sky-300 bg-sky-50 px-3 text-[11.5px] dark:bg-sky-950/40', className)} data-testid="bpo-barra-selecao">
-      <b className="shrink-0 whitespace-nowrap tabular-nums" data-testid="bpo-barra-total">{n} {n === 1 ? 'selecionado' : 'selecionados'} · {formatMoeda(total)}</b>
+      <b className="shrink-0 whitespace-nowrap tabular-nums" data-testid="bpo-barra-total">
+        {/* com a legenda ao lado (a tela própria), o total tem LUGAR RESERVADO: marcar não empurra a legenda (UI-SEM-DESLOCAR-01) */}
+        {legenda ? <TextoReservado texto={`${n} ${n === 1 ? 'selecionado' : 'selecionados'} · ${formatMoeda(total)}`} reserva={RESERVA_DO_TOTAL} />
+          : `${n} ${n === 1 ? 'selecionado' : 'selecionados'} · ${formatMoeda(total)}`}
+      </b>
+      {legenda}
       <span className="min-w-0 flex-1 break-words text-[11px] leading-[13px] text-destructive" data-testid="bpo-barra-aviso">{aviso ?? ''}</span>
       <Button size="sm" variant="outline" className="h-6 shrink-0 text-[11px] text-destructive" disabled={ocupado || n === 0}
         onClick={() => { setMotivo(''); setAviso(null); setRecusando(true); }} data-testid="bpo-recusar">Recusar…</Button>
       <Button size="sm" className="h-6 shrink-0 bg-emerald-700 text-[11px] text-white hover:bg-emerald-800" disabled={ocupado || n === 0}
-        onClick={() => void decidir(true, null)} data-testid="bpo-aprovar">Aprovar {n || ''}</Button>
+        onClick={() => void decidir(true, null)} data-testid="bpo-aprovar">Aprovar {legenda || reservarAprovar ? <TextoReservado texto={n || ''} reserva="999" /> : (n || '')}</Button>
       <Dialog open={recusando} onOpenChange={(v) => { if (!v && !ocupado) setRecusando(false); }}>
         <DialogContent className="max-w-[420px]" data-testid="bpo-recusar-dialogo">
           <DialogHeader>

@@ -318,6 +318,25 @@ const CENARIOS = [
   { nome: 'cpr-bpo-pagar', url: 'tela=cpr&bpo=1', tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => { await p.locator('[data-testid="cpr-etapa-pagar"]').click();
       await p.locator('[data-celula-aprovacao], [data-testid="bpo-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(400); } },
+  /* APROVAR-PAGAMENTOS-V3 — a tela própria do aprovador (mock aprovado 24/11): a lista por dia (Venc. em dd/mm: a tabela é `data-dia-mes`, o
+     mock), os cartões do celular, o painel (a NF em PDF + XML = uma aba) e a aba Pagamento (boleto: a linha digitável inteira) */
+  { nome: 'aprovar-v3', url: 'tela=aprovar-v3', tamanhos: [[1126, 579], [1280, 800], [1440, 800], [1920, 1080]],
+    antes: async (p) => { await p.locator('[data-testid="v3-linha"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(300); } },
+  { nome: 'aprovar-v3-celular', url: 'tela=aprovar-v3&semlateral=1&barra=0', tamanhos: [[390, 844], [750, 600]],
+    antes: async (p) => { await p.locator('[data-testid="v3-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(300); } },
+  { nome: 'aprovar-v3-vazio', url: 'tela=aprovar-v3&v=vazio', tamanhos: [[1126, 579]],
+    antes: async (p) => { await p.locator('[data-testid="v3-vazio"]').first().waitFor({ timeout: 20000 }); } },
+  /* no celular a barra lateral não existe (como as outras cenas de celular): a 390 com os 152 px dela o rodapé não cabe */
+  { nome: 'aprovar-v3-vazio-celular', url: 'tela=aprovar-v3&v=vazio&semlateral=1&barra=0', tamanhos: [[390, 844]],
+    antes: async (p) => { await p.locator('[data-testid="v3-vazio"]').first().waitFor({ timeout: 20000 }); } },
+  { nome: 'aprovar-v3-painel', url: 'tela=aprovar-v3', tamanhos: [[1126, 579], [1280, 800], [1920, 1080]], regiao: '[data-testid="v3-painel"]',
+    antes: async (p) => { await p.locator('[data-testid="v3-linha"]').nth(1).click(); await p.locator('[data-testid="v3-ultimos"] table').waitFor({ timeout: 20000 });
+      await p.waitForTimeout(400); } },
+  { nome: 'aprovar-v3-pagamento', url: 'tela=aprovar-v3', tamanhos: [[1126, 579], [1280, 800]], regiao: '[data-testid="v3-painel"]',
+    antes: async (p) => { await p.locator('[data-testid="v3-linha"]').nth(1).click(); await p.locator('[data-testid="v3-aba-pagamento-botao"]').click();
+      await p.locator('[data-testid="v3-aba-pagamento"]').waitFor(); await p.waitForTimeout(300); } },
+  { nome: 'aprovar-v3-painel-celular', url: 'tela=aprovar-v3&semlateral=1&barra=0', tamanhos: [[390, 844]], regiao: '[data-testid="v3-painel"]',
+    antes: async (p) => { await p.locator('[data-testid="v3-cartao"] button').nth(1).click(); await p.locator('[data-testid="v3-painel"]').waitFor(); await p.waitForTimeout(400); } },
   /* REC-COLUNAS-01 — Financeiro › Recorrências, a lista do mês com o pior texto de cada coluna curta, nos sete tamanhos. Descrição,
      Favorecido e a Conta acima da régua cortam com "…" e o inteiro no `title` (regra do Gabriel de 21/10, 07h25): a regra
      `reticencias` fica fora; corte calado, vazamento, número partido, quebra, sobreposição e cabeçalho valem.
