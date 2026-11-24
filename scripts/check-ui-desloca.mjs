@@ -773,6 +773,10 @@ const CENARIOS = [
   { nome: 'contas-modal-cartao', url: 'tela=contas&barra=32&n=longo&v=editar', antes: async (p) => { await p.locator('[data-testid="modal-conta-bancaria"]').waitFor(); await espera(p, 700); },
     estados: [['o cartão', { url: 'tela=contas&barra=32&n=longo&v=editar&cartao=1' }]] },
   { nome: 'cpr', url: 'tela=cpr', auto: true },
+  /* APROVAR-PAGAMENTOS-V3 — abas, filtro (os números do filtro têm lugar reservado), o mês e a seleção (a barra fica sempre; o total muda no lugar dele) */
+  { nome: 'aprovar-v3', url: 'tela=aprovar-v3', antes: async (p) => { await p.locator('[data-testid="v3-linha"]').first().waitFor({ timeout: 20000 }); await espera(p, 400); },
+    auto: true, estados: [['2 marcados', async (p) => { const c = p.locator('[data-testid="v3-linha"] button[role="checkbox"]:not([disabled])'); await c.nth(0).click(); await c.nth(1).click(); }],
+      ['mês seguinte', async (p) => { await p.getByRole('button', { name: 'Mês seguinte' }).click(); await espera(p, 300); }]] },
   { nome: 'mesclar', url: 'tela=mesclar', auto: true },
   /* FIN-NOTA-PDF-01 — o modal da nota: nada anda quando o "Falta:" troca pelo aviso de baixo, quando a faixa "Atualizar este" aparece,
      quando a nota e' barrada (ja' registrada, chave que nao confere) ou no pior caso de texto. Cada um contra a nota recem-aberta. */
