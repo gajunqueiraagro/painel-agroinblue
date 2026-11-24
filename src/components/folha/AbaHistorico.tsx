@@ -87,7 +87,8 @@ export function AbaHistorico({ clienteId, funcionarioId, onEscolher, onFicha }: 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex shrink-0 flex-col gap-1.5 rounded-lg border bg-card px-2 py-1.5" data-testid="folha-historico-faixa">
-        <div className="flex h-[24px] items-center gap-2">
+        {/* Quando não cabe (até 1000px), a linha quebra — pela largura, nunca pelo estado (o seletor e as 6 opções têm largura fixa) */}
+        <div className="flex min-h-[24px] flex-wrap items-center gap-x-2 gap-y-1">
           <div className="w-[280px] shrink-0">
             <SearchableSelect value={funcionarioId ?? ''} onValueChange={v => onEscolher(v || null)} semTodos allLabel="escolha o funcionário" allValue=""
               options={opcoesPessoa} triggerClassName="h-[24px] text-[11px]" />
@@ -97,7 +98,7 @@ export function AbaHistorico({ clienteId, funcionarioId, onEscolher, onFicha }: 
             rotulo: <span className="inline-flex w-[74px] items-center justify-center gap-1">{f.rotulo}
               <TextoReservado texto={hist ? String(contagemDoFiltroTipo(hist.por_tipo, f.valor)) : ''} reserva="999" className="text-[9.5px] opacity-80" /></span>,
           }))} />
-          <span className="max-h-[22px] min-w-0 flex-1 overflow-hidden whitespace-normal text-[9.5px] leading-[11px] text-muted-foreground"
+          <span className="max-h-[22px] min-w-[160px] flex-1 overflow-hidden whitespace-normal text-[9.5px] leading-[11px] text-muted-foreground"
             title={resumo || undefined} data-testid="folha-historico-resumo">
             {pessoa && <>{rotuloSituacao(pessoa)} · {pessoa.admissao
               ? <>admitido <span className="whitespace-nowrap">{dataBR(pessoa.admissao)}</span></> : 'admissão a confirmar'}</>}
@@ -107,7 +108,9 @@ export function AbaHistorico({ clienteId, funcionarioId, onEscolher, onFicha }: 
               onClick={() => onFicha(funcionarioId)}>ficha <ExternalLink className="h-3 w-3" /></button>
           )}
         </div>
-        <div className="flex h-[30px] items-center gap-2">
+        {/* O SeletorPeriodo ano-mês tem DUAS linhas (a barra de 30px + 4px + a linha do chip de 18px, reservada sempre) = 52px: com 30px e
+            items-center ele saía 11px para cima, sobre o resumo (gate 1126×579, "Personalizado…" sobre "Ativo · admitido …"). */}
+        <div className="flex h-[52px] items-start gap-2">
           <div className={cn('min-w-0 flex-1', !periodo && 'opacity-60')} title={periodo ? undefined : 'mostrando todo o período — clique num mês ou ano para recortar'}>
             <SeletorPeriodo modo="ano-mes" periodo={periodo ?? anoInteiro(anoAtual)} onPeriodoChange={setPeriodo} />
           </div>

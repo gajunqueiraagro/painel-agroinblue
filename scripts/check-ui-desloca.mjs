@@ -359,7 +359,8 @@ const CENARIOS = [
     ['busca 0', digitar('[data-testid="folha-busca"]', 'zzzz nada')], ['busca limpa', digitar('[data-testid="folha-busca"]', '')],
     ['fecha a ficha', clicar('[aria-label="Fechar a ficha"]')], ['Ativos', clicar('[data-testid="folha-filtros"] button:has-text("Ativos")')],
   ] })),
-  { nome: 'folha-abas', url: 'tela=folha&v=nj&barra=32&func=f00', estados: [
+  /* a troca de aba muda o CONTEÚDO por desenho; o que não se desloca é a barra das abas (e o cabeçalho dela) */
+  { nome: 'folha-abas', url: 'tela=folha&v=nj&barra=32&func=f00', regiao: '[role="tablist"]', estados: [
     ['aba Histórico', async (p) => { await p.getByRole('tab', { name: /^Histórico/ }).click(); await espera(p, 700); }],
     ['aba Pendências', async (p) => { await p.getByRole('tab', { name: /^Pendências/ }).click(); await espera(p, 700); }],
     ['aba Folha do mês', async (p) => { await p.getByRole('tab', { name: /^Folha do mês/ }).click(); await espera(p, 500); }],
@@ -367,7 +368,9 @@ const CENARIOS = [
   ] },
   ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-historico`, url: `tela=folha&v=${v}&barra=32&aba=historico&func=f00`, estados: [
     ...['Salário', '13º', 'Férias', 'Rescisão', 'Benefícios', 'Tudo'].map((t) => [`tipo ${t}`, clicar(`[data-testid="folha-historico-faixa"] button:has-text("${t}")`)]),
-    ['período 2025', botao(/^2025$/)], ['todo o período', clicar('[data-testid="folha-historico-todo"]')],
+    /* no modo ano-mês o ano é uma caixa de seleção (não há botão "2025"): o recorte é um MÊS da fita */
+    ['período março', clicar('[data-testid="folha-historico-faixa"] [data-testid="seletor-periodo-meses"] > button:nth-child(3)')],
+    ['todo o período', clicar('[data-testid="folha-historico-todo"]')],
   ] })),
   ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-pendencias`, url: `tela=folha&v=${v}&barra=32&aba=pendencias`, estados: [
     ...['Sem cadastro', 'Rescisão a conferir', 'Sugestão (descrição)', 'Sem recibo', 'Documento vence', 'Todas'].map((t) => [t, clicar(`[data-testid="folha-pendencias-filtros"] button:has-text("${t}")`)]),

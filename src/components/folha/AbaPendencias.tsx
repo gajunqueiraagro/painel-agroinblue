@@ -74,12 +74,17 @@ export function AbaPendencias({ clienteId, onFicha }: { clienteId: string; onFic
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="flex h-[34px] shrink-0 items-center gap-2 rounded-lg border bg-card px-2" data-testid="folha-pendencias-filtros">
-        <Segmentado altura={22} fonte={10} valor={filtro} onEscolher={setFiltro} opcoes={opcoes.map(o => ({
-          valor: o.valor,
-          rotulo: <span className="inline-flex w-[128px] items-center justify-center gap-1 overflow-hidden whitespace-nowrap">{o.rotulo}
-            <TextoReservado texto={data ? contagem[o.valor].toLocaleString('pt-BR') : ''} reserva="999" className="font-semibold" /></span>,
-        }))} />
+      {/* As 6 opções têm largura FIXA (128px) e a contagem reservada, em DOIS grupos de 3: quando não cabem (750/814), a faixa quebra entre
+          os grupos — pela largura da janela, nunca pelo estado. Sem a quebra a PÁGINA rolava de lado; quebrar DENTRO do Segmentado (altura
+          fixa, overflow-hidden) escondia a 2ª linha e o clique nela rolava o grupo (gate desloca). */}
+      <div className="flex min-h-[34px] shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-card px-2 py-[5px]" data-testid="folha-pendencias-filtros">
+        {[opcoes.slice(0, 3), opcoes.slice(3)].map((grupo, i) => (
+          <Segmentado key={i} altura={22} fonte={10} valor={filtro} onEscolher={setFiltro} opcoes={grupo.map(o => ({
+            valor: o.valor,
+            rotulo: <span className="inline-flex w-[128px] items-center justify-center gap-1 overflow-hidden whitespace-nowrap">{o.rotulo}
+              <TextoReservado texto={data ? contagem[o.valor].toLocaleString('pt-BR') : ''} reserva="999" className="font-semibold" /></span>,
+          }))} />
+        ))}
         <span className="min-w-0 flex-1 truncate text-right text-[10px] text-muted-foreground" title="cada ação passa pela função do banco, com prévia e trilha">
           {data && data.descartadas > 0 ? `${data.descartadas.toLocaleString('pt-BR')} descartadas` : ''}
         </span>
