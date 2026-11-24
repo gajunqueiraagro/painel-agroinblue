@@ -1,7 +1,5 @@
 import { casaNaBusca } from '@/lib/texto/busca';
 import { CabecalhoDaTela } from '@/components/ui/cabecalho-da-tela';
-import { useBpoAtivo } from '@/hooks/useBpoAtivo';
-import { EnviarParaAprovacaoDialog } from '@/components/financeiro-v2/EnviarParaAprovacaoDialog';
 import type { ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -70,7 +68,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2, ListChecks, Send } from 'lucide-react';
+import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2, ListChecks } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -1570,9 +1568,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [todosDoFiltro, setTodosDoFiltro] = useState(false);
   const [marcandoTodos, setMarcandoTodos] = useState(false);
   const [trocarAberto, setTrocarAberto] = useState(false);
-  /* BPO-APROVACAO-01 P2 — "Enviar para aprovação" dos marcados (só com o BPO ligado no cliente) */
-  const bpoAtivo = useBpoAtivo(clienteAtual?.id);
-  const [enviarAberto, setEnviarAberto] = useState(false);
+  /* BPO-FUNCIONAR-01 — o "Enviar para aprovação" SAIU: toda saída a pagar entra sozinha na aprovação pela regra (118500) */
   const idsMarcados = useMemo(() => [...selectedIds], [selectedIds]);   // estavel: o modal simula de novo so' quando a selecao muda
   const todosDoFiltroRef = useRef(false);
   todosDoFiltroRef.current = todosDoFiltro;
@@ -3382,10 +3378,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               ocDe={id => lancamentosComOC.get(id)} onAbrirOC={podeAbrirOC ? abrirOCFinanceiro : undefined} />
           )}
 
-          {enviarAberto && clienteAtual?.id && (
-            <EnviarParaAprovacaoDialog aberto={enviarAberto} onFechar={() => setEnviarAberto(false)} clienteId={clienteAtual.id}
-              ids={[...selectedIds]} onEnviou={(frase) => { toast.success(frase); setSelectedIds(new Set()); }} />
-          )}
           {/* Bulk action bar */}
           {someSelected && (
             <div className="flex flex-wrap items-center gap-2 px-2 py-1.5 bg-muted border border-border rounded-lg" data-testid="barra-lote">
@@ -3411,14 +3403,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 onClick={() => { setMotivoLote(''); setConfirmDeleteOpen(true); }}>
                 <Trash2 className="h-3 w-3" /> Excluir selecionados
               </Button>
-              {/* BPO-APROVACAO-01 P2 — enviar as marcadas para a fila do aprovador (a prévia diz quantas entram e o que fica de fora) */}
-              {bpoAtivo && (
-                <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2" disabled={todosDoFiltro} data-testid="lote-enviar-aprovacao"
-                  title={todosDoFiltro ? 'Com "todos do filtro" marcado, só o Trocar fornecedor vale (as outras ações são da página).' : 'Mandar as marcadas para a fila de aprovação'}
-                  onClick={() => setEnviarAberto(true)}>
-                  <Send className="h-3 w-3" /> Enviar para aprovação
-                </Button>
-              )}
               {/* FORN-TROCAR-LOTE-01 — o "…" da barra: Trocar fornecedor (as marcadas, ou todos do filtro) */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

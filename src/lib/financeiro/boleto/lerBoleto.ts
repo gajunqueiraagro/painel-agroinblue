@@ -162,11 +162,22 @@ export function lerBoleto(paginas: ItemDoDanfe[][]): LeituraDoBoleto {
  * BOLETO D3d (D7) — o PDF com VÁRIOS boletos: todas as linhas com DV certo (sem repetir o título) e as partes lidas como no `lerBoleto`
  * (o mesmo emissor nas fichas do mesmo arquivo). Sem nenhuma linha = `boletos` vazio (a caixa trata como "não é boleto"). Pura.
  */
-export interface LeituraDosBoletos { boletos: BoletoNormalizado[]; beneficiario: ParteDoBoleto; pagador: ParteDoBoleto }
+export interface LeituraDosBoletos {
+  boletos: BoletoNormalizado[]; beneficiario: ParteDoBoleto; pagador: ParteDoBoleto;
+  /** BOLETO-SEPARAR-01: a página (a partir de 1) em que a linha de cada boleto aparece primeiro, na ordem de `boletos`; e o total do PDF */
+  paginaDeCada: number[]; totalDePaginas: number;
+}
 export function lerBoletos(paginas: ItemDoDanfe[][]): LeituraDosBoletos {
   const um = lerBoleto(paginas);
-  const texto = paginas.map((p) => p.map((t) => t.str).join(' ')).join('\n');
-  return { boletos: acharBoletosNoTexto(texto), beneficiario: um.beneficiario, pagador: um.pagador };
+  const textos = paginas.map((p) => p.map((t) => t.str).join(' '));
+  const boletos = acharBoletosNoTexto(textos.join('\n'));
+  const porPagina = textos.map((t) => acharBoletosNoTexto(t).map((b) => b.codigo_barras));
+  /* a linha que só se forma juntando duas páginas (nunca visto) fica na última página: o arquivo dela leva o resto, nunca menos */
+  const paginaDeCada = boletos.map((b) => {
+    const i = porPagina.findIndex((cs) => cs.includes(b.codigo_barras));
+    return i < 0 ? paginas.length : i + 1;
+  });
+  return { boletos, beneficiario: um.beneficiario, pagador: um.pagador, paginaDeCada, totalDePaginas: paginas.length };
 }
 
 /** A leitura no formato do `p_leitura` da `fn_boleto_entrar` (o banco reconfere o DV; os campos vazios não vão). */
