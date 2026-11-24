@@ -84,7 +84,7 @@ const dataBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/')
 function larguraDaColunaDocumento(ls: readonly LinhaDeDocumento[]): number {
   const uma = (l: LinhaDeDocumento) => {
     const d = l.principal;
-    const selos = (l.pdf ? 28 : 0) + (l.xml ? 30 : 0) + ((d.ligadoAQtd ?? 1) > 1 ? 66 : 0) + (d.origem === 'operacao' ? 70 : 0);
+    const selos = (l.pdf ? 28 : 0) + (l.xml ? 30 : 0) + ((d.ligadoAQtd ?? 1) > 1 ? 66 : 0) + (d.origem === 'operacao' ? 70 : 0) + (d.origem === 'folha' ? 52 : 0);
     return Math.ceil(identidade(d).length * 6.2) + selos + 18;
   };
   return Math.max(96, ...ls.map(uma));
@@ -296,6 +296,11 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
                     {d.ligadoAQtd} parcelas
                   </span>
                 )}
+                {/* FOLHA-DOC-VIEW-01 — a página do recibo/holerite do contador: mora na Folha (só se lê e abre aqui) */}
+                {d.origem === 'folha' && (
+                  <span className="shrink-0 rounded-full bg-violet-100 px-1.5 text-[9.5px] leading-[13px] text-violet-800" data-testid="selo-folha"
+                    title="Página do recibo do contador, guardada na Folha de pagamento — para trocar ou cancelar, use a Folha">da folha</span>
+                )}
                 {d.origem === 'operacao' && (
                   <button type="button"
                     title="Este documento é da operação comercial — abrir a OC na aba Documentos"
@@ -343,14 +348,14 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
                     className="hover:text-foreground disabled:opacity-30">
                     <Paperclip className="h-3 w-3" />
                   </button>
-                  <button type="button" title="Editar documento" aria-label="Editar documento"
-                    disabled={somenteLeitura} onClick={() => { setEditando(d); setFormAberto(true); }}
+                  <button type="button" title={d.origem === 'folha' ? 'A página da folha se troca na Folha de pagamento' : 'Editar documento'} aria-label="Editar documento"
+                    disabled={somenteLeitura || d.origem === 'folha'} onClick={() => { setEditando(d); setFormAberto(true); }}
                     className="hover:text-foreground disabled:opacity-30">
                     <Pencil className="h-3 w-3" />
                   </button>
                   {/* ⚠ NF DA COMPRA NÃO SE CANCELA PELO CARTÃO (decisão do Gabriel, PR 2b): ela está em N
                       parcelas, e o caminho é o lápis, que avisa e pede o motivo. */}
-                  {l.membros.every((m) => (m.ligadoAQtd ?? 1) <= 1) && (
+                  {d.origem !== 'folha' && l.membros.every((m) => (m.ligadoAQtd ?? 1) <= 1) && (
                     <button type="button" title="Cancelar documento" aria-label="Cancelar documento"
                       disabled={somenteLeitura} onClick={() => { setCancelando(l); setMotivo(''); }}
                       className="hover:text-destructive disabled:opacity-30">
