@@ -92,6 +92,23 @@ describe('retorno da distribuição', () => {
     expect(() => lerRetornoDistDFe('<html><title>403 - Forbidden</title></html>')).toThrow(/403 - Forbidden/);
     expect(() => lerRetornoDistDFe('<retDistDFeInt><cStat>138</cStat><loteDistDFeInt><docZip schema="resNFe_v1.01.xsd">x</docZip></loteDistDFeInt></retDistDFeInt>')).toThrow(/NSU/);
   });
+  /* DFE-CONSCHNFE-SEM-NSU (24/11, NF 14.835 da Vera): na consulta pela CHAVE a SEFAZ manda o docZip só com o schema; o leitor aceita com
+     NSU nulo SÓ quando pedido (`semNsu`); na distNSU o docZip sem NSU segue erro (o teste acima) */
+  it('consChNFe: docZip sem NSU lido com NSU nulo; sem schema segue erro; sem a opção segue erro', async () => {
+    const ret = `<retDistDFeInt><tpAmb>1</tpAmb><cStat>138</cStat><xMotivo>Documento localizado</xMotivo><loteDistDFeInt>`
+      + `<docZip schema="resNFe_v1.01.xsd">${await zipar(RES_NFE)}</docZip></loteDistDFeInt></retDistDFeInt>`;
+    const r = lerRetornoDistDFe(ret, { semNsu: true });
+    expect(r.cStat).toBe('138');
+    expect(r.docs).toHaveLength(1);
+    expect(r.docs[0].nsu).toBeNull();
+    const lido = lerDocumento(r.docs[0], await abrirDocZip(r.docs[0].base64));
+    expect(lido.tipo === 'nota' && lido.linha.chave).toBe(CHAVE);
+    expect(lido.tipo === 'nota' && lido.linha.nsu).toBeNull();
+    expect(lido.tipo === 'nota' && lido.linha.situacao).toBe('resumo');
+    expect(() => lerRetornoDistDFe(ret)).toThrow(/NSU/);
+    expect(() => lerRetornoDistDFe('<retDistDFeInt><cStat>138</cStat><loteDistDFeInt><docZip NSU="000000000000001">x</docZip></loteDistDFeInt></retDistDFeInt>', { semNsu: true }))
+      .toThrow(/schema/);
+  });
   it('esquema desconhecido passa como "outro"; resNFe sem chave = erro', () => {
     expect(lerDocumento({ nsu: 1n, esquema: 'resCTe_v1.00.xsd' }, '<x/>')).toEqual({ tipo: 'outro', esquema: 'resCTe_v1.00.xsd' });
     expect(() => lerDocumento({ nsu: 1n, esquema: 'resNFe_v1.01.xsd' }, '<resNFe><chNFe>1</chNFe></resNFe>')).toThrow(/chave/);

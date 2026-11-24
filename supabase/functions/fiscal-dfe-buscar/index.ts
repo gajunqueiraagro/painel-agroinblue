@@ -107,8 +107,8 @@ Deno.serve(async (req) => {
         p_titular_id: r.titularId, p_cstat: r.cstat,
         p_ult_nsu: r.ultNsu === null ? null : r.ultNsu.toString(), p_max_nsu: r.maxNsu === null ? null : r.maxNsu.toString(),
         p_nao_antes_de: r.naoAntesDe,
-        p_documentos: r.documentos.map((d) => ({ ...d, nsu: d.nsu.toString() })),
-        p_eventos: r.eventos.map((e) => ({ ...e, nsu: e.nsu.toString() })),
+        p_documentos: r.documentos.map((d) => ({ ...d, nsu: d.nsu === null ? null : d.nsu.toString() })),
+        p_eventos: r.eventos.map((e) => ({ ...e, nsu: e.nsu === null ? null : e.nsu.toString() })),
         p_certificado_id: r.certificadoId, p_detalhe: r.detalhe,
       });
       if (error) throw new Error(error.message);

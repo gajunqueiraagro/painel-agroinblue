@@ -69,12 +69,14 @@ const atributo = (abertura: string, nome: string): string | null => {
   return m ? desescapar(m[1]) : null;
 };
 
-export interface DocZip { nsu: bigint; esquema: string; base64: string }
+/** DFE-CONSCHNFE-SEM-NSU (24/11): na consulta pela CHAVE (consChNFe) a SEFAZ manda o docZip SEM o atributo NSU (a nota não entra na sequência
+ *  de NSU do titular) — aí o NSU é nulo; na distNSU/consNSU ele segue obrigatório. */
+export interface DocZip { nsu: bigint | null; esquema: string; base64: string }
 export interface RetornoDistDFe {
   cStat: string; xMotivo: string; ultNsu: bigint | null; maxNsu: bigint | null; dhResp: string | null; docs: DocZip[];
 }
 /** o retorno da SEFAZ (o envelope inteiro ou só o retDistDFeInt). Retorno sem retDistDFeInt (SOAP Fault, HTML do IIS) = erro. */
-export function lerRetornoDistDFe(xml: string): RetornoDistDFe {
+export function lerRetornoDistDFe(xml: string, opcoes: { semNsu?: boolean } = {}): RetornoDistDFe {
   const ret = bloco(xml, 'retDistDFeInt');
   if (ret === null) {
     const falha = texto(xml, 'Text') ?? texto(xml, 'faultstring') ?? texto(xml, 'title');
@@ -86,7 +88,7 @@ export function lerRetornoDistDFe(xml: string): RetornoDistDFe {
   const docs: DocZip[] = [];
   for (const m of ret.matchAll(/<(?:[\w.-]+:)?docZip(\s[^>]*)>([\s\S]*?)<\/(?:[\w.-]+:)?docZip>/g)) {
     const nsu = n(atributo(m[1], 'NSU')); const esquema = atributo(m[1], 'schema');
-    if (nsu === null || !esquema) throw new Error('docZip sem NSU ou sem schema.');
+    if (!esquema || (nsu === null && !opcoes.semNsu)) throw new Error('docZip sem NSU ou sem schema.');
     docs.push({ nsu, esquema, base64: m[2].replace(/\s+/g, '') });
   }
   return { cStat, xMotivo: texto(ret, 'xMotivo') ?? '', ultNsu: n(texto(ret, 'ultNSU')), maxNsu: n(texto(ret, 'maxNSU')),
@@ -116,11 +118,11 @@ export async function abrirDocZip(base64: string): Promise<string> {
 /* ---------- o documento → a caixa de entrada ---------- */
 export type SituacaoNaCaixa = 'resumo' | 'xml' | 'cancelado_na_sefaz';
 export interface LinhaDaCaixa {
-  tipo: 'nfe'; chave: string; nsu: bigint; esquema: string; situacao: SituacaoNaCaixa;
+  tipo: 'nfe'; chave: string; nsu: bigint | null; esquema: string; situacao: SituacaoNaCaixa;
   emitente_documento: string | null; emitente_nome: string | null; emissao: string | null; valor_cent: number | null;
   resumo: Record<string, string | null>; xml: string | null;
 }
-export interface EventoDaCaixa { chave: string; nsu: bigint; esquema: string; tpEvento: string; descricao: string | null; em: string | null }
+export interface EventoDaCaixa { chave: string; nsu: bigint | null; esquema: string; tpEvento: string; descricao: string | null; em: string | null }
 export type DocumentoLido = { tipo: 'nota'; linha: LinhaDaCaixa } | { tipo: 'evento'; evento: EventoDaCaixa } | { tipo: 'outro'; esquema: string };
 
 export const EVENTO_CANCELAMENTO = '110111';
@@ -133,12 +135,12 @@ export function centavos(v: string | null): number | null {
 const dataDe = (dh: string | null) => (dh && /^\d{4}-\d{2}-\d{2}/.test(dh) ? dh.slice(0, 10) : null);
 const documentoDe = (xml: string | null) => texto(xml, 'CNPJ') ?? texto(xml, 'CPF');
 
-export function lerDocumento(doc: { nsu: bigint; esquema: string }, xml: string): DocumentoLido {
+export function lerDocumento(doc: { nsu: bigint | null; esquema: string }, xml: string): DocumentoLido {
   const esquema = doc.esquema;
   if (esquema.startsWith('resNFe')) {
     const r = bloco(xml, 'resNFe');
     const chave = texto(r, 'chNFe');
-    if (!r || !chave || !/^\d{44}$/.test(chave)) throw new Error(`resNFe sem chave válida (NSU ${doc.nsu}).`);
+    if (!r || !chave || !/^\d{44}$/.test(chave)) throw new Error(`resNFe sem chave válida (NSU ${doc.nsu ?? 'sem'}).`);
     const cSit = texto(r, 'cSitNFe');
     const resumo = { cSitNFe: cSit, tpNF: texto(r, 'tpNF'), IE: texto(r, 'IE'), dhEmi: texto(r, 'dhEmi'), vNF: texto(r, 'vNF'),
       nProt: texto(r, 'nProt'), dhRecbto: texto(r, 'dhRecbto'), digVal: texto(r, 'digVal') };
@@ -151,7 +153,7 @@ export function lerDocumento(doc: { nsu: bigint; esquema: string }, xml: string)
     const idChave = inf ? atributo(inf[1], 'Id')?.replace(/^NFe/, '') ?? null : null;
     const prot = bloco(xml, 'infProt');
     const chave = texto(prot, 'chNFe') ?? idChave;
-    if (!chave || !/^\d{44}$/.test(chave)) throw new Error(`procNFe sem chave válida (NSU ${doc.nsu}).`);
+    if (!chave || !/^\d{44}$/.test(chave)) throw new Error(`procNFe sem chave válida (NSU ${doc.nsu ?? 'sem'}).`);
     const emit = bloco(xml, 'emit'); const ide = bloco(xml, 'ide'); const tot = bloco(xml, 'ICMSTot');
     const dhEmi = texto(ide, 'dhEmi') ?? texto(ide, 'dEmi');
     const resumo = { tpNF: texto(ide, 'tpNF'), nNF: texto(ide, 'nNF'), serie: texto(ide, 'serie'), dhEmi, vNF: texto(tot, 'vNF'),
@@ -162,7 +164,7 @@ export function lerDocumento(doc: { nsu: bigint; esquema: string }, xml: string)
   if (esquema.startsWith('resEvento') || esquema.startsWith('procEventoNFe')) {
     const ev = bloco(xml, 'resEvento') ?? bloco(xml, 'infEvento');
     const chave = texto(ev, 'chNFe'); const tp = texto(ev, 'tpEvento');
-    if (!chave || !/^\d{44}$/.test(chave) || !tp) throw new Error(`evento sem chave ou tipo (NSU ${doc.nsu}).`);
+    if (!chave || !/^\d{44}$/.test(chave) || !tp) throw new Error(`evento sem chave ou tipo (NSU ${doc.nsu ?? 'sem'}).`);
     return { tipo: 'evento', evento: { chave, nsu: doc.nsu, esquema, tpEvento: tp, descricao: texto(ev, 'xEvento') ?? texto(ev, 'descEvento'),
       em: texto(ev, 'dhEvento') } };
   }
