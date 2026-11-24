@@ -2924,15 +2924,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 /* FIN-V2-DESEMPENHO-01b: no Ampliado 140→128 e 202→190 (com Fornecedor 116→104 e 177→165): as datas em dd/mm/aaaa
                     tomaram 18px e o Valor 6; a soma do Ampliado volta à de antes. Na normal, Produto 128→123, Fornecedor 122→117 e
                     Classificação 124→120: a soma vai a 916, dentro dos 919 medidos na janela do Gabriel (nomes cortam com o `title`) */
-                modoIntensivo ? (contasAmpliado ? 120 : 182) : 115,
+                modoIntensivo ? (contasAmpliado ? 102 : 164) : 97,
                 /* Fornecedor 140→120 — FIN-LISTA-VISUAL-06; 120→100 no fix1. Trunca com o nome inteiro no `title`. */
                 /* ⚠ 100 → 124 — PARC-LIVRES-01 fechamento C (pedido do Gabriel: Fornecedor mais largo). Os 24px saem de Macro (49→33,
                     que já cortava em 5.250 de 5.251 linhas do NJ) e de Centro (49→41). Medido no NJ a 1.126. */
-                modoIntensivo ? (contasAmpliado ? 97 : 158) : 110,
+                modoIntensivo ? (contasAmpliado ? 80 : 141) : 93,
                 /* Macro e Centro 66→56, a 8,5px (`.celula-classe`, exceção ao piso só nesta lista): cortam com o texto inteiro no
                     `title`, como já cortavam — medido no NJ: 3 das 11 macros cabiam em 66 a 9px, e as mesmas 3 cabem em 56 a 8,5. */
                 /* FIN-V2-COLUNAS-02: Macro e Centro viram UMA coluna, a Classificação no nível escolhido. */
-                modoIntensivo ? (contasAmpliado ? 109 : 170) : 113,
+                modoIntensivo ? (contasAmpliado ? 92 : 153) : 96,
                 /* FIN-V2-HOMOLOG-FIX-01: a coluna OC (58px, do FIN-V2-SEM-CAIXA-01) SAIU — empurrava a tabela para a rolagem
                     horizontal e escondia o "…" (onde mora "Criar OC a partir deste lançamento"). A OC continua a um clique: o
                     icone ao lado do produto abre a operacao na aba Financeiro, e o "…" ganhou "Abrir OC". */
@@ -2989,6 +2989,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     já cortavam e seguem cortando (dívida FIN-V2-DOC-CORTA-01). */
                 /* FIN-V2-COLUNAS-02: Doc. 90→78. */
                 78,
+                /* FIN-PRONTO-PAGAR-01 PR B (Gabriel 24/11 09:01) — a coluna FORMA (ponto + sigla: Bol · Pix · DA · TED · Créd · Déb · Din · Out · —),
+                    52px. A soma NÃO cresce: Produto −18, Fornecedor −17 e a Classificação −17 (as três cortam com o texto inteiro no `title`). */
+                52,
                 /* ⚠ 64 → 84 → 77. Com 64 o status saía cortado colado nos pontinhos ("Ag"); o
                     PR-FIN-V2-STATUS-PGTO-01 foi a 84 pela pílula em "Programado", e o fix1 a 77: previsto, programado e agendado viraram
                     TEXTO (sem o padding da pílula), e a caixa ficou só para realizado e conciliado.
@@ -3037,6 +3040,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       de grupo antes dela e antes do Status */}
                   <ThDaLista recuo="px-0.5" separador title="Documentos anexados: clique no clipe para abrir">Anexo</ThDaLista>
                   <ThDaLista recuo="px-1" ordenar={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></ThDaLista>
+                  <ThDaLista recuo="px-1" title="Forma de pagamento · ponto verde = pronto para pagar, laranja = falta algo (passe o mouse na linha: diz o quê)">Forma</ThDaLista>
                   <ThDaLista recuo="px-1" separador ordenar={() => toggleSort('status')}>Status<SortIndicator field="status" /></ThDaLista>
                   {/* ⚠ O "…" NÃO É FIXO — decisão soberana do Gabriel, 30/09 (PR-FIN-V2-STATUS-PGTO-01-fix1),
                       e revoga a do FIN-V2-HOMOLOG-FIX-01 ("fixo à direita, nunca some na rolagem"). Fixo, ele
@@ -3052,7 +3056,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   return (<>
                 {linhasDaGrade.length === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={modoIntensivo && contasAmpliado ? 17 : 15} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={modoIntensivo && contasAmpliado ? 18 : 16} className="text-center text-muted-foreground py-4 text-[10px]">
                       {paginaDaLista ? 'Nenhum lançamento neste filtro' : (listaV2.erro ?? 'Carregando…')}
                     </td>
                   </tr>
@@ -3246,6 +3250,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </td>
                         {/* Doc. à direita: é número, e número se lê alinhado pela unidade. */}
                         <CelulaDoc rotulo={doc.rotulo} titulo={doc.titulo} />
+                        {/* FIN-PRONTO-PAGAR-01 PR B — a coluna Forma: o ponto do pronto para pagar + a sigla; o clique abre na aba Pagamento */}
+                        <td className="px-1 py-1 align-middle text-[10px] leading-tight whitespace-nowrap" data-testid="celula-forma">
+                          <PontoProntoPagar codigo={codigoProntoDaLinha(l)} forma={formaEfetivaDaLinha(l) ?? l.forma_pagamento ?? null}
+                            onAbrir={() => { setAbaDoLancamento('pagamento'); openEdit(l); }} />
+                        </td>
                         {/* `truncate` também aqui: a tabela é `tableLayout: fixed`, então a
                             faixa não cede — sem truncar, "Realizado" transbordaria a célula em
                             vez de a alargar. É o mesmo raciocínio do `min-w-0` da barra, do
@@ -3264,14 +3273,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <CelulaStatus separador title={[stTitle ?? (stPilula || stEstagio ? null : stLabel), icone ? `origem: ${icone.significado}` : null].filter(Boolean).join(' · ') || undefined}
                             onClick={icone ? (e) => e.stopPropagation() : undefined}>
                           {(() => {
-                            /* FIN-PRONTO-PAGAR-01 — o ponto ANTES do status (lugar reservado mesmo sem ponto); o clique abre na aba Pagamento */
-                            const rotulo = (
-                              <span className="flex min-w-0 items-center gap-0.5" title={stLabel}>
-                                <PontoProntoPagar codigo={codigoProntoDaLinha(l)} forma={formaEfetivaDaLinha(l)}
-                                  onAbrir={() => { setAbaDoLancamento('pagamento'); openEdit(l); }} />
-                                <span className="min-w-0 flex-1"><RotuloDoStatus st={st} /></span>
-                              </span>
-                            );
+                            const rotulo = <RotuloDoStatus st={st} />;
                             if (!icone) return rotulo;
                             return (
                               <MinimodalOrigemLancamento

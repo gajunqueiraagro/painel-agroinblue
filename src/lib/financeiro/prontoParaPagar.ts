@@ -28,12 +28,12 @@ export const ehPronto = (c: CodigoPronto): boolean => !c.startsWith('falta');
 /** O que o ponto diz (o `title`): a 1ª linha (pronto / falta), a forma e o que conta. */
 export function fraseDoPronto(c: CodigoPronto, forma: string | null): string {
   const motivo: Record<CodigoPronto, string> = {
-    pronto_boleto: 'boleto ligado',
+    pronto_boleto: 'boleto ligado ou anexado',
     nada_a_fazer: `${forma ?? 'débito/cartão/dinheiro'}: nada a fazer`,
     pronto_dados_lancamento: 'dados de pagamento no próprio lançamento',
     pronto_chave_cadastro: 'PIX: chave do cadastro do fornecedor',
     pronto_dados_bancarios: 'TED: banco, agência e conta do cadastro',
-    falta_boleto: 'falta ligar o boleto',
+    falta_boleto: 'falta o boleto (ligar ou anexar)',
     falta_chave: 'falta a chave PIX no cadastro do fornecedor',
     falta_dados_bancarios: 'falta banco, agência e conta do favorecido',
     falta_forma: 'falta a forma de pagamento',
@@ -60,3 +60,21 @@ export function lerResumoPronto(v: unknown): ResumoPronto | null {
 
 export const FILTROS_PRONTO = ['todos', 'prontos', 'faltando'] as const;
 export type FiltroPronto = (typeof FILTROS_PRONTO)[number];
+
+/**
+ * FIN-PRONTO-PAGAR-01 PR B (Gabriel 24/11 09:01) — a SIGLA da coluna Forma: Bol · Pix · DA (débito automático) · TED · Créd (cartão de
+ * crédito) · Déb (débito: cartão de débito / débito em conta) · Din · Out · "—" sem forma. "Cart" não existe. Cobre as 8 formas de
+ * `FORMAS_PAGAMENTO_V2` e as grafias antigas da coluna (texto livre: "PIX/Transferência Bancária", "Cartão de Credito", "Débito em Conta"…).
+ */
+export function siglaDaForma(forma: string | null | undefined): string {
+  const f = (forma ?? '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!f) return '—';
+  if (f.includes('boleto')) return 'Bol';
+  if (f.includes('pix')) return 'Pix';
+  if (f.includes('automatico')) return 'DA';
+  if (f.includes('debito')) return 'Déb';
+  if (f.includes('credito') || f.includes('cartao')) return 'Créd';
+  if (f.includes('ted') || f.includes('transf') || f === 'doc') return 'TED';
+  if (f.includes('dinheiro')) return 'Din';
+  return 'Out';
+}

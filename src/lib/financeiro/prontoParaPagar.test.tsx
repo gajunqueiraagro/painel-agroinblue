@@ -8,7 +8,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { codigoProntoDaLinha, ehPronto, formaEfetivaDaLinha, fraseDoPronto, lerResumoPronto } from '@/lib/financeiro/prontoParaPagar';
+import { codigoProntoDaLinha, ehPronto, formaEfetivaDaLinha, fraseDoPronto, lerResumoPronto, siglaDaForma } from '@/lib/financeiro/prontoParaPagar';
+import { FORMAS_PAGAMENTO_V2 } from '@/lib/financeiro/formasPagamentoV2';
 import { filtrosDaPaginaV2, lerPaginaV2, precisaDosTotaisV2, type FiltrosDaTelaV2 } from '@/lib/financeiro/listaPaginaV2';
 import { PontoProntoPagar } from '@/components/financeiro-v2/PontoProntoPagar';
 import type { LancamentoV2 } from '@/hooks/useFinanceiroV2';
@@ -34,9 +35,17 @@ describe('FIN-PRONTO-PAGAR-01 — a lib', () => {
     expect(ehPronto('falta_forma')).toBe(false);
   });
   it('P2 a frase', () => {
-    expect(fraseDoPronto('pronto_boleto', 'Boleto')).toBe('Pronto para pagar\nForma: Boleto\nboleto ligado');
+    expect(fraseDoPronto('pronto_boleto', 'Boleto')).toBe('Pronto para pagar\nForma: Boleto\nboleto ligado ou anexado');
     expect(fraseDoPronto('falta_forma', null)).toBe('Falta algo para pagar\nForma: em branco\nfalta a forma de pagamento\nClique para resolver na aba Pagamento.');
     expect(fraseDoPronto('nada_a_fazer', 'Débito Automático')).toMatch(/Débito Automático: nada a fazer/);
+  });
+  it('P2b a sigla da coluna Forma: as 8 formas, as grafias antigas, "Cart" não existe', () => {
+    expect(FORMAS_PAGAMENTO_V2.map(siglaDaForma)).toEqual(['Pix', 'Créd', 'Bol', 'DA', 'Déb', 'TED', 'Din', 'Out']);
+    expect(['PIX/Transferência Bancária', 'Cartão de Credito', 'Cartão', 'Credito', 'Débito em Conta', 'Cartão de Débito', 'Transferência Bancária', 'TED']
+      .map(siglaDaForma)).toEqual(['Pix', 'Créd', 'Créd', 'Créd', 'Déb', 'Déb', 'TED', 'TED']);
+    expect(siglaDaForma(null)).toBe('—');
+    expect(siglaDaForma('  ')).toBe('—');
+    expect(FORMAS_PAGAMENTO_V2.map(siglaDaForma)).not.toContain('Cart');
   });
   it('P3 a contagem do recorte', () => {
     expect(lerResumoPronto({ prontos: 106, prontos_valor: 97496.99, faltando: 370, faltando_valor: 1649659.83 }))
@@ -67,6 +76,7 @@ describe('FIN-PRONTO-PAGAR-01 — o ponto', () => {
     const { rerender } = render(<div onClick={daLinha}><PontoProntoPagar codigo="falta_chave" forma="PIX" onAbrir={abrir} /></div>);
     const p = screen.getByTestId('ponto-pronto');
     expect(p.dataset.pronto).toBe('nao');
+    expect(p.textContent).toBe('Pix');
     expect(p.getAttribute('title')).toMatch(/falta a chave PIX/);
     fireEvent.click(p);
     expect(abrir).toHaveBeenCalledTimes(1);
@@ -75,6 +85,7 @@ describe('FIN-PRONTO-PAGAR-01 — o ponto', () => {
     expect(screen.getByTestId('ponto-pronto').dataset.pronto).toBe('sim');
     rerender(<div onClick={daLinha}><PontoProntoPagar codigo={null} forma={null} onAbrir={abrir} /></div>);
     expect(screen.queryByTestId('ponto-pronto')).toBeNull();
+    expect(screen.getByTestId('forma-sem-ponto').textContent).toBe('—');
     expect(screen.getByTestId('ponto-pronto-vazio').className).toContain('w-1.5');
   });
 });
