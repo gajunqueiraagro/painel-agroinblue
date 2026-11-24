@@ -139,12 +139,57 @@ export function formaPelaConta(forma: string, contaEhCartao: boolean, contaAntes
 }
 
 /**
- * CARTAO-LANCAMENTO-01 — o VENCIMENTO pela fatura: a data nova entra quando o campo está vazio ou ainda mostra a sugestão anterior
- * (a compra, o cartão ou o parcelado mudaram); a data que o operador ou a nota puseram fica.
+ * CARTAO-LANCAMENTO-01 / CARTAO-VENC-FATURA-01 (Gabriel 23/11) — o VENCIMENTO pela fatura: no cartão o lançamento NASCE com o vencimento
+ * da fatura em que a compra cai; só a data que o OPERADOR DIGITOU no campo fica ("pode trocar"). A data que veio de fora (a emissão da
+ * nota sem duplicata, o prefill) cede à fatura — era o caso da NF 348.174 (Sendas, 17/11, Ourocard): nascia vencendo 17/11.
  */
-export function vencimentoPelaFatura(atual: string, sugeridaAntes: string, sugerida: string): string {
+export function vencimentoPelaFatura(atual: string, sugerida: string, operadorDigitou: boolean): string {
   if (!sugerida) return atual;
-  return atual === '' || atual === sugeridaAntes ? sugerida : atual;
+  return operadorDigitou ? atual : sugerida;
+}
+
+/**
+ * CARTAO-VENC-FATURA-01 — a PARCELA k (1..N) NA FATURA k: a 1ª é a fatura da compra (`faturaDaCompra`), cada uma das seguintes vence no
+ * dia V do mês seguinte. O dia que o mês não tem cai no último dele SEM arrastar os seguintes (dia 31: 28/02 e depois 31/03 — somar um
+ * mês a 28/02 daria 28/03). Entrada inválida: vazio.
+ */
+export function faturaDaParcela(compra: string, k: number, diaVencimento: number, diaFechamento: number | null): string {
+  const primeira = faturaDaCompra(compra, diaVencimento, diaFechamento);
+  if (!primeira || !Number.isInteger(k) || k < 1) return '';
+  return diaNoMes(somarMeses(`${primeira.slice(0, 7)}-01`, k - 1), diaVencimento);
+}
+/** As N faturas das parcelas (a parcela k na fatura k). */
+export const faturasDasParcelas = (compra: string, n: number, diaVencimento: number, diaFechamento: number | null): string[] =>
+  Array.from({ length: Math.max(0, n) }, (_, i) => faturaDaParcela(compra, i + 1, diaVencimento, diaFechamento));
+
+/**
+ * CARTAO-VENC-FATURA-01 — a compra no cartão nasce PROGRAMADA e sem data de pagamento (paga-se na fatura); o conciliado não muda.
+ */
+export const statusNoCartao = (status: string): string => (status === 'conciliado' ? status : 'programado');
+/**
+ * CARTAO-VENC-FATURA-01 — a importação (Excel) que CRIA numa conta de cartão: o vencimento da planilha manda; sem ele, a fatura em que a
+ * competência cai; sem dias do cartão, nada (vazio, como hoje).
+ */
+export function vencimentoDaImportacaoNoCartao(vencimentoDaPlanilha: string | null | undefined, competencia: string | null | undefined, dias: DiasDaFatura | null): string | null {
+  if (vencimentoDaPlanilha) return vencimentoDaPlanilha;
+  if (!dias?.vencimento || !competencia) return vencimentoDaPlanilha ?? null;
+  return faturaDaCompra(competencia, dias.vencimento.dia, dias.fechamento) || null;
+}
+/** O cadastro das contas (Cadastros › Contas bancárias) numa aba nova: o lançamento aberto não se perde. */
+export const LINK_DO_CADASTRO_DAS_CONTAS = '/?secao=contas-bancarias';
+
+/** Os dias que o cartão usa para achar a fatura: o vencimento (digitado manda; vazio, o das faturas) e o fechamento digitado. */
+export interface DiasDaFatura { vencimento: { dia: number; origem: 'digitado' | 'faturas' } | null; fechamento: number | null; aviso: string | null }
+/**
+ * CARTAO-VENC-FATURA-01 — UMA leitura para toda porta (Novo, + Da nota, Parcelar este lançamento, importação): junta o cadastro do cartão
+ * (`diasCadastradosDoCartao`) e as faturas (`diasDoCartao`). Sem fechamento ou sem vencimento no cadastro: o AVISO pequeno (a tela põe o
+ * link para o cadastro); o vencimento ainda sai das faturas, como sugestão.
+ */
+export function diasDaFatura(cadastro: { fechamento: number | null; vencimento: number | null }, faturas: readonly DiaDoCartao[]): DiasDaFatura {
+  const faltam = [cadastro.fechamento == null ? 'fechamento' : null, cadastro.vencimento == null ? 'vencimento' : null].filter((x): x is string => x !== null);
+  const aviso = faltam.length === 0 ? null
+    : `Cartão sem dia de ${faltam.join(' e de ')} no cadastro: o vencimento ${faltam.includes('vencimento') ? 'não sai do cadastro' : 'não sabe em qual fatura cai a compra do fim do mês'}.`;
+  return { vencimento: diaDoVencimentoDoCartao(cadastro.vencimento, faturas), fechamento: cadastro.fechamento, aviso };
 }
 
 /**
@@ -160,14 +205,41 @@ export function fraseDaFaturaNoLancamento(nomeDoCartao: string, compra: string, 
   return `${nomeDoCartao}: compra de ${ddmm(compra)} ${naFatura} · pode trocar`;
 }
 
+/**
+ * CARTAO-VENC-FATURA-01 (mock aprovado 23/11 13:38) — o conteúdo do ⓘ "pela fatura do cartão" (o ciclo nunca vira bloco na tela):
+ * "Por que 16/12? A compra é de 17/11, depois do fechamento de 05/11 → entra na fatura que fecha em 05/12 e vence em 16/12." e, no
+ * parcelado, as N datas (parcela k na fatura k). Sem dia de fechamento, diz que o dia é o do vencimento no mês seguinte. Entrada inválida: vazio.
+ */
+export function porQueOVencimento(compra: string, dia: { dia: number; origem: 'digitado' | 'faturas' }, diaFechamento: number | null, parcelas = 1): string {
+  const vence = faturaDaCompra(compra, dia.dia, diaFechamento);
+  if (!vence) return '';
+  const dd = (x: string) => `${x.slice(8, 10)}/${x.slice(5, 7)}/${x.slice(0, 4)}`;
+  let porque: string;
+  if (diaFechamento == null) {
+    porque = `Por que ${ddmm(vence)}? Sem dia de fechamento no cadastro: vence no dia ${dia.dia} (${dia.origem === 'digitado' ? 'do cadastro' : 'sugerido pelas faturas'}) do mês seguinte à compra de ${ddmm(compra)}.`;
+  } else {
+    const fecha = fechamentoDaCompra(compra, diaFechamento);
+    const anterior = diaNoMes(somarMeses(`${fecha.slice(0, 7)}-01`, -1), diaFechamento);
+    const quando = compra === anterior ? `no dia do fechamento (${ddmm(anterior)}), que já é da fatura seguinte`
+      : `depois do fechamento de ${ddmm(anterior)}`;
+    porque = `Por que ${ddmm(vence)}? A compra é de ${ddmm(compra)}, ${quando} → entra na fatura que fecha em ${ddmm(fecha)} e vence em ${ddmm(vence)}.`;
+  }
+  if (!(parcelas >= 2)) return porque;
+  const datas = faturasDasParcelas(compra, parcelas, dia.dia, diaFechamento);
+  return `${porque} Parcelado em ${parcelas}×: ${datas.map((x, i) => (i === 0 ? `parcela 1 vence ${dd(x)}` : `${i + 1} em ${dd(x)}`)).join(' · ')}.`;
+}
+
 /** "Elo" de "Cartão Elo" — o rótulo curto da sugestão. */
 export const nomeCurtoDoCartao = (nome: string) => nome.replace(/^\s*cart[ãa]o\s+/i, '').trim() || nome;
 export const rotuloDaSugestao = (nomeDoCartao: string, dia: number) => `1ª fatura · sugerido (${nomeCurtoDoCartao(nomeDoCartao)}, dia ${dia})`;
 
 /** As N parcelas iguais, todo mês no mesmo dia, pelo arredondamento do Novo lançamento › Parcelada (a última absorve a sobra). */
-export function parcelasDoCartao(totalCent: number, n: number, primeira: string, max: number = MAX_PARCELAS_DO_CARTAO): DuplicataNFe[] {
+export function parcelasDoCartao(totalCent: number, n: number, primeira: string, max: number = MAX_PARCELAS_DO_CARTAO, diaDaFatura: number | null = null): DuplicataNFe[] {
   if (!(n >= MIN_PARCELAS_DO_CARTAO && n <= max) || !/^\d{4}-\d{2}-\d{2}$/.test(primeira) || !(totalCent > 0)) return [];
-  return preverParcelas(totalCent / 100, n, primeira).map((x) => ({ numero: String(x.numero), vencimento: x.dataVencimento, valorCent: Math.round(x.valor * 100) }));
+  /* CARTAO-VENC-FATURA-01 — com o dia da fatura, a parcela k vence no dia dele no mês k (a 1ª cortada no fim do mês não corta as outras) */
+  const dia = diaDaFatura != null && diaDaFatura >= 1 && diaDaFatura <= 31 ? diaDaFatura : null;
+  return preverParcelas(totalCent / 100, n, primeira).map((x, i) => ({ numero: String(x.numero),
+    vencimento: dia ? diaNoMes(somarMeses(`${primeira.slice(0, 7)}-01`, i), dia) : x.dataVencimento, valorCent: Math.round(x.valor * 100) }));
 }
 
 /**

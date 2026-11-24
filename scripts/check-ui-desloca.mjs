@@ -800,7 +800,7 @@ const CENARIOS = [
   /* Caso 3 (Gabriel 29/10 11:33) — a nota no cartão em 10: responder a posição (pela descrição) desenha as 10 linhas DENTRO do quadro; a barra das
      abas, o Resultado e o rodapé não andam */
   { nome: 'nota-pdf-m2', url: 'tela=nota-pdf&v=m2', antes: async (p) => {
-    await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await espera(p, 400);
+    await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await espera(p, 400);
   }, estados: [
     ['posição pela descrição', clicar('[data-testid="nota-cartao-pergunta"] button:has-text("pela descrição")')],
   ] },
@@ -843,11 +843,11 @@ const CENARIOS = [
      (duplica)" no ⋯ não movem a barra das abas nem o rodapé (o conteúdo troca dentro do corpo) */
   { nome: 'nota-pdf-caminhos', url: 'tela=nota-pdf&v=diferenca', antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await espera(p, 300); },
     estados: [
-    ['aba Parcelas × sistema', clicar('[data-testid="nota-abas-ja"] button:has-text("Parcelas × sistema")')],
-    ['aba Lançamento', clicar('[data-testid="nota-abas-ja"] button:has-text("Lançamento")')],
+    ['etapa O que já existe', clicar('[data-testid="nota-abas-ja"] button:has-text("O que já existe")')],
+    ['etapa Confirmar', clicar('[data-testid="nota-abas-ja"] button:has-text("Confirmar")')],
     ['aba Como vai ficar', clicar('[data-testid="nota-abas-ja"] button:has-text("Como vai ficar")')],
     ['atualizar as nao pagas', noLugar('[data-testid="nota-atualizar-nao-pagas"] button')],
-    ['aba Itens', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens (")')],
+    ['etapa Itens da nota', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens da nota")')],
     /* D-a — o "Criar novo (duplica)" troca de modo (volta para as 3 abas da nova): não se mede aqui; o ⋯ dele fica no lugar (teste no vitest) */
   ] },
   /* P102 — o Editar obrigação da compra parcelada: trocar de aba não move a barra de abas nem o rodapé (o "Voltar para à vista" e o Salvar) */
@@ -993,6 +993,16 @@ const CENARIOS = [
   { nome: 'conciliacao-extrato-do-sistema', url: 'tela=extrato-do-sistema&v=carregando', tamanhos: TAMANHOS_DO_P92,
     antes: async (p) => { await p.locator('[data-testid="modal-extrato-sistema"]').waitFor(); await espera(p); },
     estados: [['carregado', { url: 'tela=extrato-do-sistema' }]] },
+  /* CARTAO-FATURA-IMPORT-01 — a prévia da fatura no painel do cartão: escolher outro grupo troca as linhas da tabela, mas não mexe no
+     cabeçalho, nos selos dos grupos, no cabeçalho das colunas, no quadro, no rodapé nem no "Gravar N com prévia" */
+  { nome: 'conciliacao-painel-cartao-fatura', url: 'tela=conciliacao&admin=1&v=fatura', tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]],
+    presos: '[data-testid="fatura-cabecalho"], [data-testid^="fatura-grupo-"], [data-testid="fatura-tabela"] thead th, [data-testid="fatura-quadro"], [data-testid="fatura-rodape"], [data-testid="fatura-gravar"]',
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="car"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arrastar"] input[type="file"]').setInputFiles({ name: 'fatura-bancada-out.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+      await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor(); await espera(p); },
+    estados: [['Nova · sugestão (5 linhas)', clicar('[data-testid="fatura-grupo-nova_sugestao"]')], ['Pagamento (1 linha)', clicar('[data-testid="fatura-grupo-pagamento"]')],
+      ['Já lançado', clicar('[data-testid="fatura-grupo-ja_lancado"]')]] },
   /* P159a (CONC-TELAS-01) — a Conferência: trocar o chip (Sem par, Casados, Vencidos, Todos) não mexe no cabeçalho do modal, nos chips,
      na faixa nem no cabeçalho das colunas (régua fixa); o Casar lançamentos: trocar de sub-aba não mexe na barra, e o mês curto não mexe
      nas colunas do Extrato. */

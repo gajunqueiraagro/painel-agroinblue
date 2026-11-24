@@ -75,7 +75,7 @@ export type ResultadoDoDanfe = { ok: true; bytes: number } | { ok: false; frase:
 export const FRASE_SEM_XML = 'sem XML guardado';
 
 /** o XML da nota na caixa da Receita (`fiscal_dfe_recebidos`, RLS por cliente), quando a busca já o trouxe */
-async function xmlDaCaixaDaReceita(clienteId: string, chave: string): Promise<ArrayBuffer | null> {
+export async function xmlDaCaixaDaReceita(clienteId: string, chave: string): Promise<ArrayBuffer | null> {
   const { data, error } = await db().from('fiscal_dfe_recebidos').select('xml').eq('cliente_id', clienteId).eq('chave', chave).not('xml', 'is', null).maybeSingle();
   if (error) { console.error('[danfeDasNotasGuardadas] caixa', error); return null; }
   return typeof data?.xml === 'string' && data.xml ? new TextEncoder().encode(data.xml).buffer : null;

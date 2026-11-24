@@ -27,6 +27,7 @@ import {
 } from '@/lib/conciliacao/painelDaConta';
 import { useConciliacaoDoMes, type MovimentoConciliacao } from '@/hooks/useConciliacaoDoMes';
 import { buscarSugestoesDoMes, type RespostaDoMotor } from '@/lib/conciliacao/loteDeSugestoes';
+import { PreviaDaFatura } from '@/components/conciliacao/PreviaDaFatura';
 import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
 import {
   MAX_CARTOES_NA_FAIXA, arquivosDoMes, formatoDoArquivo, ordenarArquivos, periodoCurto, resumoDosArquivos, sobreposicoesDePeriodo,
@@ -69,7 +70,9 @@ type Direita =
   | { k: 'lista' }
   | { k: 'arquivo'; chave: string }
   | { k: 'desfazer'; chave: string }
-  | { k: 'soltou'; arquivo: File };
+  | { k: 'soltou'; arquivo: File }
+  /** CARTAO-FATURA-IMPORT-01: o PDF da fatura solto no painel do cartão — a prévia (só lê) */
+  | { k: 'fatura'; arquivo: File };
 
 export interface PainelDaContaProps {
   aberto: boolean;
@@ -236,9 +239,13 @@ export function PainelDaConta(props: PainelDaContaProps) {
                   ? <DesfazerComprovante key={arquivoAberto.chave} a={arquivoAberto} clienteId={clienteId}
                       aoVoltar={() => setDireita({ k: 'arquivo', chave: arquivoAberto.chave })}
                       aoDesfeito={() => { aoMudarArquivos(); voltarAoPasso(); }} />
+                  : direita.k === 'fatura' && clienteId
+                    ? <PreviaDaFatura key={`${direita.arquivo.name}-${direita.arquivo.size}`} clienteId={clienteId} contaId={conta.id} arquivo={direita.arquivo}
+                        nomeDaConta={nomeDe} aoVoltar={voltarAoPasso} />
                   : direita.k === 'soltou' && clienteId
                     ? <ArquivoSolto key={`${direita.arquivo.name}-${direita.arquivo.size}`} arquivo={direita.arquivo} clienteId={clienteId} contaId={conta.id} anoMes={anoMes}
-                        aoVoltar={voltarAoPasso} aoAnexado={() => { aoMudarArquivos(); voltarAoPasso(); }} aoImportar={(f) => aoImportar(conta.id, f)} />
+                        aoVoltar={voltarAoPasso} aoAnexado={() => { aoMudarArquivos(); voltarAoPasso(); }} aoImportar={(f) => aoImportar(conta.id, f)}
+                        aoLerFatura={tipo === 'cartao' ? (f) => setDireita({ k: 'fatura', arquivo: f }) : undefined} />
                     : <TrabalhoDoPasso id={passoAberto ?? passoInicial(passos)} tipo={tipo} clienteId={clienteId} contaId={conta.id}
                         anoMes={anoMes} linha={linha} saldos={saldos} fonteOF={fonte.tipo === 'open_finance'} arquivos={arquivos} lista={lista}
                         comprovante={comprovanteDoMes}
@@ -748,8 +755,10 @@ function DesfazerComprovante({ a, clienteId, aoVoltar, aoDesfeito }: { a: Arquiv
 
 /** O que se arrastou: PDF/foto = comprovante do saldo deste mês (prévia: o que, onde; nada grava antes do "Anexar"); OFX/CSV/planilha =
  *  extrato — a prévia da importação é a do Importar banco desta conta, com o arquivo já escolhido. */
-function ArquivoSolto({ arquivo, clienteId, contaId, anoMes, aoVoltar, aoAnexado, aoImportar }: {
+function ArquivoSolto({ arquivo, clienteId, contaId, anoMes, aoVoltar, aoAnexado, aoImportar, aoLerFatura }: {
   arquivo: File; clienteId: string; contaId: string; anoMes: string; aoVoltar: () => void; aoAnexado: () => void; aoImportar: (f: File) => void;
+  /** CARTAO-FATURA-IMPORT-01: só no painel do cartão — o PDF pode ser LIDO como fatura (a prévia das compras) */
+  aoLerFatura?: (f: File) => void;
 }) {
   const formato = formatoDoArquivo(arquivo.name, arquivo.type);
   const documento = formato === 'PDF' || formato === 'IMG';
@@ -760,9 +769,11 @@ function ArquivoSolto({ arquivo, clienteId, contaId, anoMes, aoVoltar, aoAnexado
     <Trabalho testid="painel-soltou" titulo={documento ? 'Anexar o comprovante' : 'Importar o extrato'} sub={`${formato} · ${Math.max(1, Math.round(arquivo.size / 1024))} KB`}
       extra={<button type="button" className="whitespace-nowrap text-[11px] text-[#1f5fbf] hover:underline" onClick={aoVoltar}>cancelar</button>}
       botoes={documento
-        ? <button type="button" className={BOTAO_PRI} style={{ background: AZUL_ATIVO }} disabled={gravando} data-testid="painel-soltou-anexar"
+        ? <>{aoLerFatura && formato === 'PDF' && <button type="button" className={BOTAO} style={CONTORNO} onClick={() => aoLerFatura(arquivo)}
+              data-testid="painel-soltou-ler-fatura">Ler a fatura</button>}
+          <button type="button" className={BOTAO_PRI} style={{ background: AZUL_ATIVO }} disabled={gravando} data-testid="painel-soltou-anexar"
             onClick={() => { setGravando(true); void anexarSaldoDocumento({ clienteId, contaId, anoMes, file: arquivo }).then((r) => {
-              setGravando(false); if (r.ok) aoAnexado(); else setErro(r.erro ?? 'Não consegui anexar.'); }); }}>{gravando ? 'Anexando…' : 'Anexar'}</button>
+              setGravando(false); if (r.ok) aoAnexado(); else setErro(r.erro ?? 'Não consegui anexar.'); }); }}>{gravando ? 'Anexando…' : 'Anexar'}</button></>
         : <button type="button" className={BOTAO_PRI} style={{ background: AZUL_ATIVO }} onClick={() => aoImportar(arquivo)} data-testid="painel-soltou-importar">Abrir a prévia</button>}>
       <table className="mb-2 w-full table-fixed"><tbody><tr><td className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold" title={arquivo.name}>{arquivo.name}</td></tr></tbody></table>
       <p>{documento

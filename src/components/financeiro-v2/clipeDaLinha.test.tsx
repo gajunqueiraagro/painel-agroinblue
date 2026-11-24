@@ -119,11 +119,14 @@ describe('F2 — o clipe da lista', () => {
     expect(fontes.ler).toHaveBeenCalledTimes(1);
     expect([linha.click.mock.calls.length, linha.dbl.mock.calls.length]).toEqual([0, 0]);
   });
-  it('a nota só em XML abre os ITENS (o XML nunca abre cru); o PDF + XML da mesma nota é UMA linha e abre o PDF', async () => {
+  it('a nota só em XML (o XML nunca abre cru): DANFE-SOB-DEMANDA-01 — o popover com "PDF · DANFE" e "XML · Itens"; Itens abre os itens; PDF + XML = UMA linha', async () => {
     const XML = DOC({ id: 'x', especie: 'nf', numero: '518', nome: 'nf 518.xml', tipo: 'application/xml', url: 'cli/l/x.xml', chaveAcesso: '5026 0911 2223 3300 0424 5500 1000 0005 1812 1753 8290' });
     fontes.ler.mockResolvedValue({ ok: true, valor: linhas(XML) });
     monta(1);
     fireEvent.click(clipe());
+    const pop = await screen.findByTestId('clipe-popover');
+    expect(within(pop).getAllByTestId('clipe-documento').map((tr) => tr.dataset.qual)).toEqual(['clipe-documento-danfe', 'clipe-documento-xml']);
+    fireEvent.click(within(pop).getAllByTestId('clipe-documento')[1]);
     expect((await screen.findByTestId('itens-da-nota')).textContent).toBe('50260911222333000424550010000005181217538290');
     expect(abriu).not.toHaveBeenCalled();
     const PDF = DOC({ ...XML, id: 'p', nome: 'nf 518.pdf', tipo: 'application/pdf', url: 'cli/l/p.pdf' });

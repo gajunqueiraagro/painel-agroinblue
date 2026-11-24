@@ -5,6 +5,8 @@
  *   bloqueio nem aviso hoje; no máximo, depois, uma SUGESTÃO do próximo dia combinado ao programar — `foraDosDiasDePagamento` é a regra pronta para ela.
  */
 
+import { rotuloDaPessoa, type NomeDoAutor } from '@/lib/acessos/nomesDosAutores';
+
 /** Os dias na ordem da semana de trabalho (o domingo por último), com o número do Postgres (`extract(dow)`). */
 export const DIAS_DA_SEMANA: readonly { n: number; rotulo: string }[] = [
   { n: 1, rotulo: 'Seg' }, { n: 2, rotulo: 'Ter' }, { n: 3, rotulo: 'Qua' }, { n: 4, rotulo: 'Qui' },
@@ -51,15 +53,9 @@ export interface CandidatoAAprovador { userId: string; rotulo: string; perfil: '
 const ehRegistro = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
 
-/** membros (user_id, perfil, ativo) + perfis (id, nome, email) + os que já aprovam → os candidatos, por nome */
-export function candidatosAAprovador(membros: unknown, perfis: unknown, aprovadores: unknown): CandidatoAAprovador[] {
-  const nomes = new Map<string, string>();
-  for (const p of Array.isArray(perfis) ? perfis : []) {
-    if (!ehRegistro(p)) continue;
-    const id = texto(p.id);
-    const nome = texto(p.nome) ?? texto(p.email);
-    if (id && nome) nomes.set(id, nome);
-  }
+/** membros (user_id, perfil, ativo) + os nomes da fonte unica (`fn_nomes_dos_autores`, por user_id) + os que já aprovam → os candidatos,
+ * por nome. O rótulo é o de toda tela de acessos (`rotuloDaPessoa`: nome → e-mail → "usuário removido"). */
+export function candidatosAAprovador(membros: unknown, nomes: ReadonlyMap<string, Pick<NomeDoAutor, 'nome' | 'email'>>, aprovadores: unknown): CandidatoAAprovador[] {
   const ja = new Set<string>();
   for (const a of Array.isArray(aprovadores) ? aprovadores : []) if (ehRegistro(a) && texto(a.user_id)) ja.add(String(a.user_id));
   const out: CandidatoAAprovador[] = [];
@@ -68,7 +64,7 @@ export function candidatosAAprovador(membros: unknown, perfis: unknown, aprovado
     const id = texto(m.user_id);
     const perfil = m.perfil === 'gestor_cliente' || m.perfil === 'financeiro' ? m.perfil : null;
     if (!id || !perfil) continue;
-    out.push({ userId: id, rotulo: nomes.get(id) ?? 'Usuário sem nome', perfil, jaAprova: ja.has(id) });
+    out.push({ userId: id, rotulo: rotuloDaPessoa(nomes.get(id)), perfil, jaAprova: ja.has(id) });
   }
   return out.sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
 }

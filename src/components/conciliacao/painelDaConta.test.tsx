@@ -6,7 +6,7 @@
  * data; o rodapé leva à próxima pendente; o fechar devolve a conta mostrada; a largura e as alturas são fixas.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -66,6 +66,7 @@ vi.mock('@/lib/conciliacao/loteDeSugestoes', () => ({
 }));
 vi.mock('@/components/conciliacao/EstacaoConciliar', () => ({ EstacaoConciliar: ({ movimento }: { movimento: { id: string } }) => <div data-testid="stub-estacao">{movimento.id}</div> }));
 vi.mock('@/components/conciliacao/PalcoDoMes', () => ({ PalcoDoMes: ({ contaId }: { contaId: string }) => <div data-testid="stub-palco">{contaId}</div> }));
+vi.mock('@/components/conciliacao/PreviaDaFatura', () => ({ PreviaDaFatura: ({ arquivo, contaId }: { arquivo: File; contaId: string }) => <div data-testid="stub-fatura">{contaId}:{arquivo.name}</div> }));
 vi.mock('@/components/conciliacao/ExtratoDoSistemaDialog', () => ({ ExtratoDoSistemaDialog: () => <div data-testid="stub-sistema" /> }));
 vi.mock('@/components/conciliacao/DesfazerArquivoModal', () => ({
   DesfazerArquivoModal: ({ alvo }: { alvo: { nome_arquivo: string | null } }) => <div data-testid="stub-desfazer-arquivo">{alvo.nome_arquivo}</div> }));
@@ -287,6 +288,23 @@ describe('o painel (componente)', () => {
     fireEvent.change(input, { target: { files: [new File(['OFXHEADER'], 'set.ofx', { type: '' })] } });
     fireEvent.click(await screen.findByTestId('painel-soltou-importar'));
     expect(p.aoImportar).toHaveBeenCalledWith('c1', expect.any(File));
+  });
+
+  it('CARTAO-FATURA-IMPORT-01: no painel do CARTÃO o PDF solto pode ser LIDO como fatura (a prévia); na outra conta, não', async () => {
+    montar({ conta: { id: 'c2', nome: 'Cartão Exemplo', tipoConta: 'cartao_credito' } });
+    const input = screen.getByTestId('painel-arrastar').querySelector('input[type="file"]');
+    if (!(input instanceof HTMLInputElement)) throw new Error('sem input');
+    fireEvent.change(input, { target: { files: [new File(['%PDF'], 'fatura-out.pdf', { type: 'application/pdf' })] } });
+    fireEvent.click(await screen.findByTestId('painel-soltou-ler-fatura'));
+    expect((await screen.findByTestId('stub-fatura')).textContent).toBe('c2:fatura-out.pdf');
+    expect(espias.anexar).not.toHaveBeenCalled();
+    cleanup();
+    montar();
+    const outro = screen.getByTestId('painel-arrastar').querySelector('input[type="file"]');
+    if (!(outro instanceof HTMLInputElement)) throw new Error('sem input');
+    fireEvent.change(outro, { target: { files: [new File(['%PDF'], 'saldo.pdf', { type: 'application/pdf' })] } });
+    await screen.findByTestId('painel-soltou');
+    expect(screen.queryByTestId('painel-soltou-ler-fatura')).toBeNull();
   });
 
   it('o rodapé: ← anterior · conta i de N · Próxima pendente →; o fechar devolve a conta mostrada (volta à linha)', async () => {

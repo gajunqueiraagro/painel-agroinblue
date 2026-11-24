@@ -88,7 +88,7 @@ import { NotasDaReceitaDialog } from '@/components/fiscal/NotasDaReceitaDialog';
 import { desfazerIgnorarDaReceita, ignorarNotaDaReceita, registrarBemDeTerceiro, useNotasDaReceita } from '@/hooks/useNotasDaReceita';
 import { Camada, useCamadas } from '@/components/ui/camadas';
 import { buscarNaReceitaPelaChave } from '@/lib/fiscal/danfeDasNotasGuardadas';
-import { pedemAcao, type AbaDaReceita } from '@/lib/fiscal/notasDaReceita';
+import { chaveDoNomeDoXml, pedemAcao, type AbaDaReceita } from '@/lib/fiscal/notasDaReceita';
 import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
 import { contarBoletosQuePedemAcao } from '@/lib/financeiro/boleto/caixaApi';
 import { NotaFiscalDialog, type NotaParaLancar } from '@/components/financeiro-v2/NotaFiscalDialog';
@@ -711,6 +711,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const camadas = useCamadas<'receita' | 'xml' | 'nota' | 'regra' | 'lanc'>({ aoFecharJunto: (id) => { if (id === 'xml') fecharXmlDaTela.current(); } });
   /* FIN-REGRA-MODAL-02 (a) — a linha do modal "Fazenda fora da regra da conta" abre o Editar lançamento POR CIMA ('lanc' sobre 'regra'); salvou = volta 'salvou' */
   const salvouPorCimaDaRegra = useRef(false);
+  /* DA-NOTA-ETAPAS-01 (NAV-VOLTA-ORIGEM-01) — o Editar/Novo lançamento aberto a partir do "+ Da nota" fica POR CIMA da nota ('lanc' sobre 'nota'):
+     fechar sem salvar volta à MESMA nota (a mesma etapa); salvar fecha a nota também e volta a quem a abriu (a lista, a Receita) */
+  const lancSobreANota = useRef(false);
   const abrirLancamentoDaRegra = async (id: string) => {
     const obj = await hook.buscarLancamentoPorId(id);
     if (!obj) { toast.error('Não consegui abrir o lançamento. Tente de novo.'); return; }
@@ -733,6 +736,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     // eslint-disable-next-line react-hooks/exhaustive-deps -- o pedido se atende ao chegar; `camadas` e o aviso não o repetem
   }, [notasDaReceitaNaAba]);
   const [xmlDaReceita, setXmlDaReceita] = useState<File[] | null>(null);
+  /* NOTA-LANCAR-SEM-DELAY-01 — as notas da Receita lançadas AGORA (saem do "A lançar" na hora; a releitura confere em segundo plano) */
+  const [lancadasAgora, setLancadasAgora] = useState<ReadonlySet<string>>(new Set());
+  const marcarLancadaAgora = (arquivos: File[] | null) => {
+    const ch = chaveDoNomeDoXml(arquivos?.[0]?.name);
+    if (ch) setLancadasAgora((s) => new Set([...s, ch]));
+  };
+  useEffect(() => { setLancadasAgora(new Set()); }, [clienteAtual?.id]);
   /* NOTA-RECEITA-CASAR-01 — a prévia aberta pelo "Vincular a este": ao fechar, a lista da Receita relê (a nota vira "Já no sistema") */
   const vinculoDaReceita = useRef(false);
   /* BOLETO D3d — a nota que veio da caixa por e-mail: ao fechar o "+ Da nota", a caixa reabre (a linha já mostra "já lançada · Vincular") */
@@ -753,7 +763,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   };
   useEffect(() => {
     fecharXmlDaTela.current = () => {
-      setXmlAberto(false); setLinhasXmlLancadas(new Set()); void receita.refetch(); setXmlDaReceita(null);
+      setXmlAberto(false); setLinhasXmlLancadas(new Set()); marcarLancadaAgora(xmlDaReceita); void receita.refetch(); setXmlDaReceita(null);
     };
   });
   /* FIN-NOTA-PDF-01 — a nota do PDF abre o "Novo lançamento · da nota fiscal" (o mock): o PDF com o lido em amarelo, criar as N
@@ -3394,7 +3404,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         onClose={() => {
           const idAberto = editingLanc?.id ?? null;
           setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setLinhaXmlAberta(null); onCloseDialog?.();
-          if (camadas.aberta('lanc')) { camadas.fechar('lanc', salvouPorCimaDaRegra.current ? 'salvou' : 'fechou', idAberto); salvouPorCimaDaRegra.current = false; }
+          const salvou = salvouPorCimaDaRegra.current;
+          if (camadas.aberta('lanc')) { camadas.fechar('lanc', salvou ? 'salvou' : 'fechou', idAberto); salvouPorCimaDaRegra.current = false; }
+          if (lancSobreANota.current) {
+            lancSobreANota.current = false;
+            if (salvou) {
+              setNotaAberta(null); camadas.fechar('nota', 'salvou', idAberto);
+              if (vinculoDaReceita.current || camadas.aberta('receita')) { vinculoDaReceita.current = false; void receita.refetch(); }
+            }
+          }
         }}
         onSave={async (form, id, onErroDeCampo) => {
           const r = await handleSave(form, id, onErroDeCampo);
@@ -3442,6 +3460,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         open={xmlAberto && !dialogOpen && !notaAberta}
         onClose={() => {
           camadas.fechar('xml', linhasXmlLancadas.size > 0 ? 'salvou' : 'fechou');
+          if (xmlDaReceita && linhasXmlLancadas.size > 0) marcarLancadaAgora(xmlDaReceita);
           setXmlAberto(false); setLinhasXmlLancadas(new Set()); if (xmlDaReceita) void receita.refetch(); setXmlDaReceita(null);
           if (voltarParaCaixa.current) { voltarParaCaixa.current = false; setCaixaAberta(true); }
         }}
@@ -3457,7 +3476,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       />
       {receitaAberta && (
         <Camada coberta={camadas.coberta('receita')}>
-        <NotasDaReceitaDialog retorno={camadas.retornoPara('receita')} abaInicial={abaReceitaInicial} clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
+        <NotasDaReceitaDialog lancadasAgora={lancadasAgora} retorno={camadas.retornoPara('receita')} abaInicial={abaReceitaInicial} clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
           erro={receita.error ? (receita.error as Error).message : null}
           aoFechar={() => { setReceitaAberta(false); setAbaReceitaInicial(undefined); camadas.fechar('receita'); }}
           /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro" (lote 25; simular = a prévia) */
@@ -3485,6 +3504,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       )}
 
       {notaAberta && clienteAtual?.id && (
+        <Camada coberta={camadas.coberta('nota')}>
         <NotaFiscalDialog
           open
           onClose={() => { setNotaAberta(null); camadas.fechar('nota'); if (vinculoDaReceita.current) { vinculoDaReceita.current = false; void receita.refetch(); } }}
@@ -3500,9 +3520,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           safras={hook.safras}
           onCriarLancamento={async (form) => { const r = await handleSave(form); return typeof r === 'string' ? r : null; }}
           onAbrirNoLancamento={(prefill) => {
-            /* NADA ESCOLHIDO NO MODAL SE PERDE: o Novo lancamento abre com a nota E as escolhas */
+            /* NADA ESCOLHIDO NO MODAL SE PERDE: o Novo lancamento abre com a nota E as escolhas — e POR CIMA dela (DA-NOTA-ETAPAS-01: a nota
+               não fecha; fechar o lançamento sem salvar volta a ela) */
             const linha = notaAberta.linhaId;
-            setNotaAberta(null); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(prefill); setLinhaXmlAberta(linha); setDialogOpen(true);
+            if (!camadas.aberta('nota')) camadas.abrir('nota', camadas.pilha[camadas.pilha.length - 1] ?? null);
+            camadas.abrir('lanc', 'nota'); lancSobreANota.current = true; salvouPorCimaDaRegra.current = false;
+            setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(prefill); setLinhaXmlAberta(linha); setDialogOpen(true);
           }}
           onAbrirRegistrada={abrirOcorrenciaDaNota}
           onCriado={() => {
@@ -3512,6 +3535,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             setLinhasXmlLancadas((antes) => new Set([...antes, linha]));
           }}
         />
+        </Camada>
       )}
 
       {criarOCDe && clienteAtual?.id && (

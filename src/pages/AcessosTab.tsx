@@ -36,6 +36,7 @@ import {
   MOTIVO_LINHA_ADMIN, MOTIVO_LINHA_PROPRIA, PERFIL_INICIAL, PERFIS_DA_TELA, ROTULO_PERFIL, SENHA_MINIMA, problemaDaSenha,
 } from '@/lib/acessos/acessosDaTela';
 import { buscarNomesDosAutores } from '@/hooks/useNomesDosAutores';
+import { rotuloDaPessoa } from '@/lib/acessos/nomesDosAutores';
 
 interface Membro {
   id: string;
@@ -303,7 +304,7 @@ export function AcessosTab() {
                       <td className={TD} data-testid="membro-email">{m.email ?? 'sem login'}</td>
                       <td className={TD} data-testid="membro-nome"
                         title={m.fazendas.length > 0 ? `fazendas: ${m.fazendas.join(', ')}` : 'sem fazenda liberada'}>
-                        {m.nome ?? '—'}
+                        {rotuloDaPessoa(m)}
                       </td>
                       {/* A linha do admin do AGROinBLUE nao tem perfil de cliente nem acoes: as tres ultimas colunas viram a frase
                           (medido: a frase pede ~200px e a coluna Perfil tem 104). */}

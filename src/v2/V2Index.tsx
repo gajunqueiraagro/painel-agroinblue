@@ -445,6 +445,9 @@ export default function V2Index() {
         // FIN-MODAL-FECHO-01 item 2 — contrato genérico ?oc_id=<id> abre a Central de Operações
         // Comerciais, que localiza e abre a operação por tipo (compra hoje; venda/abate estáveis).
         if (qs.get('oc_id')) return 'operacoes-comerciais';
+        /* CARTAO-VENC-FATURA-01 — o link "Abrir o cadastro do cartão" do lançamento abre a tela pedida numa aba nova (`?secao=`) */
+        const secao = qs.get('secao');
+        if (ehSectionConhecida(secao)) return secao;
       }
     } catch { /* URL indisponível */ }
     return 'home';
@@ -1815,6 +1818,8 @@ export default function V2Index() {
     'patrimonio',
     /* FISCAL onda 1 — a lista e a ficha dos produtores vão até o fim da tela (a altura vem do pai) */
     'produtores',
+    /* BPO-NOMES-LARGURA-01 — Aprovar pagamentos usa a área inteira, como Lançamentos: a altura vem do pai e a lista vai até o fim */
+    'aprovar-pagamentos',
     'fornecedores']);
   const appShell = modoResumo || SECOES_APP_SHELL.has(section);
 
