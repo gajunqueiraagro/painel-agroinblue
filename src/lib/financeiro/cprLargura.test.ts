@@ -39,8 +39,10 @@ describe('a lista cabe a 1.280px', () => {
     for (const ampliado of [false, true]) for (const v of [0, 113386.53, 99999999.99]) {
       expect(larguraMinimaCpr(reguaDaCpr(ampliado, v)), `${ampliado ? 'ampliado' : 'normal'} ${v}`).toBeLessThanOrEqual(LISTA_A_1280);
     }
-    /* a conta: 27 de moldura + as colunas (48 + 48 + 72 + 70 + 118 + 118) + 3 × 95 + 4px por vão (6 colunas + as 3 de texto = 8 vãos) */
-    expect(larguraMinimaCpr(reguaDaCpr(false, 0))).toBe(27 + (48 + 48 + 72 + 70 + 118 + 118) + 3 * 95 + 4 * 8);
+    /* CPR-LAYOUT-04 — a conta: 27 de moldura + as colunas (Comp. 46 + Banco 70 + NF 72 + Status 70 + 118 + 118; Venc. saiu) + 3 × 95 +
+       4px por vão (6 colunas + as 3 de texto = 8 vãos) */
+    expect(larguraMinimaCpr(reguaDaCpr(false, 0))).toBe(27 + (46 + 70 + 72 + 70 + 118 + 118) + 3 * 95 + 4 * 8);
+    expect(reguaDaCpr(false, 0)).toMatchObject({ comp: 46, venc: 0, banco: 70 });
   });
 });
 

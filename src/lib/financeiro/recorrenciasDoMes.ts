@@ -173,7 +173,6 @@ export interface ResumoDoMes {
 
 const centavos = (v: number): number => Math.round(Math.abs(Number(v) || 0) * 100);
 const mesDe = (iso: string | null | undefined): string => (iso ? iso.slice(0, 7) : '');
-const STATUS_PAGO: readonly string[] = ['realizado', 'conciliado'];
 
 /**
  * A competência cuja conta VENCE no mês pedido, ou nulo quando a regra não tem competência que vença nele.
@@ -198,10 +197,20 @@ export function competenciaQueVenceNoMes(regra: Pick<RegraDoMes, 'diaVencimento'
  * ocorrência não tem a marca do valor do mês nem está realizada/conciliada. A tela de Recorrências (`linhasDoMes`) e Contas a
  * Pagar e Receber (`lerEstimadasDoCliente` -> `recortarCpr`) julgam por ESTA função; nenhuma segunda regra.
  */
-export function ocorrenciaEstimada(o: { valorAConfirmar: boolean; valorDoMesEm: string | null | undefined; status: string | null | undefined }): boolean {
+export function ocorrenciaEstimada(o: {
+  valorAConfirmar: boolean; valorDoMesEm: string | null | undefined; status: string | null | undefined;
+  /** CPR-LAYOUT-04 — o lançamento já tem NF/boleto (número do documento): o valor está confirmado. Ausente = não se sabe (não pesa). */
+  comDocumento?: boolean;
+}): boolean {
   if (!o.valorAConfirmar) return false;
-  return !o.valorDoMesEm && !STATUS_PAGO.includes(o.status ?? '');
+  /* CPR-LAYOUT-04 (Gabriel 24/11 07:28, o Vivo Casa Programado com NF saía "estimado"): estimado é SÓ o PREVISTO sem documento e sem o
+     valor do mês — Programado/Agendado (alguém já conferiu para pagar), com NF/boleto, ou pago = confirmado. */
+  if (o.comDocumento) return false;
+  if (!STATUS_AINDA_ESTIMAVEL.includes(o.status ?? '')) return false;
+  return !o.valorDoMesEm;
 }
+/** Os status em que o valor ainda pode ser estimativa: o Previsto (e a linha sem status, que nasce Previsto). */
+const STATUS_AINDA_ESTIMAVEL: readonly string[] = ['previsto', ''];
 
 /** A pior situação vence: 'estimado' > 'confirmado'. */
 const pior = (a: SituacaoDoMes, b: SituacaoDoMes): SituacaoDoMes => (a === 'estimado' || b === 'estimado' ? 'estimado' : a === 'confirmado' || b === 'confirmado' ? 'confirmado' : 'certo');

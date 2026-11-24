@@ -270,7 +270,8 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
     expect(Array.from(tela.matchAll(/overflow-auto rolagem-fina/g)).length).toBe(1);
   });
   it('CPR-CONTA-01: o filtro entra no dono e chega a tudo — cartões, lista, total, gráfico, caixa e cabeçalho', () => {
-    expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas, cartoes })');
+    /* CPR-LAYOUT-04: as linhas chegam ao dono já pelos filtros da tela (Origem · Forma · Pagamento) */
+    expect(tela).toContain('recortarCpr(linhasDoRecorte, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas, cartoes })');
     expect(tela).toContain('resumoPorContaCpr(linhas, { periodo, hoje: hojeIso, contaEscolhida: contaSel, comRealizado })');
     /* o gráfico desenha o que sai do MESMO recorte filtrado, e parte do saldo da MESMA conta */
     expect(tela).toContain('const doFluxo = useMemo(() => linhasDoSaldoCpr(recorte), [recorte]);');
@@ -293,7 +294,8 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
          lista não expõe `recorrencia_id` nem a marca do valor do mês. Continua sem consulta por linha. */
       /* P82: entrou `cpr-cartoes` (os cartões e o saldo deles, do banco: `fn_cpr_cartoes`), uma leitura por cliente */
       /* P152: entrou `cpr-recorrencias` (o `recorrencia_id` dos ids JÁ visíveis, para o selo R — a view não o traz), um `.in()` */
-      .toEqual(['cpr-anexos', 'cpr-caixa', 'cpr-cartoes', 'cpr-estimadas', 'cpr-lancs', 'cpr-recorrencias']);
+      /* CPR-LAYOUT-04: entrou `cpr-pronto` (a `fn_pronto_para_pagar_dos` dos ids JÁ visíveis, SÓ com o filtro Pagamento ligado) */
+      .toEqual(['cpr-anexos', 'cpr-caixa', 'cpr-cartoes', 'cpr-estimadas', 'cpr-lancs', 'cpr-pronto', 'cpr-recorrencias']);
   });
   it('o cartão tem 40px e o valor não corta; o gráfico começa em "de"', () => {
     expect(tela).toContain("'flex min-w-0 h-[40px] items-center gap-1 rounded-md border border-l-[3px] px-1 py-[3px]'");
@@ -500,7 +502,7 @@ describe('CPR-SALDO-DIA-01 — a tela só renderiza (lido da fonte)', () => {
     expect(tela).not.toMatch(/COL\.(banco|origem|doc|valor)/);
     expect(tela).toContain('origem: ${rotuloOrigem(l.origem_lancamento)} · doc: ${doc || \'—\'}');
     /* BPO-FUNCIONAR-01: numa etapa da aprovação o cabeçalho do Saldo diz por que a coluna está vazia */
-    expect(tela).toContain("title={etapaAtiva ? MOTIVO_SALDO_NA_ETAPA : segmento === 'ambos' ? 'o saldo depois de cada linha, na ordem da lista; fecha no \"Saldo em\" do dia' : MOTIVO_SALDO_DOIS_LADOS}");
+    expect(tela).toContain("title={semSaldo ? motivoDoSaldoVazio : segmento === 'ambos' ? 'o saldo depois de cada linha, na ordem da lista; fecha no \"Saldo em\" do dia' : MOTIVO_SALDO_DOIS_LADOS}");
     /* CPR-AJUSTES-20-10: o grupo "vencidos anteriores à conciliação · fora do saldo" deixou de existir, e o motivo dele junto */
     expect(tela).not.toContain('MOTIVO_ANTERIORES');
   });
@@ -1047,7 +1049,7 @@ describe('CPR-CAIXA-INICIAL-SEMPRE-01 — a tela parte SEMPRE do Caixa inicial (
       { data: '2026-09-10', entradas: 500, saidas: 0, nEntradas: 1, nSaidas: 0, saldo: 1200 },
       { data: '2026-09-20', entradas: 0, saidas: 1500, nEntradas: 0, nSaidas: 1, saldo: -300 }] });
     expect(rodapeDoPeriodoCpr(r, s)).toEqual({ pagar: { valor: 1500, contas: 1 }, receber: { valor: 500, contas: 1 }, contas: 0, realizados: 2, encerrado: true });
-    expect(tela).toContain('valor={rodape.receber - rodape.pagar} saldo={serie.fim}');
+    expect(tela).toContain('valor={rodape.receber - rodape.pagar} saldo={filtroLigado ? undefined : serie.fim}');
     expect(src('../../components/financeiro-v2/CprFluxoPrevisto.tsx')).toContain("{encerradoEm ? 'Fluxo de caixa realizado' : 'Fluxo de caixa previsto'}");
   });
   it('o seletor não tem opção montada à mão na tela: a conta escolhida vem do dono', () => {
