@@ -38,7 +38,7 @@ import type { CaixaApi, ItemDaCaixa } from '@/lib/financeiro/boleto/caixaApi';
 import type { ParcelaApi } from '@/lib/financeiro/boleto/boletoDaParcela';
 import { dataBR, valorBR, type Selo, type Tom } from '@/lib/financeiro/boleto/caixaDeBoletos';
 import {
-  ABAS_DA_CAIXA_V2, ROTULO_DA_ACAO, contarAResolver, nomeDoRemetente, tituloDaAcao,
+  ABAS_DA_CAIXA_V2, ROTULO_DA_ACAO, contarAResolver, nomeDoRemetente, tituloDaAcao, virouDaEntrada,
   type AbaDaCaixaV2, type Acao, type GrupoDaCaixa, type LinhaDaCaixa, type ResumoDaNota,
 } from '@/lib/financeiro/boleto/caixaPorEmail';
 
@@ -330,11 +330,11 @@ function PainelDoArquivo({ vista, arquivo, carregando, aoNovaAba, aoBaixar, larg
   );
 }
 
-function LinhaResolvida({ e, ocupado, selecionada, arquivos, aoVer, aoBaixar, aoDesfazer }: {
-  e: EntradaDoEmail; ocupado: boolean; selecionada: boolean; arquivos: readonly ArquivoDaLinha[];
+function LinhaResolvida({ e, virou: v, ocupado, selecionada, arquivos, aoVer, aoBaixar, aoDesfazer }: {
+  e: EntradaDoEmail; virou: ReturnType<typeof virouDaEntrada>; ocupado: boolean; selecionada: boolean; arquivos: readonly ArquivoDaLinha[];
   aoVer: () => void; aoBaixar: (fonte: string) => void; aoDesfazer: () => void;
 }) {
-  const virou = e.estado === 'nota' ? (e.lancamentoId ? 'nota no lançamento' : 'nota lançada') : 'boleto na caixa';
+  const virou = v.texto;
   return (
     <tr className={cn(LINHA, 'cursor-pointer hover:bg-muted/50', selecionada && 'bg-blue-50')} onClick={aoVer} data-testid="linha-resolvida">
       <td className={TD_REGUA}><SeloDaCaixa s={e.estado === 'nota' ? TIPO.nota : TIPO.boleto} /></td>
@@ -342,12 +342,13 @@ function LinhaResolvida({ e, ocupado, selecionada, arquivos, aoVer, aoBaixar, ao
       <td className={TD_REGUA}><VerEBaixar arquivos={arquivos} aoVer={aoVer} aoBaixar={aoBaixar} /></td>
       <td className={TD_REGUA_TEXTO} title={e.remetente ?? undefined}>{nomeDoRemetente(e.remetente)}</td>
       <td className={cn(TD_REGUA_NUM, 'text-left')}>{dataBR(e.recebidoEm)}</td>
-      <td className={TD_REGUA_TEXTO} title={`${virou} · ${e.assunto ?? '—'}`}>{virou} · {e.assunto ?? '—'}</td>
+      <td className={TD_REGUA_TEXTO} title={`${virou} · ${e.assunto ?? '—'}`}>{v.selo ? <SeloDaCaixa s={v.selo} /> : virou} · {e.assunto ?? '—'}</td>
       <td className={cn(TD_REGUA_NUM, 'text-left')}>{dataBR(e.resolvidoEm)}</td>
       <td className={TD_REGUA}>
         <span className="flex justify-end" onClick={(x) => x.stopPropagation()}>
           <button type="button" className={BOTAO_X} disabled={ocupado} onClick={aoDesfazer} data-testid="desfazer-resolvido"
-            title="volta para A resolver; o boleto fica na caixa e o lançamento fica como está">Desfazer</button>
+            title={v.guardadoId ? 'volta para A resolver e o boleto sai da caixa (nada se apaga); "Guardar" de novo reabre o mesmo boleto'
+              : 'volta para A resolver; o boleto fica na caixa e o lançamento fica como está'}>Desfazer</button>
         </span>
       </td>
     </tr>
@@ -463,6 +464,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
       aoLancarNota?.(arquivo);
       return;
     }
+    if (a === 'desfazer') { if (l.boletoGuardadoId) setFrase(await caixa.desfazerGuardado(l.boletoGuardadoId)); return; }
     const r = a === 'vincular_nota' ? await caixa.vincularNota(l)
       : a === 'vincular_boleto' ? await caixa.vincularBoleto(l, lancamentos ?? [])
         : a === 'guardar' ? await caixa.guardar(l) : null;
@@ -471,7 +473,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
 
   /* curta (cabe a 918, fora de tabela não corta): o detalhe dos verbos está no title de cada botão */
   const dica = aba === 'a_resolver' ? 'um grupo por e-mail · clique na linha para ver o arquivo'
-    : aba === 'resolvidos' ? '"Desfazer" só tira a marca' : 'o arquivo continua guardado';
+    : aba === 'resolvidos' ? '"Desfazer" volta para A resolver' : 'o arquivo continua guardado';
   const rodape = frase ?? caixa.erro ?? (linhaSel ? `${linhaSel.arquivo} · ${linhaSel.noSistema.titulo}` : '');
 
   return (
@@ -539,11 +541,14 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
                     <th className={TH}>O que virou</th><th className={TH}>Resolvido em</th><th className={TH} />
                   </tr></thead>
                   <tbody>
-                    {caixa.resolvidos.map((e) => (
-                      <LinhaResolvida key={e.id} e={e} ocupado={!!caixa.ocupado} selecionada={selecionada === `entrada:${e.id}`}
-                        arquivos={arquivosDe([e.id])} aoVer={() => void ver(vistaDaEntrada(e))} aoBaixar={(f) => void baixar(f)}
-                        aoDesfazer={() => void caixa.voltar({ entradaId: e.id }).then(setFrase)} />
-                    ))}
+                    {caixa.resolvidos.map((e) => {
+                      const v = virouDaEntrada(e, caixa.lista?.itens ?? null);
+                      return (
+                        <LinhaResolvida key={e.id} e={e} virou={v} ocupado={!!caixa.ocupado} selecionada={selecionada === `entrada:${e.id}`}
+                          arquivos={arquivosDe([e.id])} aoVer={() => void ver(vistaDaEntrada(e))} aoBaixar={(f) => void baixar(f)}
+                          aoDesfazer={() => void (v.guardadoId ? caixa.desfazerGuardado(v.guardadoId) : caixa.voltar({ entradaId: e.id })).then(setFrase)} />
+                      );
+                    })}
                     {caixa.resolvidos.length === 0 && (
                       <tr className={LINHA}><td colSpan={N_COLUNAS} className={cn(TD_REGUA, 'py-4 text-center text-muted-foreground')}>Nada resolvido ainda.</td></tr>
                     )}

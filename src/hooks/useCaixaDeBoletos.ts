@@ -8,8 +8,14 @@
  * ⚠ VINCULAR O BOLETO: entra na caixa (se ainda não está) → sobe o PDF → liga aos lançamentos do candidato (`fn_boleto_ligar`) → a linha
  *   do e-mail vira 'boleto' (`fn_entrada_resolver`) quando TODOS os boletos do arquivo estão feitos. Falhou um passo = a frase diz qual,
  *   o que já gravou fica (nunca some calado).
+ * ⚠ BOLETO-SEPARAR-01: o PDF com VÁRIOS boletos se DIVIDE antes de gravar — a parcela recebe só as páginas do SEU boleto
+ *   (`paginasDosBoletos` + `dividirPdf`); não dividiu = nada grava (nunca sobe o inteiro no lugar). O original do e-mail fica no 1º
+ *   lançamento como "PDF original (N boletos)". 2 boletos na mesma página: o mesmo arquivo às duas parcelas, com o aviso.
  * ⚠ SENHA: só na memória do gesto (a leitura de novo); nunca no estado, nunca no banco.
  * ⚠ LEITURA QUE TERMINA DEPOIS DE A TELA SAIR não escreve (OC-ABRIR-LENTO-01): `vivo` guarda.
+ * ⚠ CAIXA-GUARDAR-01 (D1 a): DESFAZER O GUARDADO = o boleto vai para `descartado` (MOTIVO_DO_DESFEITO, `fn_boleto_marcar`, trilha) e o
+ *   e-mail dele volta para A resolver (`fn_entrada_voltar`) — uma linha só depois; "Guardar" o boleto descartado REABRE o mesmo (`novo`).
+ *   São 2 RPCs de hoje, nesta ordem: falhou a 2ª, a frase diz e o boleto já está fora da caixa (o e-mail segue em Resolvidos).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { caixaApiDoBanco, type CaixaApi, type DocumentoDaCaixa, type ListaDaCaixa, type RespostaDeEntrar } from '@/lib/financeiro/boleto/caixaApi';
@@ -19,15 +25,16 @@ import { lerNota } from '@/lib/financeiro/nfe/lerNota';
 import type { BoletoNormalizado } from '@/lib/financeiro/linhaDigitavel';
 import { entradaEmailApiDoBanco, rotuloDoMotivo, type EntradaDoEmail, type EntradaEmailApi, type MotivoDeIgnorar } from '@/lib/financeiro/boleto/entradaEmailApi';
 import {
-  FRASE_NEM_BOLETO_NEM_NOTA, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes, numeroDaNotaComPontos,
+  FRASE_NEM_BOLETO_NEM_NOTA, MOTIVO_DO_DESFEITO, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes, numeroDaNotaComPontos,
   type ConsultaDaNota, type ConsultaDoBoleto, type FonteParaMontar, type GrupoDaCaixa, type LinhaDaCaixa, type Lido, type ResumoDaNota,
 } from '@/lib/financeiro/boleto/caixaPorEmail';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 
 /** A leitura de UM arquivo pela caixa (injetável: a bancada e os testes passam a sua). */
 export type LeituraDaCaixa =
   | { k: 'nota'; nota: ResumoDaNota }
-  | { k: 'boletos'; boletos: BoletoNormalizado[]; beneficiario: ParteDoBoleto; pagador: ParteDoBoleto }
+  | { k: 'boletos'; boletos: BoletoNormalizado[]; beneficiario: ParteDoBoleto; pagador: ParteDoBoleto; paginaDeCada?: number[]; totalDePaginas?: number }
   | { k: 'nada'; frase: string }
   | { k: 'senha'; errada: boolean }
   | { k: 'erro'; frase: string };
@@ -60,7 +67,16 @@ function resumoDaNota(n: { chave: string; numero: string; emitente: { nome: stri
 /** O arquivo arrastado nesta sessão (não está no banco: ignorar = tirar da lista). */
 interface Local { chave: string; arquivo: File }
 /** O que a leitura guardou de cada fonte: os bytes (para ver, subir e lançar) e as partes do boleto (para a prévia do banco). */
-interface DaFonte { bytes: ArrayBuffer; nome: string; tipo: 'xml' | 'pdf'; partes: { beneficiario: ParteDoBoleto; pagador: ParteDoBoleto } | null; boletos: BoletoNormalizado[] }
+interface DaFonte {
+  bytes: ArrayBuffer; nome: string; tipo: 'xml' | 'pdf'; partes: { beneficiario: ParteDoBoleto; pagador: ParteDoBoleto } | null; boletos: BoletoNormalizado[];
+  /** BOLETO-SEPARAR-01: a página de cada boleto (na ordem de `boletos`) e o total do PDF; null = não se sabe (não divide) */
+  paginas: { deCada: number[]; total: number } | null;
+}
+
+export const FRASE_NAO_SEPAROU = 'Não consegui separar este boleto do PDF. Nada foi gravado.';
+export const FRASE_PAGINA_COM_2 = 'Esta página tem 2 boletos: o mesmo arquivo vai às duas parcelas.';
+/** O nome do arquivo de um boleto separado: "boleto_Uniao (2 de 3).pdf". */
+export const nomeDoSeparado = (nome: string, i: number, n: number) => `${nome.replace(/\.pdf$/i, '')} (${i + 1} de ${n}).pdf`;
 
 let sequencia = 0;
 const tipoDoNome = (nome: string): 'xml' | 'pdf' => (/\.xml$/i.test(nome) ? 'xml' : 'pdf');
@@ -121,6 +137,8 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     fontes.current.set(chave, {
       bytes: o.bytes, nome: o.nome, tipo, partes: r.k === 'boletos' ? { beneficiario: r.beneficiario, pagador: r.pagador } : null,
       boletos: r.k === 'boletos' ? r.boletos : [],
+      paginas: r.k === 'boletos' && r.paginaDeCada && r.totalDePaginas && r.paginaDeCada.length === r.boletos.length
+        ? { deCada: r.paginaDeCada, total: r.totalDePaginas } : null,
     });
     const lido: Lido = r.k === 'boletos'
       ? { k: 'boletos', boletos: r.boletos.map((b) => ({ codigoBarras: b.codigo_barras, linha: b.linha, vencimento: b.vencimento, valor: b.valor, beneficiario: r.beneficiario.nome })) }
@@ -208,7 +226,8 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
       linhas: linhasDasFontes(arrastados, notas, boletos, hoje, podeLancar, feitos), fontesAntigas: [],
     }] : [];
     const gGuardados = lista ? grupoDosGuardados(lista.itens, boletos, hoje, feitos) : null;
-    return [...gLocal, ...doEmail, ...(gGuardados ? [gGuardados] : [])];
+    /* CAIXA-GUARDAR-01: os guardados PRIMEIRO (no NJ ficavam depois de 15 e-mails, fora da janela) */
+    return [...(gGuardados ? [gGuardados] : []), ...gLocal, ...doEmail];
   }, [entradas, lidos, notas, boletos, hoje, podeLancar, feitos, locais, lista]);
 
   const resolvidos = useMemo(() => (entradas ?? []).filter((e) => e.estado === 'boleto' || e.estado === 'nota'), [entradas]);
@@ -233,7 +252,7 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
       if (!i?.boleto.storagePath) return null;
       const b = await entradaApi.baixar(i.boleto.storagePath);
       if (b.ok === false) return null;
-      f = { bytes: await b.dados.arrayBuffer(), nome: i.boleto.arquivoNome ?? 'boleto.pdf', tipo: 'pdf', partes: null, boletos: [] };
+      f = { bytes: await b.dados.arrayBuffer(), nome: i.boleto.arquivoNome ?? 'boleto.pdf', tipo: 'pdf', partes: null, boletos: [], paginas: null };
       fontes.current.set(fonte, f);
     }
     if (!f) {
@@ -241,11 +260,30 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
       if (!e) return null;
       const o = await baixarDoEmail(e)();
       if (typeof o === 'string') return null;
-      f = { bytes: o.bytes, nome: o.nome, tipo: e.tipo ?? 'pdf', partes: null, boletos: [] };
+      f = { bytes: o.bytes, nome: o.nome, tipo: e.tipo ?? 'pdf', partes: null, boletos: [], paginas: null };
       fontes.current.set(fonte, f);
     }
     return new File([f.bytes], f.nome, { type: f.tipo === 'xml' ? 'text/xml' : 'application/pdf' });
   }, [baixarDoEmail, entradas, entradaApi, lista]);
+
+  /** BOLETO-SEPARAR-01 — o arquivo de UM boleto: o PDF de 1 boleto vai inteiro; o de vários, só as páginas dele (`paginasDosBoletos`:
+   *  capa vai com o seguinte, ficha + recibo juntos, o resto com o último). Não dividiu = recusa (nunca o inteiro no lugar). */
+  const arquivoDoBoleto = useCallback(async (fonte: string, codigoBarras: string): Promise<
+    { ok: true; arquivo: File | null; separado: boolean; aviso: string | null } | { ok: false; frase: string }
+  > => {
+    const f = fontes.current.get(fonte);
+    const i = f ? f.boletos.findIndex((b) => b.codigo_barras === codigoBarras) : -1;
+    if (!f || f.tipo !== 'pdf' || f.boletos.length < 2 || i < 0) return { ok: true, arquivo: await arquivoDe(fonte), separado: false, aviso: null };
+    if (!f.paginas) return { ok: false, frase: FRASE_NAO_SEPAROU };
+    const { dividirPdf, paginasDosBoletos } = await importarDoApp(() => import('@/lib/pdf/dividirPdf'));
+    const grupo = paginasDosBoletos(f.paginas.deCada, f.paginas.total)[i];
+    const aviso = f.paginas.deCada.filter((p) => p === f.paginas?.deCada[i]).length > 1 ? FRASE_PAGINA_COM_2 : null;
+    if (grupo.length >= f.paginas.total) return { ok: true, arquivo: await arquivoDe(fonte), separado: false, aviso };
+    const d = await dividirPdf(f.bytes.slice(0), [grupo]);
+    if (d.ok === false) return { ok: false, frase: FRASE_NAO_SEPAROU };
+    const nome = nomeDoSeparado(f.nome, i, f.boletos.length);
+    return { ok: true, arquivo: new File([d.arquivos[0].slice().buffer], nome, { type: 'application/pdf' }), separado: true, aviso };
+  }, [arquivoDe]);
 
   /** O nome e o tipo de cada fonte, sem baixar (o "Ver" escolhe o PDF; o "Baixar" lista os arquivos). Sem arquivo = null. */
   const nomeDaFonte = useCallback((fonte: string): { nome: string; tipo: 'xml' | 'pdf' } | null => {
@@ -282,30 +320,35 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   }, [ehDoEmail, entradaApi, feitos]);
 
   /** Garante o boleto na caixa (entra + sobe o PDF) e devolve o id. */
-  const garantirNaCaixa = useCallback(async (l: LinhaDaCaixa): Promise<{ ok: true; id: string; aviso: string | null; pdf: string | null } | { ok: false; frase: string }> => {
+  const garantirNaCaixa = useCallback(async (l: LinhaDaCaixa): Promise<
+    { ok: true; id: string; aviso: string | null; pdf: string | null; separado: boolean } | { ok: false; frase: string }
+  > => {
     if (l.boletoGuardadoId) {
       const g = lista?.itens.find((x) => x.boleto.id === l.boletoGuardadoId);
-      return { ok: true, id: l.boletoGuardadoId, aviso: null, pdf: g?.boleto.storagePath ?? null };
+      return { ok: true, id: l.boletoGuardadoId, aviso: null, pdf: g?.boleto.storagePath ?? null, separado: false };
     }
     if (!clienteId || !l.boleto) return { ok: false, frase: 'Escolha o cliente.' };
     const fonte = l.fontes[0];
     const b = fontes.current.get(fonte)?.boletos.find((x) => x.codigo_barras === l.boleto?.codigoBarras);
     if (!b) return { ok: false, frase: 'Leia o arquivo de novo.' };
+    /* o arquivo deste boleto ANTES de gravar: não separou = nada entra */
+    const doBoleto = await arquivoDoBoleto(fonte, b.codigo_barras);
+    if (doBoleto.ok === false) return { ok: false, frase: doBoleto.frase };
     const r = await api.entrar(clienteId, leituraParaOBanco(fonte, b), false);
     if (r.ok === false) return { ok: false, frase: r.erro };
     const resp: RespostaDeEntrar = r.dados;
     if (resp.ok === false) return { ok: false, frase: resp.frase };
     if (!resp.id) return { ok: false, frase: 'O banco não devolveu o boleto. Nada foi ligado.' };
-    let aviso: string | null = null;
+    let aviso: string | null = doBoleto.aviso;
     let pdf: string | null = null;
     if (resp.storagePath) {
-      const arq = await arquivoDe(fonte);
+      const arq = doBoleto.arquivo;
       const s = arq ? await api.subirArquivo(resp.storagePath, arq) : null;
       if (!s || s.ok === false) aviso = 'O boleto entrou na caixa, mas o arquivo não subiu.';
       else pdf = resp.storagePath;
     }
-    return { ok: true, id: resp.id, aviso, pdf };
-  }, [api, clienteId, leituraParaOBanco, arquivoDe, lista]);
+    return { ok: true, id: resp.id, aviso, pdf, separado: doBoleto.separado };
+  }, [api, clienteId, leituraParaOBanco, arquivoDoBoleto, lista]);
 
   /** Gabriel 18/11 14:40: o PDF entra nos DOCUMENTOS de cada lançamento ligado (o clipe da lista e a aba Documentos o mostram).
    *  Falhou = a frase diz; nunca desfaz o vínculo (ele já é verdade). */
@@ -343,19 +386,31 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     const semDoc = g.pdf
       ? await anexarAosLancamentos(alvos, { especie: 'boleto', nome: l.arquivoTitulo || 'boleto', url: g.pdf, tamanhoBytes: null })
       : null;
+    /* BOLETO-SEPARAR-01: separado o 1º boleto do arquivo, o original do e-mail fica no lançamento dele (depois do boleto: um PDF de
+       boleto por lançamento, o original é 'outro') */
+    const f = fontes.current.get(l.fontes[0]);
+    const original = entradas?.find((e) => e.id === l.fontes[0])?.storagePath ?? null;
+    const semOriginal = g.separado && original && f && f.boletos[0]?.codigo_barras === l.boleto?.codigoBarras && alvos[0]
+      ? await anexarAosLancamentos([alvos[0]], { especie: 'outro', nome: `PDF original (${f.boletos.length} boletos)`, url: original, tamanhoBytes: null })
+      : null;
     const m = await resolverSeCompleto(l.fontes[0], l.chave, g.id);
     await recarregar();
-    return m ?? semDoc ?? g.aviso;
-  }), [fazer, garantirNaCaixa, parcela, anexarAosLancamentos, resolverSeCompleto, recarregar]);
+    return m ?? semDoc ?? semOriginal ?? g.aviso;
+  }), [fazer, garantirNaCaixa, parcela, anexarAosLancamentos, entradas, resolverSeCompleto, recarregar]);
 
   const guardar = useCallback((l: LinhaDaCaixa) => fazer(l.chave, async () => {
+    /* CAIXA-GUARDAR-01: o boleto tirado da caixa volta a ser o MESMO (`novo`) — o índice (cliente, código de barras) nunca duplica */
+    if (l.boletoGuardadoId && l.previa?.ok === true && l.previa.jaExiste && l.previa.boleto.situacao === 'descartado') {
+      const r = await api.marcar(l.boletoGuardadoId, 'novo', null);
+      if (r.ok === false) return r.erro;
+    }
     const g = await garantirNaCaixa(l);
     if (g.ok === false) return g.frase;
     marcarFeito(l.chave);
     const m = await resolverSeCompleto(l.fontes[0], l.chave, g.id);
     await recarregar();
     return m ?? g.aviso;
-  }), [fazer, garantirNaCaixa, resolverSeCompleto, recarregar]);
+  }), [fazer, api, garantirNaCaixa, resolverSeCompleto, recarregar]);
 
   /** Vincular a nota que já está num lançamento: as entradas (XML e PDF) viram 'nota' com o lançamento. */
   const vincularNota = useCallback((l: LinhaDaCaixa) => fazer(l.chave, async () => {
@@ -399,23 +454,45 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     return null;
   }), [fazer, ehDoEmail, entradaApi, api, recarregar]);
 
+  /** A entrada que volta para A resolver é lida e consultada DE NOVO (a prévia antiga diria o boleto de antes do gesto). */
+  const esquecerEntrada = useCallback((entradaId: string) => {
+    pedidos.current.delete(`ler:${entradaId}`);
+    for (const p of [...pedidos.current]) if (p.startsWith(`bol:${entradaId}#`)) pedidos.current.delete(p);
+    setBoletos((x) => Object.fromEntries(Object.entries(x).filter(([k]) => !k.startsWith(`${entradaId}#`))));
+    setFeitos((x) => new Set([...x].filter((c) => !c.includes(entradaId))));
+  }, []);
+
   /** Voltar para "A resolver": a entrada ignorada ou resolvida (o Desfazer), ou o boleto descartado (volta a "novo"). */
   const voltar = useCallback((alvo: { entradaId: string } | { boletoId: string }) => fazer('voltar', async () => {
     const r = 'entradaId' in alvo ? await entradaApi.voltar(alvo.entradaId) : await api.marcar(alvo.boletoId, 'novo', null);
     if (r.ok === false) return r.erro;
     if ('entradaId' in alvo) {
-      pedidos.current.delete(`ler:${alvo.entradaId}`);
-      setFeitos((x) => new Set([...x].filter((c) => !c.includes(alvo.entradaId))));
+      esquecerEntrada(alvo.entradaId);
     } else {
       pedidos.current.delete(`bol:guardado:${alvo.boletoId}`);
       setFeitos((x) => new Set([...x].filter((c) => c !== `guardado:${alvo.boletoId}`)));
     }
     await recarregar();
     return null;
-  }), [fazer, entradaApi, api, recarregar]);
+  }), [fazer, entradaApi, api, recarregar, esquecerEntrada]);
+
+  /** CAIXA-GUARDAR-01 — Desfazer o GUARDADO (A resolver ou Resolvidos): o boleto sai da caixa com o motivo e o(s) e-mail(s) dele voltam. */
+  const desfazerGuardado = useCallback((boletoId: string) => fazer('desfazer', async () => {
+    const r = await api.marcar(boletoId, 'descartado', MOTIVO_DO_DESFEITO);
+    if (r.ok === false) return r.erro;
+    pedidos.current.delete(`bol:guardado:${boletoId}`);
+    setFeitos((x) => new Set([...x].filter((c) => c !== `guardado:${boletoId}`)));
+    for (const e of (entradas ?? []).filter((x) => x.boletoId === boletoId && x.estado === 'boleto')) {
+      const v = await entradaApi.voltar(e.id);
+      if (v.ok === false) { await recarregar(); return `O boleto saiu da caixa, mas o e-mail não voltou para A resolver: ${v.erro}`; }
+      esquecerEntrada(e.id);
+    }
+    await recarregar();
+    return null;
+  }), [fazer, api, entradas, entradaApi, recarregar, esquecerEntrada]);
 
   return {
     lista, entradas, erro, grupos, resolvidos, ignorados, descartados, sugestoes, ocupado,
-    receber, arquivoDe, nomeDaFonte, tentarSenha, vincularBoleto, guardar, vincularNota, ignorar, voltar, recarregar,
+    receber, arquivoDe, nomeDaFonte, tentarSenha, vincularBoleto, guardar, vincularNota, ignorar, voltar, desfazerGuardado, recarregar,
   };
 }
