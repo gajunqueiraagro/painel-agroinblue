@@ -95,6 +95,7 @@ import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { PainelPeriodoTab } from '@/components/financeiro-v2/PainelPeriodoTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
+import { AprovarPagamentosV3 } from '@/components/financeiro-v2/aprovar/AprovarPagamentosV3';
 import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidadaTab';
 // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — import de V2MesaOperacional removido: a tela saiu
 // do menu e da rota. O arquivo continua no repo (quarentena), fora do bundle.
@@ -1217,22 +1218,10 @@ export default function V2Index() {
       <FinV2ContasTab />
     );
     /* BPO-APROVACAO-01 — a fila do aprovador (o BPO nasce desligado: sem a configuração ligada, a tela diz isso) */
-    /* BPO-FUNCIONAR-01 — "Aprovar pagamentos" é a CPR aberta em "Para aprovar" (a aprovação mora DENTRO da CPR; a tela própria saiu) */
+    /* BPO-FUNCIONAR-01 — "Aprovar pagamentos" era a CPR aberta em "Para aprovar"; APROVAR-PAGAMENTOS-V3 (mock aprovado 24/11) — volta a ser a
+       tela PRÓPRIA e enxuta do aprovador (a CPR continua sendo a lista completa, com as etapas da aprovação) */
     if (section === 'aprovar-pagamentos') return (
-      <ContasPagarReceberTab
-        key="cpr-aprovar"
-        etapaInicial="aprovar"
-        onIntensiveToggle={setIntensivo}
-        onAbrirFinanciamento={podeAbrirTela('financiamentos') ? (id) => {
-          setOrigemDoFinanciamento('aprovar-pagamentos');
-          setFinanciamentoIdAlvo(id);
-          setSection('financiamentos');
-        } : undefined}
-        onAbrirRecorrencia={podeAbrirTela('recorrencias') ? (id) => {
-          setRecorrenciaIdAlvo(id);
-          setSection('recorrencias');
-        } : undefined}
-      />
+      <AprovarPagamentosV3 />
     );
     if (section === 'contratos') return (
       <ContratosTab />

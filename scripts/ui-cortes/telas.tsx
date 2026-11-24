@@ -85,6 +85,7 @@ import { AbaContaCorrenteOC } from '@/components/venda/AbaContaCorrenteOC';
 import { lerContaCorrente } from '@/lib/oc/contaCorrente';
 import { AcessosTab } from '@/pages/AcessosTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
+import { AprovarPagamentosV3 } from '@/components/financeiro-v2/aprovar/AprovarPagamentosV3';
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
 import * as MAPA from './dados/mapaPastos';
@@ -160,6 +161,12 @@ const M2_DA_NOTA = () => [['2026-08-10', 'Manutencao Maquinas Agricultura sintet
 const AVISTA_DA_NOTA = () => [{ id: 'jl-av', vencimento: '2026-10-10', pagamento: '2026-10-10', competencia: '2026-10-10',
   descricao: 'Brincos de identificação sintéticos — pago à vista no Itaú Personalite, descrição comprida para o pior caso', valor_cent: 196656,
   status: 'realizado', conciliado: false, financiamento_id: null, conta_bancaria_id: 'sic', numero_documento: '937', fornecedor_id: 'agro-s',
+  fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
+/* DA-NOTA-JUROS-01 — `v=juros`: o molde da NF 26.185 do NJ (nota R$ 3.441,75 × pago 1 dia depois R$ 3.446,34): a nota SEM duplicata de R$ 9.583,00
+   e, no sistema, o PAGO (conciliado) de R$ 9.587,59 (+4,59) achado pelo número. A cena o vincula e entra no "Como vai ficar". SINTÉTICO. */
+const JUROS_DA_NOTA = () => [{ id: 'jl-av', vencimento: '2026-10-10', pagamento: '2026-10-11', competencia: '2026-10-10',
+  descricao: 'Pecas e implementos sinteticos — pago um dia depois do vencimento, com juros, descrição comprida para o pior caso', valor_cent: 958759,
+  status: 'realizado', conciliado: true, financiamento_id: null, conta_bancaria_id: 'sic', numero_documento: '937', fornecedor_id: 'agro-s',
   fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
 /* NOTA-ATUALIZA-PREVISTO-01 — `v=previsto`: o molde do caso da Vera (NF 69.134): a nota SEM duplicata e, no sistema, um PREVISTO de R$ 1.000,00
    achado pelo número (linha "só no sistema"); a cena escolhe "É esta" e 70%. SINTÉTICO. */
@@ -244,7 +251,7 @@ const PREVISTO_DA_NOTA = (): any[] => [{ id: 'jl-prev', vencimento: '2026-11-05'
   descricao: 'Supermercado sintetico da fazenda (70%)', valor_cent: 100000, status: 'previsto', conciliado: false, financiamento_id: null,
   numero_documento: null, fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }];
 function completarDoLr(v: string, a: any) {
-  const doLr: any[] = (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA() : v === 'm2' ? M2_DA_NOTA() : v === 'avista' ? AVISTA_DA_NOTA() : v === 'previsto' ? PREVISTO_DA_NOTA() : LR_DA_NOTA(v);
+  const doLr: any[] = (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA() : v === 'm2' ? M2_DA_NOTA() : v === 'avista' ? AVISTA_DA_NOTA() : v === 'juros' ? JUROS_DA_NOTA() : v === 'previsto' ? PREVISTO_DA_NOTA() : LR_DA_NOTA(v);
   const linhas = (a?.p_lancamentos ?? []).map((x: any) => {
     const i = doLr.findIndex((l) => l.id === x.id); const l = doLr[i]; const paga = l?.status === 'realizado';
     const hoje: Record<string, unknown> = { descricao: l?.descricao ?? null, favorecido_id: 'agro-s', fazenda_id: 'f-pur', conta_bancaria_id: 'sic', plano_conta_id: 'pl-vet',
@@ -921,6 +928,78 @@ if (tela === 'mesclar') {
      do Caixa inicial, e nenhum dia de hoje). P106: o gate clica "Mês futuro" / "Mês anterior" (o retorno de sessão não restaura mais
      o período) */
   montar(<div className="h-full"><ContasPagarReceberTab onIntensiveToggle={() => {}} etapaInicial={q.get('etapa') === 'aprovar' ? 'aprovar' : 'tudo'} /></div>);
+} else if (tela === 'aprovar-v3') {
+  /* APROVAR-PAGAMENTOS-V3 — a tela própria do aprovador (mock aprovado 24/11), SINTÉTICA, no mês corrente: o pior caso de cada coluna
+     (fornecedor e descrição longos, conta longa, todos os "pronto", todas as formas, os selos P/R/parcela), uma linha que EU lancei (não se
+     marca), Aprovados/Recusados/Pagos com uma cada; o painel da 2ª linha com a NF em PDF + XML (UMA aba) e o boleto. `&v=vazio` = nada. */
+  const hj = new Date(); const dm = (d: number) => `${hj.getFullYear()}-${String(hj.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const PIX = { forma: 'PIX', chave: '00196816000132', tipo_chave: 'CNPJ', titular: 'Auto Peças Sintética e Companhia Ltda', doc_pagamento: '00196816000132',
+    doc_fornecedor: '00196816000132', boleto_anexado: false, emitente_nf_doc: '00196816000132' };
+  const L = (id: string, d: number, o: Record<string, unknown>) => ({ lancamento_id: id, vencimento: dm(d), status: 'programado', aba: 'aprovar',
+    fornecedor: 'Auto Peças Sintética e Companhia Ltda', favorecido_id: 'f-' + id, descricao: 'Eixo interno · triângulo', valor: -1176, forma: 'PIX',
+    nf: '78728', conta: 'Banco Alfa Personalité', subcentro: 'Manutenção de Máquinas · Pecuária', financiamento_id: null, recorrencia_id: null,
+    estado: 'aguardando', motivo: null, posso_decidir: true, lancado_por: 'u2', lancado_em: '2026-10-19T12:00:00Z', documento_pedido: 'nota',
+    pronto: 'pronto', pagamento: PIX, ...o });
+  /* os PRINTS (fora do repo) podem injetar a lista, o nome do cliente e a linha dos documentos antes de a página montar (`__listaV3Fora`/
+     `__clienteV3Fora`/`__docsV3Para`): o gate usa sempre a lista SINTÉTICA abaixo */
+  if (typeof g.__clienteV3Fora === 'string') g.__clienteBancada = { clienteAtual: { id: 'cli', nome: g.__clienteV3Fora }, clientes: [{ id: 'cli', nome: g.__clienteV3Fora }],
+    isAdmin: false, loading: false };
+  const LISTA_V3 = Array.isArray(g.__listaV3Fora) ? g.__listaV3Fora : q.get('v') === 'vazio' ? [] : [
+    L('v-pix', 4, {}),
+    L('v-semen', 5, { fornecedor: 'Reprodução Animal Sintética do Brasil Ltda', descricao: 'Sêmen Bovino Sexado e Protocolo de IATF 3/8', valor: -3006.5,
+      forma: 'Boleto', nf: '000018112', pagamento: { forma: 'Boleto', boleto_anexado: true, linha_digitavel: '34191.79001 01043.510047 91020.150008 1 10010000300650',
+        beneficiario: 'Reprodução Animal Sintética do Brasil Ltda', beneficiario_doc: '11222333000181', doc_fornecedor: '11222333000181', emitente_nf_doc: '11222333000181' } }),
+    L('v-vacina', 5, { fornecedor: 'Vacinas Sintéticas e Cia Ltda', descricao: 'Vacinas e Vermífugos 2/2', valor: -672.75, forma: 'Boleto', nf: '178768', pronto: 'falta_boleto',
+      pagamento: { forma: 'Boleto', boleto_anexado: false } }),
+    L('v-contador', 5, { fornecedor: 'Contador Sintético da Silva', descricao: 'Contabilidade mensal', valor: -437.67, nf: null, pronto: 'falta_recibo', recorrencia_id: 'r1',
+      documento_pedido: 'recibo', pagamento: { ...PIX, titular: 'Contador Sintético da Silva', doc_pagamento: '12345678909', doc_fornecedor: '12345678909', emitente_nf_doc: null } }),
+    L('v-pro1', 6, { fornecedor: 'Sócia Sintética de Souza Exemplo', descricao: 'Pró-labore', valor: -65000, forma: 'Transferência', nf: null, documento_pedido: 'nada',
+      pagamento: { forma: 'Transferência', banco: '341 · Itaú', agencia: '0001', conta: '12345-6', titular: 'Sócia Sintética de Souza Exemplo', doc_pagamento: '12345678909' } }),
+    L('v-vac2', 6, { fornecedor: 'Vacinas Sintéticas e Cia Ltda', descricao: 'Vacinas e Vermífugos', valor: -13740, forma: 'Boleto', nf: '180974', pronto: 'pronto',
+      pagamento: { forma: 'Boleto', boleto_anexado: true } }),
+    L('v-fin', 7, { fornecedor: 'Banco Sintético de Crédito Rural S.A.', descricao: 'Parcela do custeio pecuário', valor: -22650, forma: 'Débito Automático', nf: null,
+      financiamento_id: 'fin1', documento_pedido: 'nada', pagamento: { forma: 'Débito Automático' } }),
+    L('v-sal', 8, { fornecedor: 'Funcionário Sintético Pereira', descricao: 'Salário', valor: -2551.95, forma: 'PIX', nf: null, pronto: 'falta_holerite', documento_pedido: 'holerite',
+      lancado_por: 'u1', posso_decidir: false, pagamento: { ...PIX, emitente_nf_doc: null } }),
+    L('v-itr', 9, { fornecedor: 'Receita Federal', descricao: 'ITR 2026 · 1ª quota', valor: -1250, forma: 'Boleto', nf: null, pronto: 'falta_guia', documento_pedido: 'guia',
+      pagamento: { forma: 'Boleto', boleto_anexado: false } }),
+    L('v-semforma', 10, { fornecedor: 'Transportes Sintéticos do Centro-Oeste Ltda', descricao: 'Frete de gado gordo para o frigorífico', valor: -8400, forma: null,
+      pronto: 'falta_forma', pagamento: { boleto_anexado: false } }),
+    L('v-chave', 11, { fornecedor: 'Posto Sintético', descricao: 'Diesel S10', valor: -12310.4, pronto: 'falta_chave', pagamento: { forma: 'PIX', boleto_anexado: false } }),
+    L('v-ted', 12, { fornecedor: 'Cerealista Sintética', descricao: 'Milho moído', valor: -45210.33, forma: 'Transferência', pronto: 'falta_dados_bancarios',
+      pagamento: { forma: 'Transferência', boleto_anexado: false } }),
+    L('v-aprov', 13, { aba: 'aprovados', estado: 'aprovado', posso_decidir: false }),
+    L('v-recus', 14, { aba: 'recusados', estado: 'recusado', motivo: 'valor diferente do combinado', posso_decidir: false }),
+    L('v-pago', 3, { aba: 'pagos', status: 'realizado', estado: 'aprovado', posso_decidir: false }),
+  ];
+  const DOC = { cliente_id: 'cli', lancamento_id: typeof g.__docsV3Para === 'string' ? g.__docsV3Para : 'v-semen', origem: 'lancamento', operacao_id: null, tamanho_bytes: 1, uploaded_em: '2026-10-19T12:00:00Z', uploaded_por: 'u2',
+    observacao: null, cancelado: false, cancelado_em: null, cancelado_motivo: null, versao: 1, ligado_a_qtd: 1, emitente_id: null,
+    emitente_nome: 'Reprodução Animal Sintética do Brasil Ltda', emitente_documento: '11222333000181', serie: '1', chave_acesso: null, data_emissao: '2026-10-19', valor_documento: 3006.5 };
+  const DOCS_V3 = [
+    { ...DOC, documento_id: 'd-pdf', nome: 'NF 18112.pdf', tipo: 'application/pdf', url: 'c/l/a.pdf', especie: 'nf', numero: '18112' },
+    { ...DOC, documento_id: 'd-xml', nome: 'NFe18112.xml', tipo: 'text/xml', url: 'c/l/b.xml', especie: 'nf', numero: '000.018.112' },
+    { ...DOC, documento_id: 'd-bol', nome: 'boleto.pdf', tipo: 'application/pdf', url: 'c/l/c.pdf', especie: 'boleto', numero: null, serie: null },
+  ];
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'financeiro_bpo_config' ? [{ ativo: true }]
+      : t === 'vw_lancamento_documentos' ? DOCS_V3.filter((d) => !e.eq.lancamento_id || d.lancamento_id === e.eq.lancamento_id)
+      /* nos prints de cliente REAL (`__ultimosV3Fora`) o painel não mostra pagamento sintético: só o último real injetado (ou nada) */
+      : t === 'financeiro_lancamentos_v2' && e.eq.favorecido_id ? (Array.isArray(g.__ultimosV3Fora)
+        ? g.__ultimosV3Fora.filter((u: any) => u.favorecido_id === e.eq.favorecido_id).map((u: any, i: number) => ({ id: `ult-${i}`, data_pagamento: u.data_pagamento, valor: u.valor }))
+        : [{ id: 'ant-1', data_pagamento: dm(1), valor: -3006.5 }, { id: 'ant-2', data_pagamento: '2026-10-05', valor: -3006.5 }])
+      /* DÉBITO AUTOMÁTICO: o último pagamento do fornecedor em DA (o v-fin veio 18.000 no mês passado → "+26%"); os prints injetam `__ultimosV3Fora` */
+      : t === 'financeiro_lancamentos_v2' && e.in.favorecido_id ? (Array.isArray(g.__ultimosV3Fora) ? g.__ultimosV3Fora
+        : [{ favorecido_id: 'f-v-fin', data_pagamento: new Date(hj.getFullYear(), hj.getMonth() - 1, 7).toISOString().slice(0, 10), valor: -18000 }])
+      : [],
+    rpc: (fn: string, a: any) => fn === 'fn_aprovacao_lista_v3' ? LISTA_V3
+      : fn === 'fn_parcelas_dos_lancamentos' ? { 'v-semen': [3, 8], 'v-vacina': [2, 2], 'ant-1': [2, 8], 'ant-2': [1, 8] }
+      : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Gestor Sintético', email: null, situacao: 'membro ativo' },
+          { user_id: 'u2', nome: 'Amanda Exemplo', email: 'financeiro@exemplo.com', situacao: 'membro ativo' }]
+      : fn === 'fin_documento_confronto' ? (Array.isArray(g.__ultimosV3Fora) && a?.p_lancamento_id !== DOC.lancamento_id ? null
+        : { docs_ativos: 2, valor_documentos: 3006.5, valor_lancamento: 3006.5, diferenca: 0, confere: true })
+      : null,
+  };
+  montar(<AprovarPagamentosV3 />);
 } else if (tela === 'contas') {
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias: a lista (`&n=longo` = o pior caso), o modal da conta (`&v=editar&aba=dados|gerente|
      saldo|importacao`, aberto pela 1ª linha) e a nova conta (`&v=nova`). SINTÉTICO (`dados/contas.ts`). */
@@ -1993,7 +2072,7 @@ if (tela === 'mesclar') {
     /* P95 — `pelachave`: o PDF ESCANEADO (so' imagem, nenhum texto) seguido pela chave digitada (sintetica): a previa com o chip e a
        emissao e o valor em ambar; `irmas`: a nota sem duplicata achada em 4 parcelas soltas ("… - k/4"), a frase com soma e diferenca */
     if (v === 'pelachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
-    else for (const it of (v === 'semdup' || v === 'janela' || v === 'emparcela' || v === 'irmas' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'previsto' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
+    else for (const it of (v === 'semdup' || v === 'janela' || v === 'emparcela' || v === 'irmas' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'previsto' || v === 'juros' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
       const str = v === 'diverge' && it.str === 'Nº 000.000.937' ? 'Nº 000.000.938' : it.str;
       doc.setFontSize(Math.max(4, it.h * 1.15));
       doc.text(str, it.x, 595.28 - it.y);
@@ -2037,7 +2116,7 @@ if (tela === 'mesclar') {
       lido.nota.totais = { ...lido.nota.totais, notaCent: 99999999 * 12, descontoCent: 99999999 };
     }
     const forn = { id: 'agro-s', nome: v === 'gulartlongo' ? 'Cooperativa Agroindustrial Sintetica dos Produtores Rurais do Centro Oeste Ltda' : 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24', fazenda_id: null, ativo: true, tipo_recebimento: null } as any;
-    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar', 'emparcela', 'pelachave', 'irmas', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista', 'janela'].includes(v) ? [forn] : [];
+    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar', 'emparcela', 'pelachave', 'irmas', 'lr', 'lr2', 'gulart', 'gulartlongo', 'm2', 'avista', 'janela', 'juros'].includes(v) ? [forn] : [];
     const resolucao = resolverEmitente(lido.nota.emitente, fornecedores, null);
     const ultima = v === 'cadastrado' || v === 'parcelar' ? { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' }
       : v === 'lavoura' ? { plano_conta_id: 'pl-lav', subcentro: 'Insumos Lavoura — Defensivos e Fertilizantes', macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', escopo_negocio: 'agricultura', data: '2026-08-14', safra_id: 's-soja', cultura: 'soja' }
@@ -2065,7 +2144,7 @@ if (tela === 'mesclar') {
         /* Gabriel 29/10 10:38 — "No sistema hoje": a fazenda, o subcentro e o fornecedor de cada achado (SINTÉTICOS; o mesmo para todos os ids da bancada) */
         if (t === 'financeiro_lancamentos_v2' && v === 'm2') return ['jl-m20', 'jl-m21', 'jl-m22'].map((id, i) => ({ id, fazenda_id: 'f-pur',
           subcentro: 'Manutenção de Máquinas Agrícolas', favorecido_id: 'agro-s', plano_conta_id: 'pl-lav', safra_id: i === 2 ? 's-soja-25' : 's-soja' }));
-        if (t === 'financeiro_lancamentos_v2' && ['jalancada', 'cancelados', 'emparcela', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'avista', 'previsto', 'janela'].includes(v)) return ['jl-jan', 'jl-prev', 'jl-0', 'jl-1', 'jl-2', 'jl-irma', 'jl-d0', 'jl-d1', 'jl-d2', 'jl-d3', 'jl-d4',
+        if (t === 'financeiro_lancamentos_v2' && ['jalancada', 'cancelados', 'emparcela', 'irmas', 'diferenca', 'lr', 'lr2', 'gulart', 'gulartlongo', 'avista', 'previsto', 'janela', 'juros'].includes(v)) return ['jl-jan', 'jl-prev', 'jl-0', 'jl-1', 'jl-2', 'jl-irma', 'jl-d0', 'jl-d1', 'jl-d2', 'jl-d3', 'jl-d4',
           'jl-irma-0', 'jl-irma-1', 'jl-irma-2', 'jl-irma-3', 'jl-p1', 'jl-lr0', 'jl-lr1', 'jl-lr2', 'jl-lr3', 'jl-g1', 'jl-av']
           .map((id) => ({ id, fazenda_id: 'f-pur', subcentro: 'Sanidade Animal — Vacinas e Medicamentos Veterinários', favorecido_id: 'agro-s', plano_conta_id: 'pl-vet' }));
         if (t === 'financeiro_lancamentos_v2' && (v === 'cadastrado' || v === 'parcelar')) return [{ id: 'l-ext', data_vencimento: '2026-10-20', data_competencia: '2026-10-20',
@@ -2115,13 +2194,14 @@ if (tela === 'mesclar') {
         : fn === 'fn_nota_ja_lancada' && (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'm2' ? M2_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'avista' ? AVISTA_DA_NOTA()
+        : fn === 'fn_nota_ja_lancada' && v === 'juros' ? JUROS_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'janela' ? JANELA_DA_NOTA()
         : fn === 'fn_nota_ja_lancada' && v === 'previsto' ? PREVISTO_DA_NOTA()
         /* DA-NOTA-CLASSIF-01 — a sugestão pelos itens (SINTÉTICA): `uma` = os 3 itens numa conta (outra que a de hoje: aparece o "usar"); `varias` = duas */
         : fn === 'fn_nota_itens_sugerir_conta' ? { ok: true, nota_id: 'nf-sintetica', tipo_operacao: '2-Saídas', itens: [1, 2, 3].map((n) => ({ item_id: `it-${n}`, n_item: n,
           plano_conta_id: q.get('sugestao') === 'varias' && n === 3 ? 'pl-lav' : 'pl-nut', subcentro: q.get('sugestao') === 'varias' && n === 3 ? 'Insumos Lavoura — Defensivos e Fertilizantes' : 'Nutrição Engorda',
           fonte: 'a', confianca: 'alta', porque: 'Já usado 4× neste cliente.', pede_ia: false })) }
-        : fn === 'fn_nota_completar' && (v === 'lr' || v === 'lr2' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'avista' || v === 'previsto') ? completarDoLr(v, a)
+        : fn === 'fn_nota_completar' && (v === 'lr' || v === 'lr2' || v === 'gulart' || v === 'gulartlongo' || v === 'm2' || v === 'avista' || v === 'previsto' || v === 'juros') ? completarDoLr(v, a)
         : fn === 'fn_nota_ja_lancada' && v === 'emparcela' ? [{ id: 'jl-p1', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
           descricao: 'Medicamentos Bovinos Sinteticos — lançado à mão como uma parcela da nota', valor_cent: 49164, status: 'agendado', conciliado: false,
           financiamento_id: null, numero_documento: 'NF_000.000.937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',

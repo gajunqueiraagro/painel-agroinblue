@@ -131,7 +131,8 @@ export async function buscarDfe(p: Pedido, pecas: Pecas): Promise<Resposta> {
   }
   let lidos: { retorno: ReturnType<typeof lerRetornoDistDFe>; documentos: LinhaDaCaixa[]; eventos: EventoDaCaixa[]; outros: string[] };
   try {
-    const retorno = lerRetornoDistDFe(http.corpo);
+    /* DFE-CONSCHNFE-SEM-NSU: na consulta pela chave o docZip vem sem NSU */
+    const retorno = lerRetornoDistDFe(http.corpo, { semNsu: !!chaveNFe });
     const documentos: LinhaDaCaixa[] = []; const eventos: EventoDaCaixa[] = []; const outros: string[] = [];
     for (const d of retorno.docs) {
       const doc = lerDocumento(d, await abrirDocZip(d.base64));
