@@ -25,7 +25,7 @@ import { ptBR } from 'date-fns/locale';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import { notificarLancamentosMudaram, useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { PageHeader } from '@/components/ui/page-header';
 import { Segmentado } from '@/components/ui/segmentado';
@@ -70,6 +70,8 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { larguraMinimaCpr, maiorValorCpr, reguaDaCpr, FORNECEDOR_MAXIMO_CPR, SUBCENTRO_MAXIMO_CPR, type Regua } from '@/lib/financeiro/cprLargura';
 import { ORDEM_PADRAO_CPR, ROTULO_DA_COLUNA_CPR, faixaDosVencidosCpr, numeroCurtoDoDocCpr, ordenarLinhasCpr, proximaOrdemCpr, saldoPorLinhaCpr, saldoAntesDoGrupoCpr, type ChavesDaLinhaCpr, type ColunaCpr, type OrdemCpr } from '@/lib/financeiro/cprOrdem';
 import { CprVencidosDialog } from '@/components/financeiro-v2/CprVencidosDialog';
+import { MOTIVO_NAO_VAI_ACONTECER_CPR, MOTIVO_NAO_VAI_DESLIGADO, formDoNovoVencimentoCpr } from '@/lib/financeiro/cprConfirmarVencido';
+import { hojeLocal as hojeNoClique } from '@/lib/datas/hojeLocal';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { docDaLinha, type DocumentoDaLinha } from '@/lib/financeiro/documentoHelper';
@@ -1041,6 +1043,53 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
     return true;
   };
 
+  /**
+   * CPR-D1 — o "Ainda vai acontecer" da lista dos vencidos: o vencimento passa para HOJE pelo gravador de hoje, só essa coluna
+   * (`formDoNovoVencimentoCpr`: o form nasce da linha INTEIRA do banco). O aviso tem Desfazer: o mesmo gesto com o vencimento de antes.
+   * ⚠ O erro do banco (pagamento agendado no banco, mês fechado…) vai ao aviso de erro e nada muda na tela.
+   */
+  const gravarVencimento = async (id: string, vencimento: string): Promise<{ ok: true; antes: string | null } | { ok: false }> => {
+    const l = await fin.buscarLancamentoPorId(id);
+    if (!l) { toast.error('Não consegui ler o lançamento agora. Tente de novo.'); return { ok: false }; }
+    let erro: string | null = null;
+    const ok = await fin.editarLancamento(id, formDoNovoVencimentoCpr(l, vencimento), { silent: true, onErro: (m) => { erro = m; } });
+    if (!ok) { toast.error(erro ?? 'Não foi possível mudar o vencimento.'); return { ok: false }; }
+    /* o `silent` (um aviso só, o nosso) também cala o canal: as outras telas abertas ficam sabendo por aqui (P73, com o id) */
+    if (l.cliente_id) notificarLancamentosMudaram(l.cliente_id, null, [id]);
+    await invalidarTela();
+    return { ok: true, antes: l.data_vencimento };
+  };
+  const vaiAcontecer = async (l: LinhaCpr) => {
+    const hojeTxt = hojeNoClique();
+    const r = await gravarVencimento(l.id, hojeTxt);
+    if (!r.ok) return;
+    const antes = r.antes;
+    toast.success(`Vencimento passou para hoje (${format(parseISO(hojeTxt), 'dd/MM/yyyy')}).`, antes ? {
+      action: { label: 'Desfazer', onClick: () => { void gravarVencimento(l.id, antes).then((d) => { if (d.ok) toast.success(`Desfeito: o vencimento voltou para ${format(parseISO(antes), 'dd/MM/yyyy')}.`); }); } },
+    } : undefined);
+  };
+
+  /**
+   * CPR-D1 — o "Não vai acontecer": cancela pela RPC de hoje com o MOTIVO FIXO (`MOTIVO_NAO_VAI_ACONTECER_CPR`); o Desfazer do aviso é a
+   * `fn_lancamento_descancelar` (118490), que só aceita esse motivo, no mês aberto e sem vínculo com o extrato desfeito pelo cancelamento.
+   * ⚠ A recusa do banco (parcela da compra parcelada, desmembramento, pagamento agendado no banco…) vai ao aviso de erro, como no Excluir.
+   */
+  const naoVaiAcontecer = async (l: LinhaCpr) => {
+    const { error } = await supabase.rpc('fn_cancelar_lancamento_auditoria', { p_lancamento_id: l.id, p_motivo: MOTIVO_NAO_VAI_ACONTECER_CPR });
+    if (error) { toast.error(error.message || 'Não foi possível cancelar.'); return; }
+    if (clienteId) notificarLancamentosMudaram(clienteId, null, [l.id]);
+    await invalidarTela();
+    toast.success('Cancelado: não vai acontecer. Saiu do saldo e fica na auditoria.', {
+      action: { label: 'Desfazer', onClick: () => { void (async () => {
+        const { error: e } = await (supabase as any).rpc('fn_lancamento_descancelar', { p_lancamento_id: l.id });
+        if (e) { toast.error(e.message || 'Não foi possível desfazer.'); return; }
+        if (clienteId) notificarLancamentosMudaram(clienteId, null, [l.id]);
+        await invalidarTela();
+        toast.success('Desfeito: a conta voltou.');
+      })(); } },
+    });
+  };
+
   const alternarConta = (conta: string) => setContaSel((atual) => (atual === conta ? null : conta));
 
   /* sem o Caixa inicial COM saldo em caixa hoje: a véspera do período cai antes dos realizados carregados (a janela do cartão Caixa) */
@@ -1865,6 +1914,9 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
         foraDoExtrato={new Set(recorte.vencidos.anteriores.linhas.map(chaveDaLinhaCpr))}
         receber={ehReceber}
         abrir={(id) => { setVencidosAbertos(false); void abrir(id); }}
+        vaiAcontecer={vaiAcontecer}
+        naoVaiAcontecer={naoVaiAcontecer}
+        motivoNaoVai={MOTIVO_NAO_VAI_DESLIGADO}
       />
       <LancamentoV2Dialog
         open={!!lancEdicao}
