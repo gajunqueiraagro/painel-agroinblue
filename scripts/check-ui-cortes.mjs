@@ -154,6 +154,12 @@ const CENARIOS = [
   /* FORN-LISTA-01 — a lista nos tamanhos do contrato; os filtros pelo rótulo que começa com a situação (o número vem depois) */
   /* FORN-01b — a lista com a barra REAL do topo (32px) e 2.356 cadastros, como no app; a régua dela é a de Recorrências (abaixo) */
   { nome: 'fornecedores-lista', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* FORN-FORMA-PELO-EXTRATO-01 — o modal (1ª maiúscula no cabeçalho, sem rolagem lateral: só Fornecedor e o extrato encolhem com "…") */
+  { nome: 'forma-pelo-extrato', url: 'tela=forma-pelo-extrato', regiao: '[data-testid="forma-pelo-extrato"]',
+    tamanhos: [[1024, 600], [1126, 579], [1240, 700], [1280, 800], [1920, 1080]], antes: async (p) => { await p.locator('[data-testid="forma-tabela"]').waitFor({ timeout: 8000 }); } },
+  { nome: 'forma-pelo-extrato-gravado', url: 'tela=forma-pelo-extrato', regiao: '[data-testid="forma-pelo-extrato"]',
+    tamanhos: [[1024, 600], [1280, 800], [1920, 1080]], antes: async (p) => { await p.locator('[data-testid="forma-tabela"]').waitFor({ timeout: 8000 });
+      await clicarRotulo(/^2 · Gravado/)(p); await p.locator('[data-testid="forma-gravacoes"]').waitFor({ timeout: 8000 }); } },
   { nome: 'fornecedores-mesclados', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Mesclados /) },
   { nome: 'fornecedores-sem-documento', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="filtro-sem-documento"]') },
   /* FORN-SEM-CADASTRO-01 — a aba "Sem cadastro" (substitui a "Pendentes") nos tamanhos do mock, fechada e com uma linha aberta */

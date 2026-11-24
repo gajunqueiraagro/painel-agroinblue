@@ -122,6 +122,7 @@ import {
 } from '@/lib/financeiro/listaPaginaV2';
 import { codigoProntoDaLinha, formaEfetivaDaLinha, type FiltroPronto } from '@/lib/financeiro/prontoParaPagar';
 import { PontoProntoPagar } from '@/components/financeiro-v2/PontoProntoPagar';
+import { FormaPeloExtratoDialog } from '@/components/financeiro-v2/FormaPeloExtratoDialog';
 import { RODAPE_REGUA, TextoReservado, reservaDeNumero } from '@/components/ui/regua-tabela';
 /* a volta do financiamento (ano, meses, contas) — P94: guardada POR CLIENTE (`chaveDoCliente`) */
 const CHAVE_ESTADO_FIN = 'financeiro_v2_state';
@@ -1408,6 +1409,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [prontoPagarFiltro, setProntoPagarFiltro] = useState<FiltroPronto>('todos');
   /* a aba em que o modal do lançamento abre (o ponto abre na Pagamento); limpa ao fechar */
   const [abaDoLancamento, setAbaDoLancamento] = useState<'pagamento' | undefined>(undefined);
+  /* FORN-FORMA-PELO-EXTRATO-01 — o atalho do "Faltando" */
+  const [formaPeloExtrato, setFormaPeloExtrato] = useState(false);
   const filtrosV2 = useMemo(() => filtrosDaPaginaV2({
     fazendaId, anos: anosSelecionados, meses: mesesSelecionados, dimensao: dataPor, tipoOperacao, status: statusSelecionados,
     contaOrigem, contaDestino, macro: macroFiltro, grupo: grupoFiltro, centro: centroFiltro, subcentro: subcentroFiltro,
@@ -2726,6 +2729,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             <span className="inline-flex items-center gap-1 text-[#9a5b00]"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-[#E08A00]" />Faltando{' '}
               <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.faltando.toLocaleString('pt-BR') : '—'} />
               <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista?.prontoPagar ? formatMoeda(paginaDaLista.prontoPagar.faltandoValor) : '—'} /></span>
+            {/* FORN-FORMA-PELO-EXTRATO-01 — o atalho: a forma de cada fornecedor pelo extrato (lugar fixo, sempre desenhado) */}
+            <button type="button" data-testid="atalho-forma-pelo-extrato" disabled={!clienteAtual?.id} onClick={() => setFormaPeloExtrato(true)}
+              title="Falta a forma? Sugerir a forma de pagamento de cada fornecedor pelo extrato conciliado"
+              className="h-4 shrink-0 rounded border border-[#E08A00] px-1 text-[9.5px] font-medium text-[#9a5b00] hover:bg-amber-50">pelo extrato</button>
           </span>
           <span className="text-muted-foreground"><TextoReservado reserva={reservaDeNumero(5)} alinhar="direita" texto={paginaDaLista ? totalLancamentosFiltrados.toLocaleString('pt-BR') : '—'} /> lanç.</span>
           {/* P94 — O LUGAR DOS AVISOS DO FILTRO, RESERVADO: sempre desenhado (vazio sem aviso), com a largura que sobra (`flex-1`), numa
@@ -3512,6 +3519,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       />
       {receitaAberta && (
         <Camada coberta={camadas.coberta('receita')}>
+        {formaPeloExtrato && clienteAtual?.id && (
+          <FormaPeloExtratoDialog aberto clienteId={clienteAtual.id} aoFechar={() => setFormaPeloExtrato(false)} />
+        )}
         <NotasDaReceitaDialog lancadasAgora={lancadasAgora} retorno={camadas.retornoPara('receita')} abaInicial={abaReceitaInicial} clienteNome={clienteAtual?.nome ?? null} dados={receita.data} carregando={receita.isLoading}
           erro={receita.error ? (receita.error as Error).message : null}
           aoFechar={() => { setReceitaAberta(false); setAbaReceitaInicial(undefined); camadas.fechar('receita'); }}

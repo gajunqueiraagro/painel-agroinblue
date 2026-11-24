@@ -18,6 +18,7 @@ import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { MesclarFornecedoresDialog } from '@/components/financeiro-v2/MesclarFornecedoresDialog';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
+import { FormaPeloExtratoDialog } from '@/components/financeiro-v2/FormaPeloExtratoDialog';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import { ListaDeFinanciamentos } from '@/components/financiamentos/ListaDeFinanciamentos';
 import { LinhaCreditoDialog } from '@/components/financiamentos/LinhaCreditoDialog';
@@ -444,6 +445,23 @@ function buscarNaBancada(a: any) {
 if (tela === 'mesclar') {
   g.__bancoBancada = bancoDeFornecedores;
   montar(<MesclarFornecedoresDialog aberto aoFechar={() => {}} clienteId="cli" inicial={q.get('vazio') ? undefined : { manter: 'b', absorver: ['c', 'm'] }} />);
+} else if (tela === 'forma-pelo-extrato') {
+  /* FORN-FORMA-PELO-EXTRATO-01 — o modal com o banco injetado (SINTÉTICO; nomes longos = o pior caso do "…"); `&passo=gravado` abre no 2 */
+  const NOMES = ['Agropecuária Exemplo Comércio de Insumos Agrícolas e Veterinários Ltda', 'Distribuidora Modelo', 'Posto Rodovia Exemplo',
+    'Veterinária Sintética', 'Casa do Produtor Modelo de Campo Grande', 'Energia Exemplo S.A.', 'Transportadora Exemplo de Gado Ltda'];
+  const FORMAS: [string, string, string][] = [['PIX', 'PIX', 'PAGAMENTO PIX'], ['Boleto', 'Boleto', 'LIQUIDACAO BOLETO'], ['Débito', 'Débito', 'COMPRA DEBITO'],
+    ['PIX', 'PIX', 'PIX ENVIADO'], ['PIX', 'PIX', 'PIX ENVIADO'], ['Débito Automático', 'Débito Automático', 'PAGTO ENERGIA'], ['Transferência', 'Transferência Bancária', 'TED ENVIADA']];
+  const previa = Array.from({ length: 28 }, (_, i) => ({ fornecedor_id: `ff${i}`, nome: `${NOMES[i % NOMES.length]}${i >= NOMES.length ? ` ${i}` : ''}`,
+    pagamentos: [14, 11, 22, 6, 8, 12, 3][i % 7] + i, iguais_pct: [100, 100, 95.5, 83.3, 87.5, 100, 100][i % 7], forma: FORMAS[i % 7][0],
+    forma_cadastro: FORMAS[i % 7][1], exemplo: FORMAS[i % 7][2], chave_sugerida: i % 7 === 0 ? '12.345.678/0001-90' : null, tipo_chave: i % 7 === 0 ? 'CNPJ' : null,
+    abertos_sem_forma: (i * 7) % 41, hoje_forma: i % 7 === 4 ? 'Boleto' : i % 7 === 5 ? 'Débito Automático' : null, hoje_chave: null }));
+  const gravacoes = Array.from({ length: 6 }, (_, i) => ({ id: `op${i}`, fornecedor_id: `ff${i}`, forma: FORMAS[i][0], chave: i === 0 ? '12.345.678/0001-90' : null,
+    lancamentos: Array.from({ length: 3 + i * 4 }, (_, k) => `l${k}`), recusados: i === 2 ? 1 : 0, feita_em: '2026-11-24T09:42:00Z',
+    fornecedor: { nome: previa[i].nome } }));
+  const fontes = { ler: async () => previa, gravacoes: async () => gravacoes,
+    gravar: async (_c: string, ids: readonly string[], simular: boolean) => ({ ok: true, simulado: simular, fornecedores: ids.map((id) => ({ id })), lancamentos: 123 }),
+    desfazer: async () => ({ ok: true, lancamentos_voltaram: 3, mantidos: [] }) };
+  montar(<FormaPeloExtratoDialog aberto clienteId="cli" aoFechar={() => {}} fontes={fontes} />);
 } else if (tela === 'fornecedores') {
   g.__bancoBancada = bancoDeFornecedores;
   /* FORN-01b — com `&barra=32` a tela entra como no app: sem o `p-3` da bancada, na secao de altura do V2 (`SECOES_APP_SHELL`) */
