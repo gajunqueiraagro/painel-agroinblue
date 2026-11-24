@@ -10,6 +10,7 @@
 //   - Conta, fornecedor e subcentro/plano NÃO são pré-preenchidos — usuário escolhe no modal.
 //     macro/grupo/centro/subcentro continuam derivados pelo fluxo oficial.
 
+import { fraseDoErroDoFornecedor } from '@/lib/fornecedores/erroDoCadastro';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hashesDoCusteio } from '@/v2/lib/custeio/hashItemCusteio';
@@ -535,7 +536,7 @@ export default function CusteioTxtImportTab(
         const { error } = await supabase.from('financeiro_fornecedores')
           .update({ aliases: [...(alvo?.aliases ?? []), item.produto_raw] })
           .eq('id', favorecidoId);
-        if (error) throw error;
+        if (error) throw new Error(fraseDoErroDoFornecedor(error, { aliases: item.produto_raw }, 'gravar o apelido do fornecedor'));
       }
       setRecarregarMemoria(n => n + 1);
     } catch (err) {
