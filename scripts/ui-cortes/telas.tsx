@@ -143,7 +143,13 @@ const LR_DA_NOTA = (v: string) => (DESCRICOES_DO_LR[v] ?? []).map((descricao, i)
   conta_bancaria_id: 'sic', numero_documento: 'NF 937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj',
   parcelas: [], por: ['numero'], parcela_n: i + 1 }));
 const NOMES_DO_LR: Record<string, string> = { 'agro-s': 'Agro Sintetica Insumos Agropecuarios Ltda', 'f-pur': 'Faz. Sintetica', sic: 'Sicredi Lavoura',
-  'pl-vet': 'Sanidade Animal — Vacinas e Medicamentos Veterinários' };
+  'pl-vet': 'Sanidade Animal — Vacinas e Medicamentos Veterinários', 'pl-maq-agr': 'Manutenção Máquinas Agricultura', 'pl-maq-pec': 'Manutenção Máquinas Pecuária',
+  'sf-pec': 'Safra 26/27 Pec.', 'sf-agr': 'Safra 26/27 Agr.' };
+/* NOTA-JUNTAR-CLASSIF-01 — `&classif=2`: o molde da NF 176.663 do NJ (SINTÉTICO) nas parcelas do LR: as ímpares em Manutenção Máquinas Agricultura, as
+   pares em Manutenção Máquinas Pecuária (cada uma com a safra da sua atividade); juntar com as duas recusa como o banco */
+const classifDoLr = (i: number) => (new URLSearchParams(location.search).get('classif') ? (i % 2 === 0 ? ['pl-maq-agr', 'sf-agr'] : ['pl-maq-pec', 'sf-pec']) : ['pl-vet', null]);
+const SAFRAS_DO_CLASSIF = [{ id: 'sf-pec', nome: 'Safra 26/27 Pec.', ativa: true, codigo: '26/27-Pec', escopo_negocio: 'pecuaria' },
+  { id: 'sf-agr', nome: 'Safra 26/27 Agr.', ativa: true, codigo: '26/27-Agr', escopo_negocio: 'agricultura' }];
 /* Gabriel 29/10 10:38 — `v=gulart`: a nota de UMA parcela já lançada 1 de 1, PROGRAMADA (o molde Gulart & Cia, SINTÉTICO; a nota sem duplicata, R$ 9.583,00) */
 const GULART_DA_NOTA = () => [{ id: 'jl-g1', vencimento: '2026-10-10', pagamento: null, competencia: '2026-09-30', descricao: 'Compra cantina sintetica', valor_cent: 958300,
   status: 'programado', conciliado: false, financiamento_id: null, conta_bancaria_id: 'sic', numero_documento: '000.000.937', fornecedor_id: 'agro-s',
@@ -254,8 +260,9 @@ function completarDoLr(v: string, a: any) {
   const doLr: any[] = (v === 'gulart' || v === 'gulartlongo') ? GULART_DA_NOTA() : v === 'm2' ? M2_DA_NOTA() : v === 'avista' ? AVISTA_DA_NOTA() : v === 'juros' ? JUROS_DA_NOTA() : v === 'previsto' ? PREVISTO_DA_NOTA() : LR_DA_NOTA(v);
   const linhas = (a?.p_lancamentos ?? []).map((x: any) => {
     const i = doLr.findIndex((l) => l.id === x.id); const l = doLr[i]; const paga = l?.status === 'realizado';
-    const hoje: Record<string, unknown> = { descricao: l?.descricao ?? null, favorecido_id: 'agro-s', fazenda_id: 'f-pur', conta_bancaria_id: 'sic', plano_conta_id: 'pl-vet',
-      numero_documento: l?.numero_documento ?? null, data_competencia: l?.competencia ?? null, safra_id: null, valor: (l?.valor_cent ?? 0) / 100, data_vencimento: l?.vencimento ?? null };
+    const [plano, safra] = classifDoLr(Math.max(0, i));
+    const hoje: Record<string, unknown> = { descricao: l?.descricao ?? null, favorecido_id: 'agro-s', fazenda_id: 'f-pur', conta_bancaria_id: 'sic', plano_conta_id: plano,
+      numero_documento: l?.numero_documento ?? null, data_competencia: l?.competencia ?? null, safra_id: safra, valor: (l?.valor_cent ?? 0) / 100, data_vencimento: l?.vencimento ?? null };
     const campos: Record<string, unknown> = {};
     for (const [c, h] of Object.entries(hoje)) {
       const cad = paga && ['valor', 'data_vencimento', 'conta_bancaria_id'].includes(c) ? 'paga: valor, data e conta não mudam' : null;
@@ -270,6 +277,10 @@ function completarDoLr(v: string, a: any) {
     if (de === para) continue;
     const g0 = grupos.get(de + para) ?? { mes_de: de, subcentro_de: NOMES_DO_LR['pl-vet'], mes_para: para, subcentro_para: NOMES_DO_LR['pl-vet'], valor: 0, lancamentos: 0 };
     g0.valor = Math.round((g0.valor + Number(c.valor.fica)) * 100) / 100; g0.lancamentos += 1; grupos.set(de + para, g0);
+  }
+  /* juntar exige UMA classificação (`fn_parcelamento_juntar_lancamentos`, motivo 'classificacoes'): a mesma recusa do banco */
+  if (a?.p_juntar && new Set(linhas.map((l: any) => String(l.campos.plano_conta_id.fica))).size > 1) {
+    return { ok: false, recusas: [{ frase: 'Os lançamentos têm classificações diferentes: acerte a classificação antes de juntar.' }], linhas, efeito_dre: [] };
   }
   return { ok: true, recusas: [], linhas, efeito_dre: [...grupos.values()] };
 }
@@ -2220,6 +2231,8 @@ if (tela === 'mesclar') {
       { id: 'pl-nut', subcentro: 'Nutrição Engorda', centro_custo: 'Suplementação', grupo_custo: 'Nutrição', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
       { id: 'pl-vet', subcentro: 'Sanidade Animal — Vacinas e Medicamentos Veterinários', centro_custo: 'Sanidade', grupo_custo: 'Custeio Pecuário', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
       { id: 'pl-lav', subcentro: 'Insumos Lavoura — Defensivos e Fertilizantes', centro_custo: 'Insumos', grupo_custo: 'Custeio Lavoura', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura' },
+      { id: 'pl-maq-agr', subcentro: 'Manutenção Máquinas Agricultura', centro_custo: 'Operações Mecanizadas', grupo_custo: 'Custeio Lavoura', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura' },
+      { id: 'pl-maq-pec', subcentro: 'Manutenção Máquinas Pecuária', centro_custo: 'Máquinas', grupo_custo: 'Custeio Pecuário', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
     ] as any;
     const SAFRAS_N = [{ id: 's-soja', nome: 'Safra 26/27 Soja — Retiro Agricultura Sintético', ativa: true, codigo: '26/27-SOJ', escopo_negocio: 'agricultura' },
       /* Caso 3 — a safra da que ficou na c/c (a de antes) */
@@ -2229,7 +2242,7 @@ if (tela === 'mesclar') {
       { id: 'elo', nome_conta: 'Cartão Elo Exemplo', banco: null, fazenda_id: 'f-pur', tipo_conta: 'cartao', codigo_conta: null, nome_exibicao: 'Cartão Elo Exemplo', agencia: null, numero_conta: null, conta_digito: null }] as any;
     montar(<NotaFiscalDialog open onClose={() => {}} clienteId="cli" clienteNome="Cliente Exemplo"
       nota={{ arquivo, bytes, lido, doXml: { proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente, resolucao, ocorrencias, arquivo } as any }}
-      fazendas={[{ id: 'f-pur', nome: 'Faz. Sintetica', codigo: 'PUR' }] as any} contas={CONTAS_N} classificacoes={PLANO} safras={SAFRAS_N} fornecedores={fornecedores}
+      fazendas={[{ id: 'f-pur', nome: 'Faz. Sintetica', codigo: 'PUR' }] as any} contas={CONTAS_N} classificacoes={PLANO} safras={q.get('classif') ? [...SAFRAS_N, ...SAFRAS_DO_CLASSIF] : SAFRAS_N} fornecedores={fornecedores}
       onCriarFornecedor={async () => null} onCriarLancamento={async () => null} onAbrirNoLancamento={() => {}} onAbrirRegistrada={() => {}} onCriado={() => {}} consultarReceita={receita as any} />);
   };
   void montarNotaPdf();

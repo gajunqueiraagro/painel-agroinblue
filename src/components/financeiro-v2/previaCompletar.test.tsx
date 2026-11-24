@@ -19,10 +19,15 @@ const HOJE: Record<string, Record<string, unknown>> = {
     plano_conta_id: 'p0', safra_id: 's0', valor: 632, data_vencimento: '2031-07-20' },
 };
 const NOMES: Record<string, string> = { f1: 'Fornecedor sintetico', z1: 'Fazenda Um', z2: 'Fazenda Dois', c0: 'Banco sintetico', c1: 'Banco da nota', p0: 'Manutenção', s0: 'Safra 30/31' };
-const estado = vi.hoisted(() => ({ hoje: {} as Record<string, Record<string, unknown>>, nomes: {} as Record<string, string> }));
+const estado = vi.hoisted(() => ({ hoje: {} as Record<string, Record<string, unknown>>, nomes: {} as Record<string, string>, recusaJuntar: false }));
 const banco = vi.hoisted(() => ({
   completarComANota: vi.fn(async (_c: string, pedido: readonly Record<string, unknown>[], _o: { juntar: boolean; chave: string | null; simular: boolean; valorNotaCent?: number | null })
-    : Promise<Consulta<ResultadoCompletar>> => ({ ok: true, valor: { ok: true, recusas: [], operacao: null, financiamentoId: null,
+    : Promise<Consulta<ResultadoCompletar>> => {
+    /* NOTA-JUNTAR-CLASSIF-01 — juntar com contas diferentes no que FICA: a recusa do banco (`fn_parcelamento_juntar_lancamentos`) */
+    const fica = (p: Record<string, unknown>) => ('plano_conta_id' in p ? p.plano_conta_id : estado.hoje[String(p.id)].plano_conta_id);
+    const recusas = estado.recusaJuntar && _o.juntar && new Set(pedido.map(fica)).size > 1
+      ? ['Os lançamentos têm classificações diferentes: acerte a classificação antes de juntar.'] : [];
+    return ({ ok: true, valor: { ok: recusas.length === 0, recusas, operacao: null, financiamentoId: null,
       efeitoDre: [{ mesDe: '2031-05', subcentroDe: 'Manutenção', mesPara: '2031-06', subcentroPara: 'Manutenção', valor: 1264, lancamentos: 2 }],
       linhas: pedido.map((p) => {
         const id = String(p.id);
@@ -34,7 +39,8 @@ const banco = vi.hoisted(() => ({
           campos[k] = { hoje: h, fica, muda: fica !== h, hojeNome: estado.nomes[String(h)] ?? null, ficaNome: estado.nomes[String(fica)] ?? null, cadeado: cad };
         }
         return { id, descricao: 'Cercas', situacao: pago ? 'conciliada' : 'programada', parcelaN: null, campos };
-      }) } })),
+      }) } });
+  }),
   /* DA-NOTA-CLASSIF-01 — a sugestão pelos itens: por padrão a nota ainda não está gravada (`null`) */
   sugestaoDosItensDaNota: vi.fn(async (_c: string, _k: string | null): Promise<Consulta<ItemSugerido[] | null>> => ({ ok: true, valor: null })),
 }));
@@ -71,6 +77,7 @@ beforeEach(() => {
   banco.completarComANota.mockClear();
   estado.hoje = { l1: { ...HOJE.l1 }, l2: { ...HOJE.l2 } };
   estado.nomes = { ...NOMES };
+  estado.recusaJuntar = false;
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
   Element.prototype.releasePointerCapture = () => {};
@@ -197,6 +204,17 @@ describe('DA-NOTA-CLASSIF-01 — a sugestão da conta pelos itens', () => {
     expect(screen.queryByTestId('previa-sugestao-usar')).toBeNull();
     expect(confirmar).not.toHaveBeenCalled();
   });
+  it('DA-NOTA ETAPA 2 — a troca de subcentro DESTACADA: "Subcentro muda de Manutenção para Peças e Pneus" (antes do clique: "não muda")', async () => {
+    estado.nomes.p9 = 'Peças e Pneus';
+    banco.sugestaoDosItensDaNota.mockResolvedValueOnce({ ok: true, valor: [item(1, 'p9', 'Peças e Pneus')] });
+    abrir();
+    await conferido();
+    expect(screen.getByTestId('previa-troca-conta-nao').textContent).toBe('Subcentro não muda');
+    fireEvent.click(await screen.findByTestId('previa-sugestao-usar'));
+    expect((await screen.findByTestId('previa-troca-conta-de')).textContent).toBe('Manutenção');
+    expect(screen.getByTestId('previa-troca-conta-para').textContent).toBe('Peças e Pneus');
+    expect(screen.getByTestId('previa-troca-conta').textContent).toBe('Subcentro muda deManutençãoparaPeças e Pneus');
+  });
   it('a sugestão igual à de hoje: "já está nela", sem botão', async () => {
     banco.sugestaoDosItensDaNota.mockResolvedValueOnce({ ok: true, valor: [item(1, 'p0', 'Manutenção')] });
     abrir();
@@ -217,5 +235,49 @@ describe('DA-NOTA-CLASSIF-01 — a sugestão da conta pelos itens', () => {
     fireEvent.click(screen.getByText('Tentar de novo'));
     await waitFor(() => expect(banco.sugestaoDosItensDaNota.mock.calls.length).toBe(antes + 1));
     expect(await screen.findByTestId('previa-sugestao-sem-nota')).toBeTruthy();
+  });
+});
+
+describe('NOTA-JUNTAR-CLASSIF-01 — juntar com classificações diferentes resolve em 1 clique', () => {
+  const abrirJuntando = (juntar = true) => {
+    render(<PreviaCompletar open onFechar={() => {}} clienteId="cli" alvos={ALVOS} rotulos={{ l1: '1/2', l2: '2/2' }} todasIniciais={TODAS}
+      atualizarNaoPagas={false} juntar={juntar} chave="k" onConfirmar={vi.fn(async () => null)} />);
+  };
+  /* o caso NJ (NF 176.663): a 1/2 em Manutenção Máquinas Agricultura, a 2/2 em Manutenção Máquinas Pecuária, cada uma com a safra da atividade */
+  const doisLados = () => {
+    estado.hoje.l1 = { ...estado.hoje.l1, plano_conta_id: 'p-agr', safra_id: 's-agr' };
+    estado.hoje.l2 = { ...estado.hoje.l2, plano_conta_id: 'p-pec', safra_id: 's-pec' };
+    estado.recusaJuntar = true;
+  };
+  it('a linha: "Usar a da 1/2 em todas" · "Usar a da 2/2 em todas" · "Dividir por item · em breve" (desligado); o rodapé curto; não grava', async () => {
+    doisLados();
+    abrirJuntando();
+    const linhaJ = await screen.findByTestId('previa-juntar-classif');
+    const botoes = within(linhaJ).getAllByRole('button').filter((b) => b.textContent && !/^\s*$/.test(b.textContent));
+    expect(botoes.slice(0, 3).map((b) => b.textContent)).toEqual(['Usar a da 1/2 em todas', 'Usar a da 2/2 em todas', 'Dividir por item · em breve']);
+    expect(within(linhaJ).getByText('Dividir por item · em breve')).toBeDisabled();
+    expect((await screen.findByTestId('previa-recusa')).textContent).toBe('Classificações diferentes: escolha uma acima para juntar.');
+    expect(screen.getByTestId('previa-gravar')).toBeDisabled();
+  });
+  it('o clique leva a conta E a safra da parcela às DUAS (a conciliada inclusive) e o juntar passa; a escolhida fica marcada', async () => {
+    doisLados();
+    abrirJuntando();
+    fireEvent.click(await screen.findByText('Usar a da 2/2 em todas'));
+    await waitFor(() => expect(ultimoPedido().map((p: Record<string, unknown>) => p.plano_conta_id)).toEqual(['p-pec', 'p-pec']));
+    expect(ultimoPedido().map((p: Record<string, unknown>) => p.safra_id)).toEqual(['s-pec', 's-pec']);
+    await conferido();
+    expect(screen.getByText('Usar a da 2/2 em todas').className).toContain('bg-primary');
+    expect(screen.getByTestId('previa-juntar-classif')).toBeTruthy();
+  });
+  it('sem juntar, ou com a mesma conta nas duas: nenhuma linha', async () => {
+    doisLados();
+    abrirJuntando(false);
+    await conferido();
+    expect(screen.queryByTestId('previa-juntar-classif')).toBeNull();
+  });
+  it('a mesma conta nas parcelas (juntando): nenhuma linha', async () => {
+    abrirJuntando();
+    await conferido();
+    expect(screen.queryByTestId('previa-juntar-classif')).toBeNull();
   });
 });

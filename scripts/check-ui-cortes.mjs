@@ -1954,6 +1954,31 @@ const CENARIOS = [
       await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
       await p.locator('[data-testid="previa-diferenca"]').waitFor({ timeout: 5000 });
     } },
+  /* DA-NOTA ETAPA 2 (Gabriel 24/11 19:30, o 2º print: NF 26.185 já com os juros) — a sugestão pelos itens TROCA o subcentro: o "usar" e a linha
+     "Subcentro muda de Sanidade Animal — … · Pecuária para Nutrição Engorda · Pecuária"; subcentro, safra e descrição inteiros; nada rola de lado. SINTÉTICO. */
+  { nome: 'nota-pdf-ja-juros-troca', url: 'tela=nota-pdf&v=juros&sugestao=uma', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-acao"][data-acao="deixar"]').first().click(); await p.locator('[data-testid="nota-acao-vincular"]').click(); await p.waitForTimeout(300);
+      const cria = p.locator('[data-testid="nota-acao"][data-acao="criar"]');
+      if (await cria.count()) { await cria.first().click(); await p.locator('[data-testid="nota-acao-deixar"], [data-testid="nota-acao-jaPaga"]').first().click(); await p.waitForTimeout(300); }
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="previa-sugestao-usar"]').click(); await p.locator('[data-testid="previa-troca-conta-para"]').waitFor({ timeout: 5000 }); await p.waitForTimeout(400);
+    } },
+  /* NOTA-JUNTAR-CLASSIF-01 (Gabriel 24/11 19:05) — juntar com classificações diferentes (as parcelas em Manutenção Máquinas Agricultura e Pecuária, o molde
+     da NF 176.663 do NJ, SINTÉTICO): a linha "Classificações diferentes · Usar a da 1/4 em todas · … · Dividir por item · em breve" e o rodapé curto; e
+     depois do clique (a conta e a safra da 1/4 no Aplicar a todas, o subcentro "Manut. Máquinas · Agricultura" inteiro). DA-NOTA ETAPA 2: nada cortado. */
+  ...[['', false], ['-escolhido', true]].map(([suf, clica]) => ({ nome: `nota-pdf-ja-juntar-classif${suf}`, url: 'tela=nota-pdf&v=lr&classif=2',
+    tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="previa-juntar-classif"]').waitFor({ timeout: 5000 });
+      if (clica) { await p.locator('[data-testid="previa-juntar-classif"] button', { hasText: 'Usar a da 1/4' }).first().click(); await p.waitForTimeout(900); }
+    } })),
   /* NOTA-ATUALIZA-PREVISTO-01 — o caso da Vera (SINTÉTICO): "É esta" no PREVISTO de R$ 1.000 + "paga 70 %": a aba Parcelas (o Resultado
      "1 atualiza · 0 cria · R$ … · paga 70 % · outro paga R$ …", o resumo em colunas) e a Como vai ficar (o valor de hoje riscado → o novo) */
   ...[['parcelas', 'O que já existe'], ['ficar', 'Como vai ficar']].map(([a, rotulo]) => ({
