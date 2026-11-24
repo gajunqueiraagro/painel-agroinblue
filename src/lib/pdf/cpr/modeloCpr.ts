@@ -110,6 +110,8 @@ export interface LinhaDaTela {
 export interface EntradaDoModelo<L extends LinhaDaTela> {
   clienteNome: string; fazendaNome?: string; contaNome: string; todasAsContas: boolean;
   periodo: PeriodoCpr; segmento: 'pagar' | 'receber' | 'ambos'; emitidoEm: string;
+  /** CPR-LAYOUT-04 — a frase dos filtros da tela ("Filtros: Origem: Recorrente · Forma: PIX"); ausente = sem filtro */
+  filtros?: string;
   serie: SerieDoSaldoCpr; grupos: GrupoDaTela<L>[];
   cartoes: {
     vencidosContamPagar: LadoCpr; vencidosContamReceber: LadoCpr; pagarNoPeriodo: LadoCpr; receberNoPeriodo: LadoCpr;
@@ -260,7 +262,7 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
     cabecalho: {
       clienteNome: e.clienteNome, fazenda: e.fazendaNome, contaNome: e.todasAsContas ? 'Todas as contas' : e.contaNome,
       periodo: `${dma(e.periodo.de)} a ${dma(e.periodo.ate)}`,
-      linha2: `${SEGMENTO[e.segmento]}   ·   emitido em ${e.emitidoEm}`,
+      linha2: `${SEGMENTO[e.segmento]}${e.filtros ? `   ·   ${e.filtros}` : ''}   ·   emitido em ${e.emitidoEm}`,
     },
     numeros,
     grafico: e.grafico ?? null,

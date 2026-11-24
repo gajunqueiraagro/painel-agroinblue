@@ -5,14 +5,14 @@
  */
 import { useEffect, useState } from 'react';
 import { chavesGuardadas, lerItensGuardados, notaComItensDoArquivo } from '@/lib/financeiro/itensDaNotaBanco';
-import { ehChaveDeNota } from '@/lib/financeiro/nfe/formatos';
+import { chaveDoDocumento } from '@/lib/financeiro/nfe/formatos';
 import type { CabecalhoDaNota, ItensLidos } from '@/lib/financeiro/nfe/itensDaNota';
 
 export interface NotaComItens { cabecalho: CabecalhoDaNota; lidos: ItensLidos }
 
 export function useItensDaNota({ clienteId, chaves, arquivo }: { clienteId: string | null; chaves: readonly string[]; arquivo: File | null }): NotaComItens | null {
   const [nota, setNota] = useState<NotaComItens | null>(null);
-  const chave = chaves.filter(ehChaveDeNota).sort().join(',');
+  const chave = [...new Set(chaves.map(chaveDoDocumento).filter((c): c is string => !!c))].sort().join(',');
   useEffect(() => {
     let vivo = true;
     (async () => {
@@ -37,7 +37,7 @@ export function useItensDaNota({ clienteId, chaves, arquivo }: { clienteId: stri
 /** As chaves (das listadas) que ja' tem itens guardados — para a aba Documentos da OC oferecer "Itens da nota". */
 export function useChavesComItens(clienteId: string | null | undefined, chaves: readonly (string | null | undefined)[]): ReadonlySet<string> {
   const [com, setCom] = useState<ReadonlySet<string>>(new Set());
-  const lista = [...new Set(chaves.filter(ehChaveDeNota))].sort().join(',');
+  const lista = [...new Set(chaves.map(chaveDoDocumento).filter((c): c is string => !!c))].sort().join(',');
   useEffect(() => {
     let vivo = true;
     if (!clienteId || !lista) { setCom(new Set()); return; }
@@ -55,7 +55,7 @@ export function useItensDaNotaDaTela({ clienteId, chave, arquivo }: { clienteId:
   nota: NotaComItens | null; carregando: boolean;
 } {
   const [estado, setEstado] = useState<{ nota: NotaComItens | null; carregando: boolean }>({ nota: null, carregando: true });
-  const chaveValida = chave && /^\d{44}$/.test(chave) ? chave : null;
+  const chaveValida = chaveDoDocumento(chave);
   useEffect(() => {
     let vivo = true;
     setEstado({ nota: null, carregando: true });

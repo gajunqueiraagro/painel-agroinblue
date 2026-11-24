@@ -66,7 +66,11 @@ import { movimentoNaConta, type LinhaDaPosicao } from '@/hooks/useExtratoDaConta
 import { rotuloOrigem } from '@/v2/lib/origemLancamento';
 import { useNomesDeFornecedores } from '@/hooks/useNomesDeFornecedores';
 import { ChevronDown, Maximize2, Minimize2 } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  GRUPOS_DO_FILTRO_CPR, ROTULO_DO_GRUPO_CPR, SEM_FILTROS_CPR, algumFiltroCpr, alternarFiltroCpr, apelidoCurtoDaContaCpr, chipsDosFiltrosCpr,
+  fraseDosFiltrosCpr, marcadoNoFiltroCpr, opcoesDoGrupoCpr, passaNosFiltrosCpr, prontaDoCodigoCpr, type FiltrosCpr, type GrupoDoFiltroCpr,
+} from '@/lib/financeiro/cprFiltros';
 import { montarModeloCpr, nomeDoArquivoCpr, type EntradaDoModelo } from '@/lib/pdf/cpr/modeloCpr';
 import { useParcelasDosLancamentos } from '@/hooks/useParcelasDosLancamentos';
 import { nomeEParcela } from '@/lib/financiamentos/nomeDaParcela';
@@ -204,9 +208,11 @@ const MAX_CONTAS_NA_FAIXA = 4;
 const RESERVA_DO_VALOR_NA_FAIXA = `R$\u00a0${reservaDeNumero(10)},99`;
 /* CPR-LAYOUT-03 (mock aprovado 15/11 11:25) — a régua tipográfica do mock: a linha a 12px; DATAS a 10,5px e a NF a 10px (ponto 1); o
    status a 10,5px; a linha do dia e o fim do período a 12px negrito (ponto 7), nada maior. Safra e Faz. (ampliado) com as datas. */
-const FONTE_LINHA = 'text-[12px]';
-const FONTE_STATUS = 'text-[10.5px]';
-const FONTE_DATA = 'text-[10.5px]';
+/* CPR-LAYOUT-04 (Gabriel 24/11 07:28) — a linha a 11px e 22px de altura; as DATAS a 10px cinza; o cabeçalho a 10,5; as faixas seguem a
+   12px negrito. O status a 10px (abaixo da linha, como as datas). */
+const FONTE_LINHA = 'text-[11px]';
+const FONTE_STATUS = 'text-[10px]';
+const FONTE_DATA = 'text-[10px]';
 const FONTE_NF = 'text-[10px]';
 const FONTE_FINA = FONTE_DATA;
 const FONTE_QUANDO = 'text-[10.5px]';
@@ -384,6 +390,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
   const [segmento, setSegmento] = useState<Segmento>('ambos');
   /** CPR-LAYOUT-03 — toda coluna ordena; abre (e volta) pelo vencimento crescente, dentro de cada grupo. */
   const [ordem, setOrdem] = useState<OrdemCpr>(ORDEM_PADRAO_CPR);
+  /** CPR-LAYOUT-04 — os filtros do botão "Filtros" (Origem · Forma · Pagamento); cada um ativo vira um chip com ✕. */
+  const [filtros, setFiltros] = useState<FiltrosCpr>(SEM_FILTROS_CPR);
   /** CPR-LAYOUT-03 (pontos 2–3) — a lista dos vencidos, aberta pelo "Ver e confirmar" da faixa. */
   const [vencidosAbertos, setVencidosAbertos] = useState(false);
   const [statusLigados, setStatusLigados] = useState<string[]>(retorno?.statusLigados ?? STATUS_INICIAIS);
@@ -734,6 +742,83 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
     return linhas;
   }, [caixa]);
 
+  const idsVisiveis = useMemo(() => linhas.map((l) => l.id).sort(), [linhas]);
+  /* PARC-LIVRES-01 passo 5 — o "i/N" da parcela de parcelamento vem do CONTRATO, numa parte que nunca corta (lista, PDF e Excel). */
+  const { data: parcelasDosLancamentos } = useParcelasDosLancamentos(clienteId);
+  /* P152 — a MESMA leitura traz agora os documentos de cada linha (espécie, número, cancelado): o "NF nnnn" é o do dono (`docDaLinha`,
+     o mesmo de Lançamentos), e com documento vivo o "NF" abre a aba Documentos do lançamento. */
+  const { data: documentosPorLancamento } = useQuery({
+    queryKey: ['cpr-anexos', clienteId, idsVisiveis.length, idsVisiveis[0] ?? ''],
+    enabled: !!clienteId && idsVisiveis.length > 0,
+    queryFn: async (): Promise<Map<string, DocumentoDaLinha[]>> => {
+      const achados = await paginarTudo<{ lancamento_id: string | null; especie: string | null; numero: string | null; cancelado: boolean | null; chave_acesso: string | null }>(async (de, tamanho) => {
+        const fatia = idsVisiveis.slice(de, de + tamanho);
+        if (fatia.length === 0) return { linhas: [], brutas: 0 };
+        const { data, error } = await supabase
+          .from('vw_lancamento_documentos')
+          .select('lancamento_id, especie, numero, cancelado, chave_acesso')
+          .eq('cliente_id', clienteId ?? '')
+          .in('lancamento_id', fatia);
+        if (error) throw error;
+        return { linhas: data ?? [], brutas: fatia.length };
+      });
+      const mapa = new Map<string, DocumentoDaLinha[]>();
+      for (const d of achados) {
+        if (!d.lancamento_id) continue;
+        const lista = mapa.get(d.lancamento_id) ?? [];
+        lista.push({ especie: d.especie, numero: d.numero, cancelado: d.cancelado, chave_acesso: d.chave_acesso });
+        mapa.set(d.lancamento_id, lista);
+      }
+      return mapa;
+    },
+  });
+  /* P152 — o selo R vem do VÍNCULO (`recorrencia_id`), nunca da descrição. A view da lista não traz a coluna: a mesma pergunta `.in()`
+     sobre os ids já visíveis, só os que têm recorrência. */
+  const { data: recorrenciaDaLinha } = useQuery({
+    queryKey: ['cpr-recorrencias', clienteId, idsVisiveis.length, idsVisiveis[0] ?? ''],
+    enabled: !!clienteId && idsVisiveis.length > 0,
+    queryFn: async (): Promise<Map<string, string>> => {
+      const achados = await paginarTudo<{ id: string; recorrencia_id: string | null }>(async (de, tamanho) => {
+        const fatia = idsVisiveis.slice(de, de + tamanho);
+        if (fatia.length === 0) return { linhas: [], brutas: 0 };
+        const { data, error } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('id, recorrencia_id')
+          .eq('cliente_id', clienteId ?? '')
+          .in('id', fatia)
+          .not('recorrencia_id', 'is', null);
+        if (error) throw error;
+        return { linhas: data ?? [], brutas: fatia.length };
+      });
+      const mapa = new Map<string, string>();
+      for (const r of achados) if (r.recorrencia_id) mapa.set(r.id, r.recorrencia_id);
+      return mapa;
+    },
+  });
+  /* CPR-LAYOUT-04 — o filtro Pagamento (Prontos · Faltando) lê a regra do banco (`fn_pronto_para_pagar_dos`), SÓ com o filtro ligado e
+     sobre os ids já visíveis (uma ida por leva). Ainda não lido = não filtra; falhou = não filtra e o chip DIZ (P146). */
+  const comPagamento = filtros.pagamento.length > 0;
+  const { data: prontaPorId, isError: prontoFalhou } = useQuery({
+    queryKey: ['cpr-pronto', clienteId, idsVisiveis.length, idsVisiveis[0] ?? ''],
+    enabled: !!clienteId && idsVisiveis.length > 0 && comPagamento,
+    queryFn: async (): Promise<Map<string, boolean | null>> => {
+      const mapa = new Map<string, boolean | null>();
+      for (let i = 0; i < idsVisiveis.length; i += 500) {
+        const { data, error } = await (supabase as any).rpc('fn_pronto_para_pagar_dos', { p_ids: idsVisiveis.slice(i, i + 500) });
+        if (error) throw error;
+        const leva: { lancamento_id: string; pronto_pagar: string | null }[] = data ?? [];
+        for (const r of leva) mapa.set(r.lancamento_id, prontaDoCodigoCpr(r.pronto_pagar));
+      }
+      return mapa;
+    },
+  });
+  /* CPR-LAYOUT-04 — O FILTRO CORTA AS LINHAS ANTES DO RECORTE: cartões, lista, PDF e Excel leem o mesmo resultado. Com filtro, o saldo
+     corrido fica vazio (ele é do caixa inteiro, não das contas filtradas) e o motivo vai no `title`. */
+  const filtroLigado = algumFiltroCpr(filtros);
+  const linhasDoRecorte = useMemo(() => (!filtroLigado ? linhas : linhas.filter((l) => passaNosFiltrosCpr(
+    { ...l, recorrencia_id: recorrenciaDaLinha?.get(l.id) ?? null }, filtros,
+    { ehParcela: parcelasDosLancamentos?.has(l.id) ?? false, pronta: !comPagamento || !prontaPorId ? undefined : (prontaPorId.get(l.id) ?? null) }))),
+  [linhas, filtroLigado, filtros, recorrenciaDaLinha, parcelasDosLancamentos, comPagamento, prontaPorId]);
   // ── Recortes em memória ────────────────────────────────────────────────────
   /* CPR-PERIODO-VENCIDOS-01 — baldes, cartões e total saem do DONO (`recortarCpr`), dos mesmos dados nas duas visões. */
   const ehReceber = ehReceberCpr;
@@ -757,8 +842,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
   const tituloDoSelo = tituloDoEstimado(estimadasDoCliente ? origensPresentes(estimadasDoCliente) : undefined, avisoEstimadasIncompleto);
   const tituloDoSeloDaLinha = (id: string) => tituloDoEstimado(estimadasDoCliente?.origens.get(id), avisoEstimadasIncompleto);
   const recorte = useMemo(
-    () => recortarCpr(linhas, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas, cartoes }),
-    [linhas, periodo, hojeIso, contaSel, ancoras, estimadas, cartoes]);
+    () => recortarCpr(linhasDoRecorte, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas, cartoes }),
+    [linhasDoRecorte, periodo, hojeIso, contaSel, ancoras, estimadas, cartoes]);
   /* A SÉRIE DO SALDO — do dono, a partir do MESMO número do cartão Caixa. */
   /* CPR-PDF-ACABAMENTO-01 — o REALIZADO do período (Caixa inicial + o que entrou e saiu por dia, até hoje): do MESMO dono do cartão
      Caixa, sobre a MESMA entrada dele e as mesmas contas (uma, ou todas). Nulo quando o dono não responde na véspera do período. */
@@ -776,8 +861,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
     [recorte, caixa, realizado, saldoDosCartoes]);
   /* o resumo por conta (opções do seletor e a faixa): do MESMO dono, sobre os MESMOS dados, sempre de TODAS as contas */
   const recorteDeTodas = useMemo(
-    () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, ancoras, estimadas, cartoes })),
-    [recorte, contaSel, linhas, periodo, hojeIso, ancoras, estimadas, cartoes]);
+    () => (contaSel == null && !filtroLigado ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, ancoras, estimadas, cartoes })),
+    [recorte, contaSel, filtroLigado, linhas, periodo, hojeIso, ancoras, estimadas, cartoes]);
   /* quem teve movimento realizado no período (do dono do caixa, sempre de TODAS as contas): entra no seletor em qualquer pílula */
   const comRealizado = useMemo(
     () => (caixaTodas ? contasComRealizadoNoPeriodo(caixaTodas.argumentos, periodo.de, periodo.ate) : []),
@@ -838,59 +923,6 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
    * proto, 111 lançamentos distintos, e a pergunta é um `.in()` sobre os ids JÁ visíveis — o
    * mesmo padrão do mapa de conciliação do Extrato Gerencial. Nenhum join novo.
    */
-  const idsVisiveis = useMemo(() => linhas.map((l) => l.id).sort(), [linhas]);
-  /* PARC-LIVRES-01 passo 5 — o "i/N" da parcela de parcelamento vem do CONTRATO, numa parte que nunca corta (lista, PDF e Excel). */
-  const { data: parcelasDosLancamentos } = useParcelasDosLancamentos(clienteId);
-  /* P152 — a MESMA leitura traz agora os documentos de cada linha (espécie, número, cancelado): o "NF nnnn" é o do dono (`docDaLinha`,
-     o mesmo de Lançamentos), e com documento vivo o "NF" abre a aba Documentos do lançamento. */
-  const { data: documentosPorLancamento } = useQuery({
-    queryKey: ['cpr-anexos', clienteId, idsVisiveis.length, idsVisiveis[0] ?? ''],
-    enabled: !!clienteId && idsVisiveis.length > 0,
-    queryFn: async (): Promise<Map<string, DocumentoDaLinha[]>> => {
-      const achados = await paginarTudo<{ lancamento_id: string | null; especie: string | null; numero: string | null; cancelado: boolean | null; chave_acesso: string | null }>(async (de, tamanho) => {
-        const fatia = idsVisiveis.slice(de, de + tamanho);
-        if (fatia.length === 0) return { linhas: [], brutas: 0 };
-        const { data, error } = await supabase
-          .from('vw_lancamento_documentos')
-          .select('lancamento_id, especie, numero, cancelado, chave_acesso')
-          .eq('cliente_id', clienteId ?? '')
-          .in('lancamento_id', fatia);
-        if (error) throw error;
-        return { linhas: data ?? [], brutas: fatia.length };
-      });
-      const mapa = new Map<string, DocumentoDaLinha[]>();
-      for (const d of achados) {
-        if (!d.lancamento_id) continue;
-        const lista = mapa.get(d.lancamento_id) ?? [];
-        lista.push({ especie: d.especie, numero: d.numero, cancelado: d.cancelado, chave_acesso: d.chave_acesso });
-        mapa.set(d.lancamento_id, lista);
-      }
-      return mapa;
-    },
-  });
-  /* P152 — o selo R vem do VÍNCULO (`recorrencia_id`), nunca da descrição. A view da lista não traz a coluna: a mesma pergunta `.in()`
-     sobre os ids já visíveis, só os que têm recorrência. */
-  const { data: recorrenciaDaLinha } = useQuery({
-    queryKey: ['cpr-recorrencias', clienteId, idsVisiveis.length, idsVisiveis[0] ?? ''],
-    enabled: !!clienteId && idsVisiveis.length > 0,
-    queryFn: async (): Promise<Map<string, string>> => {
-      const achados = await paginarTudo<{ id: string; recorrencia_id: string | null }>(async (de, tamanho) => {
-        const fatia = idsVisiveis.slice(de, de + tamanho);
-        if (fatia.length === 0) return { linhas: [], brutas: 0 };
-        const { data, error } = await supabase
-          .from('financeiro_lancamentos_v2')
-          .select('id, recorrencia_id')
-          .eq('cliente_id', clienteId ?? '')
-          .in('id', fatia)
-          .not('recorrencia_id', 'is', null);
-        if (error) throw error;
-        return { linhas: data ?? [], brutas: fatia.length };
-      });
-      const mapa = new Map<string, string>();
-      for (const r of achados) if (r.recorrencia_id) mapa.set(r.id, r.recorrencia_id);
-      return mapa;
-    },
-  });
 
   const nomeConta = (id: string | null): string => {
     if (!id) return '—';
@@ -911,11 +943,17 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
     const a = aprovacao.estados.get(id);
     return lancadoPorTexto(a?.lancadoPor ? aprovacao.nomes.get(a.lancadoPor) ?? null : null, a?.lancadoEm ?? null);
   };
+  /* CPR-LAYOUT-04 — a coluna Banco: o apelido curto da conta da linha (`apelidoCurtoDaContaCpr`), o nome inteiro no `title` */
+  const bancoDaLinha = (l: LinhaCpr): { curto: string; inteiro: string } => {
+    const id = contaDaConta(l);
+    const c = id ? fin.contasBancarias.find((x) => x.id === id) : undefined;
+    return { curto: (c && apelidoCurtoDaContaCpr(c.nome_exibicao || c.nome_conta)) || '—', inteiro: nomeConta(id) };
+  };
   const chavesDaLinha = (l: LinhaCpr): ChavesDaLinhaCpr => {
     const st = (l.status_transacao ?? '').toLowerCase();
     const rot = docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, documentosPorLancamento?.get(l.id)).rotulo;
     return {
-      comp: l.data_competencia, venc: l.data_vencimento, descricao: l.descricao ?? '',
+      comp: l.data_competencia, venc: l.data_vencimento, banco: bancoDaLinha(l).curto.replace('—', ''), descricao: l.descricao ?? '',
       fornecedor: (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '', subcentro: l.subcentro ?? '',
       nf: numeroCurtoDoDocCpr(rot), status: STATUS_FILTRO_LABEL[st] ?? st,
       valor: (ehReceber(l) ? 1 : -1) * Math.abs(Number(l.valor ?? 0)),
@@ -1064,6 +1102,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
       queryClient.invalidateQueries({ queryKey: ['cpr-anexos'] }),
       queryClient.invalidateQueries({ queryKey: ['cpr-recorrencias'] }),
       queryClient.invalidateQueries({ queryKey: ['cpr-estimadas'] }),
+      queryClient.invalidateQueries({ queryKey: ['cpr-pronto'] }),
     ]);
   };
 
@@ -1303,6 +1342,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
     clienteNome: clienteAtual?.nome ?? 'cliente', contaNome: contaSel == null ? 'Todas as contas' : nomeConta(contaSel),
     todasAsContas: contaSel == null, periodo,
   };
+  /* CPR-LAYOUT-04 — o arquivo segue a tela: com filtro, as linhas já vêm filtradas (do recorte) e o saldo corrido sai vazio */
+  const gruposDoArquivo = filtroLigado ? grupos.map((g) => ({ ...g, saldo: g.saldo === undefined ? undefined : null })) : grupos;
   const exportarPdf = async () => {
     setExportando('pdf'); setRecadoExport(null);
     try {
@@ -1318,8 +1359,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
       const modelo = montarModeloCpr<LinhaCpr>({
         ...identidadeDoArquivo, grafico,
         fazendaNome: fazScope ? (fazendaAtual?.nome ?? undefined) : undefined,
-        segmento, emitidoEm: format(new Date(), 'dd/MM/yyyy HH:mm'),
-        serie, grupos,
+        segmento, emitidoEm: format(new Date(), 'dd/MM/yyyy HH:mm'), filtros: fraseDosFiltrosCpr(filtros) || undefined,
+        serie, grupos: gruposDoArquivo,
         cartoes: {
           vencidosContamPagar: recorte.cartoes.vencidosContam.pagar, vencidosContamReceber: recorte.cartoes.vencidosContam.receber,
           pagarNoPeriodo: recorte.cartoes.periodo.pagar, receberNoPeriodo: recorte.cartoes.periodo.receber,
@@ -1351,8 +1392,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
     setExportando('excel'); setRecadoExport(null);
     try {
       triggerXlsxDownload(montarPayloadExcelCpr<LinhaCpr>({
-        arquivo: nomeDoArquivoCpr(identidadeDoArquivo), grupos, serie, de: resolvedores, hoje: hojeIso, inicio: periodo.de,
-        fim: periodo.ate, rodape,
+        arquivo: nomeDoArquivoCpr(identidadeDoArquivo), grupos: gruposDoArquivo, serie, de: resolvedores, hoje: hojeIso, inicio: periodo.de,
+        fim: periodo.ate, rodape, filtros: fraseDosFiltrosCpr(filtros) || undefined,
       }));
     } catch (e) {
       setRecadoExport({ erro: true, texto: `Falha ao gerar Excel: ${e instanceof Error ? e.message : String(e)}` });
@@ -1360,6 +1401,52 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
       setExportando(null);
     }
   };
+  /* CPR-LAYOUT-04 — UM botão "Filtros ▾" (Origem · Forma · Pagamento: marcar várias; o menu fica aberto) e, ao lado, um chip com ✕ por
+     grupo ativo. Os chips moram num lugar que encolhe (`min-w-0`, rola no lugar): os botões da direita não andam (NADA SE DESLOCA). */
+  const tituloDoChip = (g: GrupoDoFiltroCpr, texto: string): string => (g === 'pagamento' && prontoFalhou
+    ? `${texto} — não consegui verificar o "pronto para pagar" agora: o filtro de Pagamento não está valendo (tente de novo)`
+    : g === 'pagamento' && !prontaPorId ? `${texto} — lendo o "pronto para pagar"…` : texto);
+  const ctlFiltros = (
+    <div className="flex min-w-0 shrink items-center gap-1" data-testid="cpr-filtros">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" data-testid="cpr-filtros-botao" title="Filtrar por origem, forma de pagamento e pronto para pagar"
+            className={cn('flex h-[22px] shrink-0 items-center gap-1 rounded-md border px-2 text-[10px] font-medium transition-colors',
+              filtroLigado ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+            Filtros <ChevronDown className="h-3 w-3" aria-hidden />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {GRUPOS_DO_FILTRO_CPR.map((g, i) => (
+            <Fragment key={g}>
+              {i > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuLabel>{ROTULO_DO_GRUPO_CPR[g]}</DropdownMenuLabel>
+              {opcoesDoGrupoCpr(g).map((o) => (
+                <DropdownMenuCheckboxItem key={o.valor} data-filtro={`${g}:${o.valor}`}
+                  checked={marcadoNoFiltroCpr(filtros, g, o.valor)}
+                  onSelect={(e) => e.preventDefault()}
+                  onCheckedChange={() => setFiltros((f) => alternarFiltroCpr(f, g, o.valor))}>
+                  {o.rotulo}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </Fragment>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <div className="uma-linha-que-rola flex min-w-0 items-center gap-1" data-testid="cpr-filtros-chips">
+        {chipsDosFiltrosCpr(filtros).map((c) => (
+          <span key={c.grupo} data-chip-filtro={c.grupo} title={tituloDoChip(c.grupo, c.texto)}
+            className={cn('flex h-[18px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-primary/10 pl-2 pr-1 text-[10px] text-primary',
+              c.grupo === 'pagamento' && prontoFalhou && 'bg-amber-100 text-amber-800')}>
+            {c.texto}
+            <button type="button" aria-label={`Tirar o filtro ${c.texto}`} title="Tirar este filtro"
+              onClick={() => setFiltros((f) => ({ ...f, [c.grupo]: [] }))}
+              className="flex h-[14px] w-[14px] items-center justify-center rounded-full hover:bg-primary/20">✕</button>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
   /* UM nó: "Exportar ▾" (PDF · Excel). Gerando: desabilitado e "Gerando…"; sem dados no recorte: desabilitado com o motivo. */
   const ctlExportar = (
     <DropdownMenu>
@@ -1460,6 +1547,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
     return <span className={cn('inline-block whitespace-nowrap rounded-full px-1.5 text-[10px] font-semibold leading-[15px]', COR_DO_CHIP[c.tom])} title={c.titulo}>{c.texto}</span>;
   };
   const MOTIVO_SALDO_NA_ETAPA = 'numa etapa o saldo fica vazio: o saldo corrido é do grupo inteiro (volte a "Tudo")';
+  /* CPR-LAYOUT-04 — com filtro, o saldo corrido fica vazio: ele é do caixa inteiro, não só das contas filtradas */
+  const MOTIVO_SALDO_COM_FILTRO = 'com filtro o saldo fica vazio: o saldo é do caixa inteiro, não só das contas filtradas (limpe os filtros)';
+  const semSaldo = etapaAtiva || filtroLigado;
+  const motivoDoSaldoVazio = etapaAtiva ? MOTIVO_SALDO_NA_ETAPA : MOTIVO_SALDO_COM_FILTRO;
   const somaDaEtapa = (ls: readonly LinhaCpr[]) => ls.filter(naEtapa)
     .reduce((acc, l) => acc + (chavesForaDoCaixa.has(chaveDaLinhaCpr(l)) ? 0 : (ehReceber(l) ? 1 : -1) * Math.abs(Number(l.valor ?? 0))), 0);
   const desenharGrupo = (g: Grupo, i?: number): ReactNode => {
@@ -1484,8 +1575,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
               : g.tipo === 'vencidos' || g.tipo === 'saem_hoje' ? cn('h-[22px] border-t-[1.5px] border-t-[#b91c1c]/40 font-bold', COR_SINAL.neg, FUNDO_VENCIDOS)
               : 'h-[20px] border-b bg-muted font-medium text-muted-foreground')}
           titulo={g.titulo} quando={g.quando} dica={g.dica}
-          valor={etapaAtiva ? somaDaEtapa(g.linhas) : g.receber - g.pagar} saldo={etapaAtiva ? undefined : g.saldo}
-          motivoSemSaldo={etapaAtiva ? MOTIVO_SALDO_NA_ETAPA : motivoSemSaldo}
+          valor={etapaAtiva ? somaDaEtapa(g.linhas) : g.receber - g.pagar} saldo={semSaldo ? undefined : g.saldo}
+          motivoSemSaldo={semSaldo ? motivoDoSaldoVazio : motivoSemSaldo}
         />
       )}
       {g.frase && (
@@ -1499,7 +1590,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
         const ordenadas = ordenarLinhasCpr(etapaAtiva ? g.linhas.filter(naEtapa) : g.linhas, ordem, chavesDaLinha);
         /* o SALDO EM TODA LINHA (ponto 5): corre na ordem desenhada e fecha no "Saldo em" do dia (do dono). Só em "Ambos" — com um
            lado só, o saldo pularia as linhas escondidas. Grupo sem saldo (sem vencimento, entre, saem hoje): a célula fica vazia. */
-        const comSaldo = !etapaAtiva && g.tipo === 'dia' && segmento === 'ambos' && g.saldo !== undefined;
+        const comSaldo = !semSaldo && g.tipo === 'dia' && segmento === 'ambos' && g.saldo !== undefined;
         const efeito = (l: LinhaCpr) => (chavesForaDoCaixa.has(chaveDaLinhaCpr(l)) ? 0 : (ehReceber(l) ? 1 : -1) * Math.abs(Number(l.valor ?? 0)));
         const saldos = comSaldo ? saldoPorLinhaCpr(ordenadas, g.saldo, efeito) : ordenadas.map(() => undefined);
         const antes = comSaldo ? saldoAntesDoGrupoCpr(ordenadas, g.saldo, efeito) : undefined;
@@ -1510,7 +1601,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
             onClick={() => setVencidosAbertos(true)}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setVencidosAbertos(true); } }}
             title="Os vencidos em aberto contam no saldo de hoje. Clique para ver a lista."
-            className={cn('flex h-[20px] w-full shrink-0 cursor-pointer items-center gap-1 border-b border-l-[3px] border-l-[#b91c1c]/60 px-3 hover:bg-muted/50', FONTE_LINHA)}>
+            className={cn('flex h-[22px] w-full shrink-0 cursor-pointer items-center gap-1 border-b border-l-[3px] border-l-[#b91c1c]/60 px-3 hover:bg-muted/50', FONTE_LINHA)}>
             <span className={cn('min-w-0 flex-1 truncate', COR_SINAL.neg)} title={textoDosVencidosNoDia(g.vencidosHoje.contas)} data-reticencias-com-title="">
               {textoDosVencidosNoDia(g.vencidosHoje.contas)}
             </span>
@@ -1591,7 +1682,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
             onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && catalogosProntos && !abrindo) { e.preventDefault(); abrirNaEtapa(l.id); } }}
             title={catalogosProntos ? (paga && l.data_pagamento ? `Abrir o lançamento · pago em ${format(parseISO(l.data_pagamento), 'dd/MM/yyyy')}` : 'Abrir o lançamento') : 'Carregando os catálogos…'}
             className={cn(
-              'flex h-[20px] w-full shrink-0 cursor-pointer items-center gap-1 border-b px-3 text-left', FONTE_LINHA,
+              'flex h-[22px] w-full shrink-0 cursor-pointer items-center gap-1 border-b px-3 text-left', FONTE_LINHA,
               'transition-colors hover:bg-muted/50 aria-disabled:cursor-default',
               /* A faixa de 3px do destaque: `border-l-[3px]` em TODAS as linhas, transparente nas comuns (A27). */
               'border-l-[3px]',
@@ -1616,9 +1707,12 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
             <span style={larg(regua.comp)} className={cn(FONTE_DATA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
               {l.data_competencia ? format(parseISO(l.data_competencia), 'dd/MM/yy') : '—'}
             </span>
-            <span style={larg(regua.venc)} className={cn(FONTE_DATA, 'whitespace-nowrap tabular-nums', vencida ? COR_SINAL.neg : 'text-muted-foreground')} data-celula-data>
-              {l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM/yy') : '—'}
-            </span>
+            {/* CPR-LAYOUT-04 — a coluna Venc. SAI (a data está na faixa do dia): só desenha com largura na régua */}
+            {regua.venc > 0 && (
+              <span style={larg(regua.venc)} className={cn(FONTE_DATA, 'whitespace-nowrap tabular-nums', vencida ? COR_SINAL.neg : 'text-muted-foreground')} data-celula-data>
+                {l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM/yy') : '—'}
+              </span>
+            )}
             {/* A DESCRIÇÃO, numa linha: a marca "Transf.", o nome (P152: o que não cabe termina em "…", com o texto inteiro no `title`;
                 era CPR-SEM-CORTE-01, rolava no lugar), o "i/N" do contrato e os selos "estimado" / "vencido" — marcas e selos nunca cortam; a linha segue com 18px. */}
             <span style={ESTICA_DESCRICAO} className="flex items-center gap-1" data-celula-descricao>
@@ -1659,6 +1753,15 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
                 {codigoDaFazenda(l.fazenda_id)}
               </span>
             )}
+            {/* CPR-LAYOUT-04 — o Banco: o apelido curto da conta ("Sic. Pes."), o nome inteiro no `title` */}
+            {regua.banco > 0 && (() => {
+              const b = bancoDaLinha(l);
+              return (
+                <span style={larg(regua.banco)} data-celula-banco className="truncate text-muted-foreground" title={b.inteiro} data-reticencias-com-title="">
+                  {b.curto}
+                </span>
+              );
+            })()}
             {/* P152 — "NF nnnn" (o do dono, `docDaLinha`), cinza, sem cor; com documento vivo é botão que abre a aba Documentos do
                 lançamento (o PDF; sem PDF, os itens); sem documento é só o texto (D4). Substitui o clipe solto. */}
             {/* CPR-LAYOUT-03 (ponto 8) — a NF SÓ COM O NÚMERO ("9.232"), 10px; o rótulo inteiro ("NF 000.009.232") no `title` */}
@@ -1708,8 +1811,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
           className={cn('h-[22px] border-b-[1.5px] border-b-primary/50 text-[12px] font-bold text-primary', FUNDO_DIA)}
           titulo={`Saldo em ${format(parseISO(g.chave), 'dd/MM/yyyy')}`}
           dica={g.hoje ? 'hoje: o realizado de hoje (já no caixa), os vencidos (contam no saldo de hoje) e o que vence hoje' : undefined}
-          valor={etapaAtiva ? somaDaEtapa(g.linhas) : g.receber - g.pagar} saldo={etapaAtiva ? undefined : g.saldo}
-          motivoSemSaldo={etapaAtiva ? MOTIVO_SALDO_NA_ETAPA : motivoSemSaldo}
+          valor={etapaAtiva ? somaDaEtapa(g.linhas) : g.receber - g.pagar} saldo={semSaldo ? undefined : g.saldo}
+          motivoSemSaldo={semSaldo ? motivoDoSaldoVazio : motivoSemSaldo}
         />
       )}
     </div>
@@ -1792,6 +1895,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
           <div data-testid="cpr-linha-status" className="flex min-h-[20px] flex-wrap items-center gap-x-2 whitespace-nowrap">
             <span className="shrink-0 text-[9.5px] text-muted-foreground">Status</span>
             {ctlStatus}
+            {ctlFiltros}
             <div className="flex min-w-0 flex-1 basis-0 justify-end">{ctlRecadoExport}</div>
             {ctlConfirmadoEstimado}
           </div>
@@ -1923,6 +2027,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
           {ctlSegmento}
 
           {ctlStatus}
+          {ctlFiltros}
 
           {/* o espaço entre os filtros e os botões carrega a frase do exportar (erro ou aviso), numa linha */}
           <div className="flex min-w-0 flex-1 basis-0 justify-end">{ctlRecadoExport}</div>
@@ -2024,7 +2129,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
               {/* CABEÇALHO DE COLUNA — navy, 22px, a régua do modo. */}
               <div data-testid="cpr-cabecalho" className={cn(
                 'sticky top-0 z-20 flex h-[22px] shrink-0 items-center gap-1 px-3',
-                'text-[11px] font-semibold bg-primary text-primary-foreground',
+                'text-[10.5px] font-semibold bg-primary text-primary-foreground',
                 'border-l-[3px] border-l-transparent',
               )}>
                 {/* CPR-LAYOUT-03 — TODA coluna ordena (clique; de novo inverte); padrão: Venc. crescente. O Saldo corre na ordem desenhada. */}
@@ -2039,19 +2144,20 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
                   </span>
                 )}
                 {cabecalhoOrdenavel('comp', larg(regua.comp))}
-                {cabecalhoOrdenavel('venc', larg(regua.venc))}
+                {regua.venc > 0 && cabecalhoOrdenavel('venc', larg(regua.venc))}
                 {cabecalhoOrdenavel('descricao', ESTICA_DESCRICAO)}
                 {cabecalhoOrdenavel('fornecedor', ESTICA_FORNECEDOR)}
                 {cabecalhoOrdenavel('subcentro', ESTICA_SUBCENTRO)}
                 {regua.safra > 0 && <span style={larg(regua.safra)}>Safra</span>}
                 {regua.faz > 0 && <span style={larg(regua.faz)}>Faz.</span>}
+                {regua.banco > 0 && cabecalhoOrdenavel('banco', larg(regua.banco))}
                 {cabecalhoOrdenavel('nf', larg(regua.nf))}
                 {cabecalhoOrdenavel('status', larg(regua.status), 'center')}
                 {regua.aprov != null && cabecalhoOrdenavel('aprovacao', larg(regua.aprov), 'center')}
                 {regua.lancado != null && cabecalhoOrdenavel('lancado', larg(regua.lancado))}
                 {cabecalhoOrdenavel('valor', larg(regua.valor), 'right')}
                 <span style={larg(regua.saldo)} className="text-right"
-                  title={etapaAtiva ? MOTIVO_SALDO_NA_ETAPA : segmento === 'ambos' ? 'o saldo depois de cada linha, na ordem da lista; fecha no "Saldo em" do dia' : MOTIVO_SALDO_DOIS_LADOS}>Saldo</span>
+                  title={semSaldo ? motivoDoSaldoVazio : segmento === 'ambos' ? 'o saldo depois de cada linha, na ordem da lista; fecha no "Saldo em" do dia' : MOTIVO_SALDO_DOIS_LADOS}>Saldo</span>
               </div>
 
               {/* CAIXA INICIAL — fixo sob o cabeçalho, em TODO filtro (R1): o saldo no fim do dia anterior ao período, do mesmo dono do
@@ -2076,8 +2182,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento,
                 titulo={`Fim do período · ${format(parseISO(periodo.ate), 'dd/MM/yyyy')} · ${contagemDoRodapeCpr(fimDoPeriodo)}`}
                 dica={rodape.realizado ? 'período encerrado: o que saiu e o que entrou no período (realizado) e o saldo no fim dele'
                   : 'o que vem depois do Caixa inicial: Caixa inicial + a receber − a pagar = saldo no fim'}
-                valor={rodape.receber - rodape.pagar} saldo={serie.fim}
-                motivoSemSaldo={motivoSemSaldo}
+                valor={rodape.receber - rodape.pagar} saldo={filtroLigado ? undefined : serie.fim}
+                motivoSemSaldo={filtroLigado ? MOTIVO_SALDO_COM_FILTRO : motivoSemSaldo}
               />
               )}
               {/* CPR-AJUSTES-20-10c — período encerrado: os vencidos em aberto do período, DEPOIS do Fim do período e fora da soma dele */}

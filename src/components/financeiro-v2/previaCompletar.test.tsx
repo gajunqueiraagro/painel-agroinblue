@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import type { Consulta } from '@/lib/financeiro/nfeConsultas';
 import type { AlvoDaPrevia, ResultadoCompletar, ValoresParaTodas } from '@/lib/financeiro/nfe/notaCompletar';
+import type { ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
 
 /* o "hoje" de cada parcela no banco falso: a l1 é conciliada (🔒 conta, valor, vencimento), a l2 programada. A conta da l2 está VAZIA (a 4/4 da
    Alta Paulista); o fornecedor é o mesmo nas duas; a fazenda DIFERE (z1 × z2). */
@@ -34,6 +35,8 @@ const banco = vi.hoisted(() => ({
         }
         return { id, descricao: 'Cercas', situacao: pago ? 'conciliada' : 'programada', parcelaN: null, campos };
       }) } })),
+  /* DA-NOTA-CLASSIF-01 — a sugestão pelos itens: por padrão a nota ainda não está gravada (`null`) */
+  sugestaoDosItensDaNota: vi.fn(async (_c: string, _k: string | null): Promise<Consulta<ItemSugerido[] | null>> => ({ ok: true, valor: null })),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => banco);
 import { PreviaCompletar } from './PreviaCompletar';
@@ -77,9 +80,10 @@ describe('P163 v4 — uma linha por parcela, na ordem da casa', () => {
   it('as colunas: Parc. · Comp. · Venc. · Pgto. · Descrição · Nº · [as opcionais que mudam ou diferem] · Valor · Status; o cabeçalho numa linha', async () => {
     abrir();
     await conferido();
-    /* a fazenda DIFERE (z1 × z2) e a conta da nota mudaria a da l2 (vazia hoje): aparecem; fornecedor, subcentro e safra iguais: não */
-    expect(cabecalhos()).toEqual(['Parc.', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Nº documento', 'Fazenda', 'Conta', 'Valor', 'Status']);
-    expect(screen.getByTestId('previa-iguais').textContent).toBe('Fornecedor, subcentro, safra: iguais em todas, não mudam');
+    /* DA-NOTA-CLASSIF-01 — a classificação (fazenda, subcentro, safra) aparece SEMPRE; a conta da nota mudaria a da l2 (vazia hoje): aparece;
+       o fornecedor igual: não (e a legenda não diz mais "não mudam") */
+    expect(cabecalhos()).toEqual(['Parc.', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Nº documento', 'Fazenda', 'Conta', 'Subcentro', 'Safra', 'Valor', 'Status']);
+    expect(screen.getByTestId('previa-iguais').textContent).toBe('Fornecedor: igual em todas');
     expect(screen.getByRole('dialog').textContent).toContain('O que a nota muda em cada parcela · NF 000.000.001 · Fornecedor sintetico · R$ 1.264,00');
     expect(screen.getByTestId('previa-dre').textContent).toBe('DRE: R$ 1.264,00 passam de 05/2031 para 06/2031');
     expect(screen.getByTestId('previa-rodape-frase').textContent).toContain('nada é gravado antes de você clicar');
@@ -88,12 +92,15 @@ describe('P163 v4 — uma linha por parcela, na ordem da casa', () => {
       .toEqual(['checked', 'unchecked', 'checked', 'unchecked', 'unchecked']);   // URGENTE 29/10 — a Descrição vem desmarcada
     expect(banco.completarComANota.mock.calls.every((c) => c[2].simular)).toBe(true);
   });
-  it('campo igual em todas e que não muda: SEM coluna; o mesmo campo diferente numa parcela: a coluna aparece', async () => {
+  it('fornecedor igual em todas: SEM coluna; a fazenda igual em todas SEGUE com coluna (classificação sempre editável, DA-NOTA-CLASSIF-01)', async () => {
     estado.hoje.l2 = { ...HOJE.l2, fazenda_id: 'z1' };
     abrir();
     await conferido();
-    expect(cabecalhos()).not.toContain('Fazenda');
-    expect(screen.getByTestId('previa-iguais').textContent).toContain('fazenda');
+    expect(cabecalhos()).not.toContain('Fornecedor');
+    expect(cabecalhos()).toEqual(expect.arrayContaining(['Fazenda', 'Subcentro', 'Safra']));
+    expect(screen.getByTestId('previa-iguais').textContent).not.toContain('azenda');
+    /* na conciliada (l1) o cadeado fica SÓ no caixa: subcentro, fazenda e safra sem 🔒 */
+    for (const c of ['fazenda', 'subcentro', 'safra']) expect(within(naColuna('l1', c)).queryByTestId('previa-cadeado')).toBeNull();
   });
   it('a célula que vai mudar: azul com o valor NOVO e o de hoje no title — sem riscado, sem "→"; 🔒 da conciliada em Valor e Vencimento', async () => {
     abrir();
@@ -167,5 +174,48 @@ describe('P163 v4 — uma linha por parcela, na ordem da casa', () => {
     await conferido();
     fireEvent.click(screen.getByTestId('previa-gravar'));
     expect((await screen.findByTestId('previa-erro')).textContent).toBe('O mês 06/2031 está fechado. Nada foi gravado.');
+  });
+});
+
+/* DA-NOTA-CLASSIF-01 (Gabriel 24/11 09:17) — a sugestão pelos itens (PLANO-SUGESTAO-01 B2) na etapa 2: só sugere; o "usar" põe no "Aplicar a todas" */
+describe('DA-NOTA-CLASSIF-01 — a sugestão da conta pelos itens', () => {
+  const item = (n: number, plano: string, subcentro: string): ItemSugerido => ({ itemId: `i${n}`, nItem: n, planoContaId: plano, subcentro, fonte: 'a',
+    confianca: 'alta', porque: 'Já usado 4× neste cliente.' });
+  it('sem a nota gravada: diz "depois de gravar a nota" (nunca vazio calado)', async () => {
+    abrir();
+    expect(await screen.findByTestId('previa-sugestao-sem-nota')).toBeTruthy();
+  });
+  it('uma conta para todos os itens: "Sugestão pelos itens: <subcentro> · usar"; NADA vai ao pedido antes do clique; o clique leva às DUAS (a conciliada inclusive)', async () => {
+    banco.sugestaoDosItensDaNota.mockResolvedValueOnce({ ok: true, valor: [item(1, 'p9', 'Peças e Pneus'), item(2, 'p9', 'Peças e Pneus')] });
+    const confirmar = abrir();
+    await conferido();
+    expect((await screen.findByTestId('previa-sugestao-conta')).textContent).toBe('Peças e Pneus');
+    expect(ultimoPedido().some((p: Record<string, unknown>) => 'plano_conta_id' in p)).toBe(false);
+    fireEvent.click(screen.getByTestId('previa-sugestao-usar'));
+    await waitFor(() => expect(ultimoPedido().map((p: Record<string, unknown>) => p.plano_conta_id)).toEqual(['p9', 'p9']));
+    expect(screen.getByTestId('previa-coluna-subcentro').getAttribute('data-state')).toBe('checked');
+    expect(screen.queryByTestId('previa-sugestao-usar')).toBeNull();
+    expect(confirmar).not.toHaveBeenCalled();
+  });
+  it('a sugestão igual à de hoje: "já está nela", sem botão', async () => {
+    banco.sugestaoDosItensDaNota.mockResolvedValueOnce({ ok: true, valor: [item(1, 'p0', 'Manutenção')] });
+    abrir();
+    await conferido();
+    expect((await screen.findByTestId('previa-sugestao-igual')).textContent).toContain('já está nela');
+    expect(screen.queryByTestId('previa-sugestao-usar')).toBeNull();
+  });
+  it('itens em contas diferentes: manda para a etapa Itens (nenhum palpite de uma conta só)', async () => {
+    banco.sugestaoDosItensDaNota.mockResolvedValueOnce({ ok: true, valor: [item(1, 'p9', 'Peças'), item(2, 'p8', 'Combustível')] });
+    abrir();
+    expect((await screen.findByTestId('previa-sugestao-varias')).textContent).toBe('Os itens vão para 2 contas: divida na etapa Itens da nota');
+  });
+  it('P146 — a consulta que falha diz "Não consegui verificar" e oferece Tentar de novo (relê)', async () => {
+    banco.sugestaoDosItensDaNota.mockResolvedValueOnce({ ok: false, motivo: 'sem conexão com o servidor' });
+    abrir();
+    expect((await screen.findByTestId('previa-sugestao-falha')).getAttribute('title')).toBe('sem conexão com o servidor');
+    const antes = banco.sugestaoDosItensDaNota.mock.calls.length;
+    fireEvent.click(screen.getByText('Tentar de novo'));
+    await waitFor(() => expect(banco.sugestaoDosItensDaNota.mock.calls.length).toBe(antes + 1));
+    expect(await screen.findByTestId('previa-sugestao-sem-nota')).toBeTruthy();
   });
 });

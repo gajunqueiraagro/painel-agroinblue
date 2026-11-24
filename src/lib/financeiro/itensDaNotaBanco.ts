@@ -5,7 +5,7 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 import { lerNota } from '@/lib/financeiro/nfe/lerNota';
-import { ehChaveDeNota } from '@/lib/financeiro/nfe/formatos';
+import { chaveDoDocumento, ehChaveDeNota } from '@/lib/financeiro/nfe/formatos';
 import { itensDoPdf, itensDoXml, lidosDoBanco, payloadDaNotaFiscal, type CabecalhoDaNota, type ItensLidos } from '@/lib/financeiro/nfe/itensDaNota';
 import { decodificarPeloCharsetDeclarado } from '@/lib/financeiro/parser/decodificarExtrato';
 
@@ -51,7 +51,8 @@ export async function gravarItensDoArquivo(clienteId: string, bytes: ArrayBuffer
 
 /** Os itens guardados de uma das chaves (a primeira que tiver nota guardada, a mais recente). `null` = nenhuma. */
 export async function lerItensGuardados(clienteId: string, chaves: readonly string[]): Promise<{ cabecalho: CabecalhoDaNota; lidos: ItensLidos } | null> {
-  const validas = [...new Set(chaves.filter(ehChaveDeNota))];
+  /* NOTA-ITENS-CLASSIF-01 — a chave como o documento a guarda ("5026 0921 …") vale: só os dígitos vão ao banco */
+  const validas = [...new Set(chaves.map(chaveDoDocumento).filter((c): c is string => !!c))];
   if (!validas.length) return null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- as tabelas novas ainda nao estao nos tipos gerados
   const db = supabase as any;
@@ -77,9 +78,13 @@ export async function gravarItensSemTravar(clienteId: string, arquivo: File | Ar
 /** Quais destas chaves ja' tem nota guardada no cliente. */
 export async function chavesGuardadas(clienteId: string, chaves: readonly string[]): Promise<ReadonlySet<string>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- as tabelas novas ainda nao estao nos tipos gerados
-  const { data, error } = await (supabase as any).from('nota_fiscal').select('chave_acesso').eq('cliente_id', clienteId).in('chave_acesso', [...chaves]);
+  const digitos = [...new Set(chaves.map(chaveDoDocumento).filter((c): c is string => !!c))];
+  if (!digitos.length) return new Set();
+  const { data, error } = await (supabase as any).from('nota_fiscal').select('chave_acesso').eq('cliente_id', clienteId).in('chave_acesso', digitos);
   if (error || !Array.isArray(data)) return new Set();
-  return new Set(data.map((r: { chave_acesso: string }) => r.chave_acesso));
+  const achadas = new Set<string>(data.map((r: { chave_acesso: string }) => r.chave_acesso));
+  /* NOTA-ITENS-CLASSIF-01 — quem pergunta pela chave do documento ("5026 0921 …") acha-a no conjunto como a mandou */
+  return new Set([...achadas, ...chaves.filter((c) => { const d = chaveDoDocumento(c); return !!d && achadas.has(d); })]);
 }
 
 /* ── BACKFILL — as notas ja' guardadas (documento com chave e arquivo) que ainda nao tem itens ─────────────────────────────────────── */

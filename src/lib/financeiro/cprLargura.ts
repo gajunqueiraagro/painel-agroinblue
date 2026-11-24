@@ -22,8 +22,14 @@
  *   - o VALOR a 12px (a linha) e 12px negrito (dia e fim do período): "+99.999.999,99" ≈ 103px → a coluna tem 118 (o mock); acima de
  *     8 algarismos ela cresce pelo número, em degraus como antes (NADA SE DESLOCA: o teto só cresce no mesmo cliente/período/conta).
  */
+/*
+ * CPR-LAYOUT-04 (Gabriel 24/11 07:28, print NJ dezembro) — a linha a 11px (datas 10px cinza; cabeçalho 10,5; faixas 12 negrito) e 22px de
+ * altura; a coluna Venc. SAI (a data já está na faixa do dia) — `venc: 0`, o campo fica para quem lê a régua inteira; Comp. a 10px
+ * ("16/11/26" ~42px) → 46; entra o BANCO (a conta de saída, pelo apelido curto: "Sic. Pes.", ~70px, o nome inteiro no `title`). A sobra
+ * vai para Descrição e Fornecedor. O valor segue medido a 12px negrito (a faixa do dia e o fim do período, o lugar mais largo).
+ */
 export interface Regua {
-  comp: number; venc: number; safra: number; faz: number;
+  comp: number; venc: number; banco: number; safra: number; faz: number;
   nf: number; status: number; valor: number; saldo: number;
   /** BPO-FUNCIONAR-01 (aditivo; Code 6 07:13) — SÓ com a aprovação ligada: a caixa de seleção (antes de Comp.), a Aprovação e o
    *  Lançado por (entre Status e Valor: as faixas alinham pelo Valor/Saldo à direita). Ausentes = a CPR de sempre, byte a byte. */
@@ -34,7 +40,7 @@ export interface Regua {
 export const DA_APROVACAO_CPR: Readonly<Required<Pick<Regua, 'sel' | 'aprov' | 'lancado'>>> = { sel: 20, aprov: 100, lancado: 92 };
 
 /** As colunas fixas que não dependem do valor. */
-const FIXAS: Readonly<Pick<Regua, 'comp' | 'venc' | 'nf' | 'status'>> = { comp: 48, venc: 48, nf: 72, status: 70 };
+const FIXAS: Readonly<Pick<Regua, 'comp' | 'venc' | 'banco' | 'nf' | 'status'>> = { comp: 46, venc: 0, banco: 70, nf: 72, status: 70 };
 /** O ampliado é a MESMA régua + Safra e Faz. (P152, Gabriel 28/10 15:34, D2). */
 const DO_AMPLIADO: Readonly<Pick<Regua, 'safra' | 'faz'>> = { safra: 56, faz: 26 };
 /** A coluna Valor e a Saldo do mock (118px) — o piso. */
@@ -73,7 +79,7 @@ export function reguaDaCpr(ampliado: boolean, maiorValor: number, aprovacao = fa
 
 /** As colunas fixas, na ordem do cabeçalho (sem as de texto). */
 export function colunasFixasCpr(r: Regua): number[] {
-  return [r.sel ?? 0, r.comp, r.venc, r.safra, r.faz, r.nf, r.status, r.aprov ?? 0, r.lancado ?? 0, r.valor, r.saldo].filter((x) => x > 0);
+  return [r.sel ?? 0, r.comp, r.venc, r.banco, r.safra, r.faz, r.nf, r.status, r.aprov ?? 0, r.lancado ?? 0, r.valor, r.saldo].filter((x) => x > 0);
 }
 
 /** A largura mínima da lista: a moldura, as colunas da régua, as três de texto no mínimo e 4px por vão. Abaixo dela a lista rola. */

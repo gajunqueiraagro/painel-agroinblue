@@ -74,7 +74,8 @@ describe('(2) o saldo do dia na ÚLTIMA linha do dia', () => {
     expect(tela.indexOf("{g.tipo === 'dia' && (", ini)).toBeGreaterThan(ini);
     expect(fecho).toContain("titulo={`Saldo em ${format(parseISO(g.chave), 'dd/MM/yyyy')}`}");
     /* BPO-FUNCIONAR-01: numa etapa da aprovação a faixa soma o que se vê e o saldo fica vazio (o saldo corrido é do grupo inteiro) */
-    expect(fecho).toContain('valor={etapaAtiva ? somaDaEtapa(g.linhas) : g.receber - g.pagar} saldo={etapaAtiva ? undefined : g.saldo}');
+    /* CPR-LAYOUT-04: com filtro (Origem · Forma · Pagamento) também — o saldo é do caixa inteiro */
+    expect(fecho).toContain('valor={etapaAtiva ? somaDaEtapa(g.linhas) : g.receber - g.pagar} saldo={semSaldo ? undefined : g.saldo}');
     expect(fecho).toContain('text-[12px] font-bold text-primary');
     expect(fecho).toContain('FUNDO_DIA');
   });
@@ -147,8 +148,9 @@ describe('CPR-SEM-CORTE-01 — nada de "…" na CPR (P152 + CPR-LAYOUT-03: só n
     /* P152 (D6, Gabriel 28/10 16:04): Descrição, Fornecedor e Subcentro terminam em "…" com o texto inteiro no `title` e
        `data-reticencias-com-title`; nenhum outro lugar */
     const truncados = tela.split('\n').filter((l) => /\btruncate\b/.test(l) && !l.trim().startsWith('/*') && !l.trim().startsWith('*'));
-    /* CPR-LAYOUT-03: + a NF (só o número; o rótulo inteiro no title) e a linha-resumo dos vencidos de hoje; BPO-FUNCIONAR-01: + o Lançado por */
-    expect(truncados).toHaveLength(6);
+    /* CPR-LAYOUT-03: + a NF (só o número; o rótulo inteiro no title) e a linha-resumo dos vencidos de hoje; BPO-FUNCIONAR-01: + o Lançado por;
+       CPR-LAYOUT-04: + o Banco (o apelido curto; o nome inteiro da conta no title) */
+    expect(truncados).toHaveLength(7);
     for (const l of truncados) expect(l).toMatch(/title=\{[^}]+\} data-reticencias-com-title="">/);
     expect(tela).not.toMatch(/text-ellipsis|line-clamp/);
     expect(fluxo).not.toMatch(/\btruncate\b|text-ellipsis|line-clamp/);
