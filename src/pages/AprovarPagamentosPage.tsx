@@ -169,7 +169,7 @@ export default function AprovarPagamentosPage() {
     { valor: 'alertas', rotulo: 'Alertas' },
   ];
   return (
-    <div className="mx-auto flex h-full w-full max-w-[720px] flex-col" data-testid="aprovar-pagamentos">
+    <div className="flex h-full w-full flex-col" data-testid="aprovar-pagamentos">
       <GuiaDaAprovacao aberto={guia.aberto} passoInicial={guia.passo} onFechar={fecharGuia} ehAdmin={isAdmin} clienteId={clienteId}
         ligado={ligado === true} onLigou={(t) => { setFrase({ tipo: 'ok', texto: t }); void ler(); }} />
       <div className="flex-none bg-primary px-3 py-2 text-primary-foreground">
@@ -214,7 +214,7 @@ export default function AprovarPagamentosPage() {
                   <span className="tabular-nums">{formatMoeda(d.total)}</span>
                 </div>
                 {d.linhas.map((l) => (
-                  <div key={l.lancamentoId} className="mb-1.5 grid grid-cols-[22px_1fr_auto] gap-x-1.5 rounded-lg border px-2 py-1.5 text-[12px]" data-testid="aprovar-item">
+                  <div key={l.lancamentoId} className={GRADE_DO_ITEM} data-testid="aprovar-item">
                     {aba === 'fila' && aprovador
                       ? <Checkbox aria-label={`Marcar ${l.fornecedor ?? l.descricao ?? 'pagamento'}`} className="mt-0.5 h-[18px] w-[18px]"
                           checked={marcadas.has(l.lancamentoId)} onCheckedChange={(v) => setMarcadas((s) => { const n = new Set(s); if (v === true) n.add(l.lancamentoId); else n.delete(l.lancamentoId); return n; })} />
@@ -222,16 +222,18 @@ export default function AprovarPagamentosPage() {
                     <button type="button" className="min-w-0 break-words text-left font-semibold" title={l.fornecedor ?? l.descricao ?? ''} onClick={() => setAberta(l)}>
                       {l.fornecedor ?? l.descricao ?? 'Sem fornecedor'}
                     </button>
-                    <span className="whitespace-nowrap text-right font-semibold tabular-nums">{formatMoeda(Math.abs(l.valor))}</span>
-                    <span />
-                    <span className="col-span-2 break-words text-[11px] text-muted-foreground" title={[l.fazenda, l.conta, l.descricao].filter(Boolean).join(' · ')}>
+                    <span className="whitespace-nowrap text-right font-semibold tabular-nums md:order-last">{formatMoeda(Math.abs(l.valor))}</span>
+                    <span className="md:hidden" />
+                    <span className="col-span-2 break-words text-[11px] text-muted-foreground md:col-span-1" data-testid="aprovar-item-onde"
+                      title={[l.fazenda, l.conta, l.descricao].filter(Boolean).join(' · ')}>
                       {[l.fazenda, l.conta].filter(Boolean).join(' · ')}
-                      {l.vencimento ? <span className="whitespace-nowrap">{l.fazenda || l.conta ? ' · ' : ''}vence {brData(l.vencimento)}</span> : null}
+                      {l.vencimento ? <span className="whitespace-nowrap md:hidden">{l.fazenda || l.conta ? ' · ' : ''}vence {brData(l.vencimento)}</span> : null}
                     </span>
-                    <span />
-                    <span className="col-span-2 flex gap-1.5 pt-0.5">
-                      <span className={`rounded-full border px-2 text-[10.5px] ${l.temNota ? '' : 'border-rose-300 text-rose-800'}`}>{l.temNota ? 'Nota' : 'sem nota'}</span>
-                      <span className={`rounded-full border px-2 text-[10.5px] ${l.temBoleto ? '' : 'border-rose-300 text-rose-800'}`}>{l.temBoleto ? 'Boleto' : 'sem boleto'}</span>
+                    <span className="hidden whitespace-nowrap text-[11px] tabular-nums text-muted-foreground md:inline" data-testid="aprovar-item-vence">{l.vencimento ? brData(l.vencimento) : '—'}</span>
+                    <span className="md:hidden" />
+                    <span className="col-span-2 flex gap-1.5 pt-0.5 md:col-span-1 md:min-w-0 md:pt-0">
+                      <span className={`flex-none rounded-full border px-2 text-[10.5px] ${l.temNota ? '' : 'border-rose-300 text-rose-800'}`}>{l.temNota ? 'Nota' : 'sem nota'}</span>
+                      <span className={`flex-none rounded-full border px-2 text-[10.5px] ${l.temBoleto ? '' : 'border-rose-300 text-rose-800'}`}>{l.temBoleto ? 'Boleto' : 'sem boleto'}</span>
                       {l.situacao === 'recusado' && l.motivo && <span className="min-w-0 break-words text-[10.5px] text-rose-800" title={l.motivo}>{l.motivo}</span>}
                       {l.observacao && l.situacao !== 'recusado' && <span className="min-w-0 break-words text-[10.5px] text-muted-foreground" title={l.observacao}>{l.observacao}</span>}
                     </span>
@@ -315,6 +317,11 @@ export default function AprovarPagamentosPage() {
     </div>
   );
 }
+
+/* a linha da fila: celular = cartão (☐ | fornecedor | valor; embaixo onde/vence e os selos); md+ = uma linha (26px; o nome comprido QUEBRA, nunca "…" fora de tabela) em colunas fixas (px
+   medidos: data dd/mm/aaaa 74, os selos com o motivo 260, o valor no teto "R$ 99.999.999,99" 112), o fornecedor e o "onde" cedem quebrando */
+const GRADE_DO_ITEM = 'mb-1.5 grid grid-cols-[22px_1fr_auto] gap-x-1.5 rounded-lg border px-2 py-1.5 text-[12px] '
+  + 'md:mb-1 md:min-h-[26px] md:grid-cols-[22px_minmax(0,1fr)_minmax(0,320px)_74px_260px_112px] md:items-center md:py-1';
 
 function ListaDeAlertas({ alertas }: { alertas: Alerta[] | null }) {
   if (alertas === null) return <div className="p-3 text-[12px] text-muted-foreground">Lendo os alertas…</div>;

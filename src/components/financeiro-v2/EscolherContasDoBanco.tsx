@@ -16,7 +16,12 @@ import {
 } from '@/lib/openfinance/openfinanceTela';
 import { LigarContaDoSistema } from './LigarContaDoSistema';
 
-export function EscolherContasDoBanco({ clienteId, itemId, onFechar }: { clienteId: string; itemId: string | null; onFechar: () => void }) {
+/* CONTAS-OF-LINHA-01: `marcarFinais` = os finais da conta da LINHA de onde veio o "Conectar" — essa conta do banco já vem marcada (só ela;
+   o resto segue desmarcado) e nada é gravado sem a prévia */
+export function EscolherContasDoBanco({ clienteId, itemId, onFechar, marcarFinais }: {
+  clienteId: string; itemId: string | null; onFechar: () => void; marcarFinais?: readonly string[];
+}) {
+  const chaveDosFinais = (marcarFinais ?? []).join(',');
   const [contas, setContas] = useState<ContaDaConexao[] | null>(null);
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
   const [previa, setPrevia] = useState<string | null>(null);
@@ -34,11 +39,13 @@ export function EscolherContasDoBanco({ clienteId, itemId, onFechar }: { cliente
         if (!vivo) return;
         if (r.ok === false) { toast.error(r.frase); onFechar(); return; }
         const lista = contasDaResposta(r.corpo);
-        setContas(lista); setMarcadas(marcadasDePartida(lista));
+        const finais = chaveDosFinais ? chaveDosFinais.split(',') : [];
+        const daLinha = lista.filter(c => c.final4 !== null && finais.includes(c.final4)).map(c => c.accountId);
+        setContas(lista); setMarcadas(new Set([...marcadasDePartida(lista), ...daLinha]));
       } catch { if (vivo) { toast.error(FRASE_CONTAS_FALHOU); onFechar(); } }
     })();
     return () => { vivo = false; };
-  }, [clienteId, itemId, onFechar]);
+  }, [clienteId, itemId, onFechar, chaveDosFinais]);
 
   const alternar = (id: string, v: boolean) => {
     setPrevia(null);

@@ -7,6 +7,8 @@
 // NÃO GRAVA NADA. Nem lançamento, nem apelido. A gravação é o passo 4 e entra
 // depois, no mesmo PR. Até o operador confirmar, tudo vive em memória.
 // ============================================================================
+import { lerDiasDaFatura } from '@/hooks/useDiasDaFatura';
+import { vencimentoDaImportacaoNoCartao, type DiasDaFatura } from '@/lib/financeiro/pagamentoNoCartao';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -1053,6 +1055,13 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
 
     try {
       const clsPorSubcentro = new Map(classificacoes.map((c) => [c.subcentro, c]));
+      /* CARTAO-VENC-FATURA-01 — a linha que CRIA numa conta de CARTÃO sem vencimento na planilha nasce com o vencimento da fatura (a
+         mesma regra do Novo lançamento); os dias de cada cartão se leem UMA vez, antes de gravar */
+      const cartoesDaPrevia = [...new Set(previa.linhas
+        .filter((l) => l.entra && l.modo === 'criar' && l.contaBancariaId && !l.row.data_vencimento)
+        .map((l) => l.contaBancariaId ?? '')
+        .filter((id) => contasBancarias.find((c) => c.id === id)?.tipo_conta === 'cartao'))];
+      const diasPorCartao = new Map(await Promise.all(cartoesDaPrevia.map(async (id): Promise<[string, DiasDaFatura]> => [id, await lerDiasDaFatura(id)])));
 
       for (const l of previa.linhas) {
         if (!l.entra || !l.fazendaId || !l.subcentro || !l.row.tipo_operacao) continue;
@@ -1084,7 +1093,9 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
           conta_destino_id: contas.conta_destino_id,
           data_competencia: l.row.data_competencia ?? '',
           data_pagamento: l.row.data_pagamento,
-          data_vencimento: l.row.data_vencimento,
+          data_vencimento: l.modo === 'criar'
+            ? vencimentoDaImportacaoNoCartao(l.row.data_vencimento, l.row.data_competencia, diasPorCartao.get(l.contaBancariaId ?? '') ?? null)
+            : l.row.data_vencimento,
           valor: Math.abs(Number(l.row.valor) || 0),
           tipo_operacao: l.row.tipo_operacao,
           /* ⚠ O STATUS VEM DA LINHA DA PRÉVIA, decidido por `statusParaImportar` — FIN-IMPORT-EXCEL-STATUS-01a. Não há

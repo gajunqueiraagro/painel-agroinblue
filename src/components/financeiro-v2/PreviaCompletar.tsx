@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils';
 import { reais } from '@/lib/financeiro/nfe/formatos';
 import { completarComANota } from '@/lib/financeiro/nfeConsultas';
 import {
-  CAMPO_DA_COLUNA, COLUNAS_OPCIONAIS, ROTULO_DA_COLUNA, chaveDaGrade, colunasQueAparecem, fraseDoEfeitoNoDre, pedidoDaGrade,
+  CAMPO_DA_COLUNA, COLUNAS_OPCIONAIS, ROTULO_DA_COLUNA, camposQueMudam, chaveDaGrade, colunasQueAparecem, fraseDoEfeitoNoDre, pedidoDaGrade,
   type AlvoDaPrevia, type CampoDaPrevia, type ColunaCompletar, type ResultadoCompletar, type ValoresParaTodas,
 } from '@/lib/financeiro/nfe/notaCompletar';
 
@@ -62,7 +62,9 @@ export interface OpcoesDaPrevia {
 }
 
 /** O que a prévia embutida diz ao modal da nota (o botão único "Aplicar: …" dele grava por aqui). */
-export interface EstadoDaPrevia { pode: boolean; gravando: boolean; impedimento: string | null; fraseDre: string | null; gravar: () => void }
+export interface EstadoDaPrevia { pode: boolean; gravando: boolean; impedimento: string | null; fraseDre: string | null; gravar: () => void;
+  /** DA-NOTA-ETAPAS-01 — os campos que mudam em alguma parcela (a etapa 4 Confirmar: "Atualizar N campos"); vazio enquanto confere */
+  mudam: readonly string[] }
 
 export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, todasIniciais, atualizarNaoPagas, juntar, chave, onConfirmar, valorNotaCent = null,
   embutida = false, opcoes, cabecalho, semRodape = false, aoMudarEstado }: {
@@ -152,9 +154,12 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
   const gravarRef = useRef(gravar);
   gravarRef.current = gravar;
   const impedimento = falha ? `Não consegui conferir a prévia (${falha}).` : recusas.length ? `${recusas[0]}${recusas.length > 1 ? ` (+${recusas.length - 1})` : ''}` : erro;
+  const mudam = useMemo(() => (previa ? camposQueMudam(previa.linhas) : []), [previa]);
+  const chaveDasMudancas = conferindo ? '' : mudam.join('|');
   useEffect(() => {
-    aoMudarEstado?.({ pode: podeGravar, gravando, impedimento, fraseDre: conferindo ? null : fraseDre ?? 'DRE: não muda', gravar: () => { void gravarRef.current(); } });
-  }, [aoMudarEstado, podeGravar, gravando, impedimento, fraseDre, conferindo]);
+    aoMudarEstado?.({ pode: podeGravar, gravando, impedimento, fraseDre: conferindo ? null : fraseDre ?? 'DRE: não muda', gravar: () => { void gravarRef.current(); },
+      mudam: chaveDasMudancas ? chaveDasMudancas.split('|') : [] });
+  }, [aoMudarEstado, podeGravar, gravando, impedimento, fraseDre, conferindo, chaveDasMudancas]);
 
   /* ── a célula de uma coluna da grade (Comp., Descrição, Nº e as opcionais) ── */
   const celula = (a: AlvoDaPrevia, c: ColunaCompletar, campo: CampoDaPrevia | undefined): ReactNode => {

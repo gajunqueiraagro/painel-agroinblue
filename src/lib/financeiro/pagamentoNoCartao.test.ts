@@ -133,11 +133,11 @@ describe('P74 — pagamento no cartão', () => {
     expect(formaPelaConta('Cartão de crédito', false, false)).toBe('Cartão de crédito');
   });
 
-  it('K14 o vencimento pela fatura: entra no vazio ou no lugar da sugestão anterior; a data do operador fica', () => {
-    expect(vencimentoPelaFatura('', '', '2026-11-10')).toBe('2026-11-10');
-    expect(vencimentoPelaFatura('2026-11-10', '2026-11-10', '2026-12-10')).toBe('2026-12-10');
-    expect(vencimentoPelaFatura('2026-11-20', '2026-11-10', '2026-12-10')).toBe('2026-11-20');
-    expect(vencimentoPelaFatura('2026-11-20', '', '')).toBe('2026-11-20');
+  it('K14 o vencimento pela fatura (CARTAO-VENC-FATURA-01): a fatura entra no lugar do vazio e da data que veio de fora; só a DIGITADA fica', () => {
+    expect(vencimentoPelaFatura('', '2026-11-10', false)).toBe('2026-11-10');
+    expect(vencimentoPelaFatura('2026-11-17', '2026-12-16', false)).toBe('2026-12-16');   // a emissão da nota cede
+    expect(vencimentoPelaFatura('2026-11-20', '2026-12-10', true)).toBe('2026-11-20');    // o operador digitou
+    expect(vencimentoPelaFatura('2026-11-20', '', false)).toBe('2026-11-20');
   });
 
   it('K15 o fechamento da compra e a frase do lançamento (mock v2)', () => {
@@ -175,3 +175,58 @@ describe('NOTA-PAGTO-PARCELADO-01 — parcelado sem cartão', () => {
   });
 }); 
 
+import { diasDaFatura, porQueOVencimento, faturaDaParcela, faturasDasParcelas, statusNoCartao, vencimentoDaImportacaoNoCartao } from './pagamentoNoCartao';
+/* CARTAO-VENC-FATURA-01 (Gabriel 23/11) — os dias dos dois cartões do caso (fecha 05/vence 16 e fecha 07/vence 20); datas SINTÉTICAS */
+describe('CARTAO-VENC-FATURA-01 — em qual fatura cai a compra', () => {
+  it('F1 o caso: compra de 17/11 no cartão que fecha 05 e vence 16 → 16/12 (hoje nascia 17/11); no que fecha 07 e vence 20 → 20/12', () => {
+    expect(faturaDaCompra('2026-11-17', 16, 5)).toBe('2026-12-16');
+    expect(faturaDaCompra('2026-11-17', 20, 7)).toBe('2026-12-20');
+  });
+  it('F2 antes do fechamento, no dia do fechamento e depois (a do dia do fechamento já é da fatura seguinte)', () => {
+    expect(faturaDaCompra('2026-11-04', 16, 5)).toBe('2026-11-16');
+    expect(faturaDaCompra('2026-11-05', 16, 5)).toBe('2026-12-16');
+    expect(faturaDaCompra('2026-11-06', 16, 5)).toBe('2026-12-16');
+    expect(faturaDaCompra('2026-10-03', 16, 5)).toBe('2026-10-16');
+  });
+  it('F3 a virada do ano', () => {
+    expect(faturaDaCompra('2026-12-04', 16, 5)).toBe('2026-12-16');
+    expect(faturaDaCompra('2026-12-05', 16, 5)).toBe('2027-01-16');
+    expect(faturaDaCompra('2026-12-31', 20, 7)).toBe('2027-01-20');
+  });
+  it('F4 parcelado: a parcela k na fatura k (atravessando o ano)', () => {
+    expect(faturasDasParcelas('2026-11-17', 3, 16, 5)).toEqual(['2026-12-16', '2027-01-16', '2027-02-16']);
+    expect(faturaDaParcela('2026-11-04', 2, 16, 5)).toBe('2026-12-16');
+    expect(faturaDaParcela('2026-11-04', 0, 16, 5)).toBe('');
+  });
+  it('F5 o mês sem o dia: vence 31 → 28/02 e depois 31/03 (o corte de fevereiro não arrasta as seguintes); fechamento 30 em fevereiro', () => {
+    expect(faturasDasParcelas('2027-01-25', 3, 31, 20)).toEqual(['2027-02-28', '2027-03-31', '2027-04-30']);
+    expect(parcelasDoCartao(30000, 3, '2027-02-28', 24, 31).map((x) => x.vencimento)).toEqual(['2027-02-28', '2027-03-31', '2027-04-30']);
+    expect(parcelasDoCartao(30000, 3, '2027-02-28').map((x) => x.vencimento)).toEqual(['2027-02-28', '2027-03-28', '2027-04-28']);   // sem o dia: a regra de antes
+    expect(faturaDaCompra('2027-02-28', 10, 30)).toBe('2027-04-10');   // fecha "30" em fevereiro = 28/02: a de 28/02 já é da seguinte (fecha 30/03, vence 10/04)
+    expect(faturaDaCompra('2027-02-27', 10, 30)).toBe('2027-03-10');
+  });
+  it('F6 os dias do cartão: o aviso quando falta fechamento ou vencimento no cadastro (o vencimento ainda vem das faturas)', () => {
+    const faturas = [{ dia: 16, lancamentos: 4, ultimo: '2026-10-16' }];
+    expect(diasDaFatura({ fechamento: 5, vencimento: 16 }, faturas)).toEqual({ vencimento: { dia: 16, origem: 'digitado' }, fechamento: 5, aviso: null });
+    expect(diasDaFatura({ fechamento: null, vencimento: 16 }, faturas).aviso).toBe('Cartão sem dia de fechamento no cadastro: o vencimento não sabe em qual fatura cai a compra do fim do mês.');
+    expect(diasDaFatura({ fechamento: null, vencimento: null }, faturas)).toEqual({ vencimento: { dia: 16, origem: 'faturas' }, fechamento: null,
+      aviso: 'Cartão sem dia de fechamento e de vencimento no cadastro: o vencimento não sai do cadastro.' });
+  });
+  it('F7 status: a compra no cartão é Programada (o conciliado fica)', () => {
+    expect(['previsto', 'realizado', 'programado', 'conciliado'].map(statusNoCartao)).toEqual(['programado', 'programado', 'programado', 'conciliado']);
+  });
+  it('F8 importação: o vencimento da planilha manda; sem ele, a fatura da competência; sem os dias, nada', () => {
+    const dias = diasDaFatura({ fechamento: 5, vencimento: 16 }, []);
+    expect(vencimentoDaImportacaoNoCartao('2026-11-30', '2026-11-17', dias)).toBe('2026-11-30');
+    expect(vencimentoDaImportacaoNoCartao(null, '2026-11-17', dias)).toBe('2026-12-16');
+    expect(vencimentoDaImportacaoNoCartao(null, '2026-11-17', null)).toBeNull();
+    expect(vencimentoDaImportacaoNoCartao(undefined, null, dias)).toBeNull();
+  });
+  it('F9 o ⓘ "pela fatura do cartão" (mock aprovado): o ciclo, o dia do fechamento e o parcelado', () => {
+    const d: { dia: number; origem: 'digitado' | 'faturas' } = { dia: 16, origem: 'digitado' };
+    expect(porQueOVencimento('2026-11-17', d, 5)).toBe('Por que 16/12? A compra é de 17/11, depois do fechamento de 05/11 → entra na fatura que fecha em 05/12 e vence em 16/12.');
+    expect(porQueOVencimento('2026-11-05', d, 5)).toBe('Por que 16/12? A compra é de 05/11, no dia do fechamento (05/11), que já é da fatura seguinte → entra na fatura que fecha em 05/12 e vence em 16/12.');
+    expect(porQueOVencimento('2026-11-17', d, 5, 3)).toBe('Por que 16/12? A compra é de 17/11, depois do fechamento de 05/11 → entra na fatura que fecha em 05/12 e vence em 16/12. Parcelado em 3×: parcela 1 vence 16/12/2026 · 2 em 16/01/2027 · 3 em 16/02/2027.');
+    expect(porQueOVencimento('', d, 5)).toBe('');
+  });
+});
