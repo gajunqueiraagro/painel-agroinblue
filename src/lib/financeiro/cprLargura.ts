@@ -25,7 +25,13 @@
 export interface Regua {
   comp: number; venc: number; safra: number; faz: number;
   nf: number; status: number; valor: number; saldo: number;
+  /** BPO-FUNCIONAR-01 (aditivo; Code 6 07:13) — SÓ com a aprovação ligada: a caixa de seleção (antes de Comp.), a Aprovação e o
+   *  Lançado por (entre Status e Valor: as faixas alinham pelo Valor/Saldo à direita). Ausentes = a CPR de sempre, byte a byte. */
+  sel?: number; aprov?: number; lancado?: number;
 }
+
+/** as larguras fixas das colunas da aprovação (o chip "Aprovado · regra" e "Amanda · 20/11" medidos a 12px) */
+export const DA_APROVACAO_CPR: Readonly<Required<Pick<Regua, 'sel' | 'aprov' | 'lancado'>>> = { sel: 20, aprov: 100, lancado: 92 };
 
 /** As colunas fixas que não dependem do valor. */
 const FIXAS: Readonly<Pick<Regua, 'comp' | 'venc' | 'nf' | 'status'>> = { comp: 48, venc: 48, nf: 72, status: 70 };
@@ -60,13 +66,14 @@ export function larguraDosValoresCpr(maiorValor: number): Pick<Regua, 'valor' | 
 }
 
 /** A régua do modo, para o maior valor do período. */
-export function reguaDaCpr(ampliado: boolean, maiorValor: number): Regua {
-  return { ...FIXAS, safra: ampliado ? DO_AMPLIADO.safra : 0, faz: ampliado ? DO_AMPLIADO.faz : 0, ...larguraDosValoresCpr(maiorValor) };
+export function reguaDaCpr(ampliado: boolean, maiorValor: number, aprovacao = false): Regua {
+  const base: Regua = { ...FIXAS, safra: ampliado ? DO_AMPLIADO.safra : 0, faz: ampliado ? DO_AMPLIADO.faz : 0, ...larguraDosValoresCpr(maiorValor) };
+  return aprovacao ? { ...base, ...DA_APROVACAO_CPR } : base;
 }
 
 /** As colunas fixas, na ordem do cabeçalho (sem as de texto). */
 export function colunasFixasCpr(r: Regua): number[] {
-  return [r.comp, r.venc, r.safra, r.faz, r.nf, r.status, r.valor, r.saldo].filter((x) => x > 0);
+  return [r.sel ?? 0, r.comp, r.venc, r.safra, r.faz, r.nf, r.status, r.aprov ?? 0, r.lancado ?? 0, r.valor, r.saldo].filter((x) => x > 0);
 }
 
 /** A largura mínima da lista: a moldura, as colunas da régua, as três de texto no mínimo e 4px por vão. Abaixo dela a lista rola. */

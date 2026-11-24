@@ -68,7 +68,7 @@ describe('a tela (lida da fonte)', () => {
   });
 
   it('a régua vem do maior valor do período (recorte e série) e a largura mínima é a dela; o teto só cresce no mesmo cliente/período/conta', () => {
-    expect(tela).toContain('const regua = useMemo(() => reguaDaCpr(ampliado, maiorValor), [ampliado, maiorValor]);');
+    expect(tela).toContain('const regua = useMemo(() => reguaDaCpr(ampliado, maiorValor, aprovacao.ligado), [ampliado, maiorValor, aprovacao.ligado]);');
     expect(tela).toContain('const agora = maiorValorCpr(recorte, serie);');
     /* as pílulas filtram na consulta: desligar uma nunca estreita a régua */
     expect(tela).toContain('const valor = tetoDoValor.current.chave === chave ? Math.max(tetoDoValor.current.valor, agora) : agora;');

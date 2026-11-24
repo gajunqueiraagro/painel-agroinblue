@@ -493,13 +493,14 @@ describe('CPR-SALDO-DIA-01 — a tela só renderiza (lido da fonte)', () => {
     expect(tela).not.toMatch(/text-destructive'? : 'text-success|text-success' : 'text-destructive/);
   });
   it('uma régua por modo (do dono, pelo maior valor do período); CPR-LAYOUT-03: UMA coluna Valor e a Saldo, nas linhas, nas faixas e no cabeçalho', () => {
-    expect(tela).toContain('const regua = useMemo(() => reguaDaCpr(ampliado, maiorValor), [ampliado, maiorValor]);');
+    expect(tela).toContain('const regua = useMemo(() => reguaDaCpr(ampliado, maiorValor, aprovacao.ligado), [ampliado, maiorValor, aprovacao.ligado]);');
     expect(tela).not.toMatch(/regua\.(pagar|receber)\b/);
     /* valor: cabeçalho, a célula da linha, a linha-resumo dos vencidos e a Faixa · saldo: cabeçalho, linha, linha-resumo e Faixa */
     for (const [col, n] of [['regua.valor', 4], ['regua.saldo', 4]] as const) expect(Array.from(tela.matchAll(new RegExp(`larg(?:ura=\\{|\\()${col.replace('.', '\\.')}`, 'g'))).length, col).toBe(n);
     expect(tela).not.toMatch(/COL\.(banco|origem|doc|valor)/);
     expect(tela).toContain('origem: ${rotuloOrigem(l.origem_lancamento)} · doc: ${doc || \'—\'}');
-    expect(tela).toContain("title={segmento === 'ambos' ? 'o saldo depois de cada linha, na ordem da lista; fecha no \"Saldo em\" do dia' : MOTIVO_SALDO_DOIS_LADOS}");
+    /* BPO-FUNCIONAR-01: numa etapa da aprovação o cabeçalho do Saldo diz por que a coluna está vazia */
+    expect(tela).toContain("title={etapaAtiva ? MOTIVO_SALDO_NA_ETAPA : segmento === 'ambos' ? 'o saldo depois de cada linha, na ordem da lista; fecha no \"Saldo em\" do dia' : MOTIVO_SALDO_DOIS_LADOS}");
     /* CPR-AJUSTES-20-10: o grupo "vencidos anteriores à conciliação · fora do saldo" deixou de existir, e o motivo dele junto */
     expect(tela).not.toContain('MOTIVO_ANTERIORES');
   });
@@ -802,7 +803,7 @@ describe('CPR-TRANSFERENCIAS-NO-FLUXO-01 — a transferência tem duas pontas, e
     expect(tela).not.toContain('tipo_operacao.not.like');
     expect(tela).toContain(".or('sem_movimentacao_caixa.is.null,sem_movimentacao_caixa.eq.false')");
     expect(tela).toContain('key={chaveDaLinhaCpr(l)}');
-    expect(tela).toContain('onClick={() => { if (catalogosProntos && !abrindo) void abrir(l.id); }}');   // P152: a linha é div role="button"
+    expect(tela).toContain('onClick={() => { if (catalogosProntos && !abrindo) abrirNaEtapa(l.id); }}');   // BPO-FUNCIONAR-01: em "Para aprovar" abre o painel; senão, o lançamento   // P152: a linha é div role="button"
     expect(tela).toContain('...recorte.foraDoCaixa]');
     const semComentario = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     /* a direção não se decide por prefixo fora do dono */
