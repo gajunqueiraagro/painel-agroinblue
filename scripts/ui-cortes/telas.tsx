@@ -977,16 +977,20 @@ if (tela === 'mesclar') {
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financeiro_bpo_config' ? [{ ativo: true }]
       : t === 'vw_lancamento_documentos' ? DOCS_V3.filter((d) => !e.eq.lancamento_id || d.lancamento_id === e.eq.lancamento_id)
-      : t === 'financeiro_lancamentos_v2' && e.eq.favorecido_id ? [{ id: 'ant-1', data_pagamento: dm(1), valor: -3006.5 }, { id: 'ant-2', data_pagamento: '2026-10-05', valor: -3006.5 }]
+      /* nos prints de cliente REAL (`__ultimosV3Fora`) o painel não mostra pagamento sintético: só o último real injetado (ou nada) */
+      : t === 'financeiro_lancamentos_v2' && e.eq.favorecido_id ? (Array.isArray(g.__ultimosV3Fora)
+        ? g.__ultimosV3Fora.filter((u: any) => u.favorecido_id === e.eq.favorecido_id).map((u: any, i: number) => ({ id: `ult-${i}`, data_pagamento: u.data_pagamento, valor: u.valor }))
+        : [{ id: 'ant-1', data_pagamento: dm(1), valor: -3006.5 }, { id: 'ant-2', data_pagamento: '2026-10-05', valor: -3006.5 }])
       /* DÉBITO AUTOMÁTICO: o último pagamento do fornecedor em DA (o v-fin veio 18.000 no mês passado → "+26%"); os prints injetam `__ultimosV3Fora` */
       : t === 'financeiro_lancamentos_v2' && e.in.favorecido_id ? (Array.isArray(g.__ultimosV3Fora) ? g.__ultimosV3Fora
         : [{ favorecido_id: 'f-v-fin', data_pagamento: new Date(hj.getFullYear(), hj.getMonth() - 1, 7).toISOString().slice(0, 10), valor: -18000 }])
       : [],
-    rpc: (fn: string) => fn === 'fn_aprovacao_lista_v3' ? LISTA_V3
+    rpc: (fn: string, a: any) => fn === 'fn_aprovacao_lista_v3' ? LISTA_V3
       : fn === 'fn_parcelas_dos_lancamentos' ? { 'v-semen': [3, 8], 'v-vacina': [2, 2], 'ant-1': [2, 8], 'ant-2': [1, 8] }
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Gestor Sintético', email: null, situacao: 'membro ativo' },
           { user_id: 'u2', nome: 'Amanda Exemplo', email: 'financeiro@exemplo.com', situacao: 'membro ativo' }]
-      : fn === 'fin_documento_confronto' ? { docs_ativos: 2, valor_documentos: 3006.5, valor_lancamento: 3006.5, diferenca: 0, confere: true }
+      : fn === 'fin_documento_confronto' ? (Array.isArray(g.__ultimosV3Fora) && a?.p_lancamento_id !== DOC.lancamento_id ? null
+        : { docs_ativos: 2, valor_documentos: 3006.5, valor_lancamento: 3006.5, diferenca: 0, confere: true })
       : null,
   };
   montar(<AprovarPagamentosV3 />);

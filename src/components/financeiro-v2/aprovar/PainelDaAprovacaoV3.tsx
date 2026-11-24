@@ -206,7 +206,7 @@ export function PainelDaAprovacaoV3({ clienteId, linhas, indice, onIndice, nomes
     <>
       <Textarea value={comentario} onChange={(e) => { setComentario(e.target.value); setAviso(null); }} disabled={ocupado || !pode}
         placeholder="Comentário (obrigatório para recusar)" className="h-[52px] min-h-0 shrink-0 resize-none text-[11.5px]" data-testid="v3-comentario" />
-      <p className="min-h-[15px] shrink-0 break-words text-[11px] leading-[15px] text-destructive" data-testid="v3-painel-aviso">{aviso ?? (pode ? '' : motivoSemDecidir(linha))}</p>
+      <p className={cn('min-h-[15px] shrink-0 break-words text-[11px] leading-[15px]', !aviso && linha.daPelaRegra ? 'text-violet-700' : 'text-destructive')} data-testid="v3-painel-aviso">{aviso ?? (pode ? '' : motivoSemDecidir(linha))}</p>
       <div className="flex shrink-0 items-center gap-2">
         <Button size="sm" variant="outline" className="h-8 flex-1 text-[12px] text-destructive" disabled={ocupado || !pode} onClick={() => void decidir(false)} data-testid="v3-recusar">Recusar</Button>
         <Button size="sm" className="h-8 flex-1 bg-emerald-700 text-[12px] text-white hover:bg-emerald-800" disabled={ocupado || !pode} onClick={() => void decidir(true)} data-testid="v3-aprovar">Aprovar</Button>
