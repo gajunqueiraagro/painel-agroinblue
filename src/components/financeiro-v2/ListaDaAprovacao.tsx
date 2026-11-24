@@ -29,10 +29,12 @@ export const LARGURA_DOS_CARTOES = 900;
 
 const ddmm = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 
-export function BarraDaAprovacao({ clienteId, selecionadas, onFeito, className, legenda }: {
+export function BarraDaAprovacao({ clienteId, selecionadas, onFeito, className, legenda, reservarAprovar }: {
   clienteId: string; selecionadas: readonly { id: string; valor: number }[]; onFeito: () => void; className?: string;
   /** APROVAR-PAGAMENTOS-V3 — a legenda das siglas da forma, depois do total (a tela própria; a CPR não passa) */
   legenda?: ReactNode;
+  /** APROVAR-PAGAMENTOS-V3 — o "Aprovar N" com lugar reservado também SEM legenda (o celular da tela própria: marcar não empurra o "Recusar…") */
+  reservarAprovar?: boolean;
 }) {
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -67,7 +69,7 @@ export function BarraDaAprovacao({ clienteId, selecionadas, onFeito, className, 
       <Button size="sm" variant="outline" className="h-6 shrink-0 text-[11px] text-destructive" disabled={ocupado || n === 0}
         onClick={() => { setMotivo(''); setAviso(null); setRecusando(true); }} data-testid="bpo-recusar">Recusar…</Button>
       <Button size="sm" className="h-6 shrink-0 bg-emerald-700 text-[11px] text-white hover:bg-emerald-800" disabled={ocupado || n === 0}
-        onClick={() => void decidir(true, null)} data-testid="bpo-aprovar">Aprovar {legenda ? <TextoReservado texto={n || ''} reserva="999" /> : (n || '')}</Button>
+        onClick={() => void decidir(true, null)} data-testid="bpo-aprovar">Aprovar {legenda || reservarAprovar ? <TextoReservado texto={n || ''} reserva="999" /> : (n || '')}</Button>
       <Dialog open={recusando} onOpenChange={(v) => { if (!v && !ocupado) setRecusando(false); }}>
         <DialogContent className="max-w-[420px]" data-testid="bpo-recusar-dialogo">
           <DialogHeader>

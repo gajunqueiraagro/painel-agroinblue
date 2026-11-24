@@ -324,7 +324,10 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="v3-linha"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(300); } },
   { nome: 'aprovar-v3-celular', url: 'tela=aprovar-v3&semlateral=1&barra=0', tamanhos: [[390, 844], [750, 600]],
     antes: async (p) => { await p.locator('[data-testid="v3-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(300); } },
-  { nome: 'aprovar-v3-vazio', url: 'tela=aprovar-v3&v=vazio', tamanhos: [[1126, 579], [390, 844]],
+  { nome: 'aprovar-v3-vazio', url: 'tela=aprovar-v3&v=vazio', tamanhos: [[1126, 579]],
+    antes: async (p) => { await p.locator('[data-testid="v3-vazio"]').first().waitFor({ timeout: 20000 }); } },
+  /* no celular a barra lateral não existe (como as outras cenas de celular): a 390 com os 152 px dela o rodapé não cabe */
+  { nome: 'aprovar-v3-vazio-celular', url: 'tela=aprovar-v3&v=vazio&semlateral=1&barra=0', tamanhos: [[390, 844]],
     antes: async (p) => { await p.locator('[data-testid="v3-vazio"]').first().waitFor({ timeout: 20000 }); } },
   { nome: 'aprovar-v3-painel', url: 'tela=aprovar-v3', tamanhos: [[1126, 579], [1280, 800], [1920, 1080]], regiao: '[data-testid="v3-painel"]',
     antes: async (p) => { await p.locator('[data-testid="v3-linha"]').nth(1).click(); await p.locator('[data-testid="v3-ultimos"] table').waitFor({ timeout: 20000 });

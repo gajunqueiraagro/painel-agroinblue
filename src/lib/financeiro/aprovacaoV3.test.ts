@@ -124,9 +124,9 @@ describe('DÉBITO AUTOMÁTICO — já autorizado no banco (Gabriel 24/11 17:40)'
   it('variou MAIS de 20% = aviso "mês passado R$ X"; 20% exato ou não DA = nada', () => {
     const v = variacaoDoDa(comRegra[0], { data: '2026-11-07', valor: 1000 });
     expect(v?.selo).toBe('+30%');
-    expect(v?.texto).toBe('mês passado R$ 1.000,00');
+    expect(v?.texto).toMatch(/^mês passado R\$\s1\.000,00$/);
     expect(v?.titulo).toContain('07/11/2026');
-    expect(variacaoDoDa(comRegra[0], { data: '2026-09-07', valor: 2000 })?.texto).toBe('em 09/2026 R$ 2.000,00');
+    expect(variacaoDoDa(comRegra[0], { data: '2026-09-07', valor: 2000 })?.texto).toMatch(/^em 09\/2026 R\$\s2\.000,00$/);
     expect(variacaoDoDa(comRegra[0], { data: '2026-09-07', valor: 2000 })?.selo).toBe('−35%');
     expect(variacaoDoDa({ ...comRegra[0], valor: 1200 }, { data: '2026-11-07', valor: 1000 })).toBeNull();
     expect(variacaoDoDa(comRegra[1], { data: '2026-11-07', valor: 10 })).toBeNull();

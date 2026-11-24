@@ -216,7 +216,7 @@ export function AprovarPagamentosV3() {
                 <col style={{ width: COLUNAS_V3.pronto }} /><col style={{ width: COLUNAS_V3.conta }} />
               </colgroup>
               <thead className="sticky top-0 z-10">
-                <tr className="bg-primary text-left text-[10.5px] text-primary-foreground [&>th]:h-[26px] [&>th]:whitespace-nowrap [&>th]:px-1.5 [&>th]:font-medium">
+                <tr className="bg-primary text-left text-[10.5px] text-primary-foreground [&>th]:h-[26px] [&>th]:bg-primary [&>th]:whitespace-nowrap [&>th]:px-1.5 [&>th]:font-medium">
                   <th>{aba === 'aprovar' && marcaveis.length > 0 && (
                     <Checkbox checked={todasMarcadas} onCheckedChange={(v) => setMarcadas(v === true ? new Set(marcaveis.map((l) => l.id)) : new Set())}
                       aria-label="Selecionar todos" className="border-primary-foreground" />)}</th>
@@ -256,11 +256,11 @@ export function AprovarPagamentosV3() {
             </table>
           </div>
         )}
-        <BarraDaAprovacao clienteId={clienteId} selecionadas={selecionadas} onFeito={feito} legenda={legenda}
+        <BarraDaAprovacao clienteId={clienteId} selecionadas={selecionadas} onFeito={feito} legenda={legenda} reservarAprovar
           className={celular ? 'h-[52px]' : 'h-[40px]'} />
       </div>
       {aberta !== null && (
-        <PainelDaAprovacaoV3 clienteId={clienteId} linhas={visiveis} indice={aberta} onIndice={setAberta} nomes={v3.nomes} parcelas={parcelas} ultimos={v3.ultimos}
+        <PainelDaAprovacaoV3 clienteId={clienteId} linhas={visiveis} indice={aberta} onIndice={setAberta} nomes={v3.nomes} parcelas={parcelas} ultimosPagamentos={v3.ultimos}
           celular={celular} onFechar={() => setAberta(null)} onDecidido={() => void v3.recarregar()} />
       )}
     </div>

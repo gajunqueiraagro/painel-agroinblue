@@ -81,7 +81,7 @@ describe('AprovarPagamentosV3', () => {
   it('a linha: valor negativo em negrito, sigla da forma, NF com milhar ou "—", selo da parcela e do R', async () => {
     montar();
     const linhas = await screen.findAllByTestId('v3-linha');
-    expect(linhas[1].textContent).toContain('−R$ 3.006,50');
+    expect(linhas[1].textContent).toMatch(/−R\$\s3\.006,50/);
     expect(linhas[1].textContent).toContain('Bol');
     expect(linhas[1].textContent).toContain('18.112');
     expect(linhas[1].textContent).toContain('3/8');
@@ -108,6 +108,7 @@ describe('AprovarPagamentosV3', () => {
     await screen.findAllByTestId('v3-linha');
     fireEvent.click(screen.getByRole('button', { name: /^Faltando/ }));
     expect(screen.getAllByTestId('v3-linha')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /^Todos/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Aprovados/ }));
     await waitFor(() => expect(screen.getAllByTestId('v3-linha')).toHaveLength(1));
   });
@@ -149,7 +150,7 @@ describe('AprovarPagamentosV3', () => {
     if (!linhaDa) throw new Error('a linha do DA não está em Aprovados');
     expect(within(linhaDa).getByTestId('v3-pronto').textContent).toBe('aprovado · DA');
     expect(within(linhaDa).getByTestId('v3-variacao').textContent).toBe('+30%');
-    expect(within(linhaDa).getByTestId('v3-variacao').getAttribute('title')).toContain('R$ 1.000,00');
+    expect(within(linhaDa).getByTestId('v3-variacao').getAttribute('title')).toMatch(/R\$\s1\.000,00/);
     expect(within(linhaDa).queryByRole('checkbox')).toBeNull();
   });
 

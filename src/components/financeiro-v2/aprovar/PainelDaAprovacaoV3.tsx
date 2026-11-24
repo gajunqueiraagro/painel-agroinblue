@@ -98,9 +98,9 @@ export function AbaPagamentoV3({ linha }: { linha: LinhaV3 }) {
   );
 }
 
-export function PainelDaAprovacaoV3({ clienteId, linhas, indice, onIndice, nomes, parcelas, ultimos, celular, onFechar, onDecidido }: {
+export function PainelDaAprovacaoV3({ clienteId, linhas, indice, onIndice, nomes, parcelas, ultimosPagamentos, celular, onFechar, onDecidido }: {
   clienteId: string; linhas: readonly LinhaV3[]; indice: number | null; onIndice: (i: number) => void; nomes: ReadonlyMap<string, string>;
-  parcelas: ReadonlyMap<string, ParcelaDoContrato>; ultimos: ReadonlyMap<string, UltimoPagamento>; celular: boolean; onFechar: () => void; onDecidido: () => void;
+  parcelas: ReadonlyMap<string, ParcelaDoContrato>; ultimosPagamentos: ReadonlyMap<string, UltimoPagamento>; celular: boolean; onFechar: () => void; onDecidido: () => void;
 }) {
   const linha = indice != null ? linhas[indice] ?? null : null;
   const docs = useLancamentoDocumentos(linha?.id ?? null, clienteId);
@@ -172,7 +172,7 @@ export function PainelDaAprovacaoV3({ clienteId, linhas, indice, onIndice, nomes
 
   const parcela = parcelas.get(linha.id);
   const forma = siglaDaForma(linha.forma);
-  const variacao = variacaoDoDa(linha, linha.favorecidoId ? ultimos.get(linha.favorecidoId) : undefined);
+  const variacao = variacaoDoDa(linha, linha.favorecidoId ? ultimosPagamentos.get(linha.favorecidoId) : undefined);
   const pronto = textoDoPronto(linha.pronto);
   const confere = docs.confronto;
   const textoConfere = !confere || confere.docsAtivos === 0 ? 'sem documento anexado'
@@ -206,7 +206,7 @@ export function PainelDaAprovacaoV3({ clienteId, linhas, indice, onIndice, nomes
     <>
       <Textarea value={comentario} onChange={(e) => { setComentario(e.target.value); setAviso(null); }} disabled={ocupado || !pode}
         placeholder="Comentário (obrigatório para recusar)" className="h-[52px] min-h-0 shrink-0 resize-none text-[11.5px]" data-testid="v3-comentario" />
-      <p className="h-[15px] shrink-0 truncate text-[11px] text-destructive" title={aviso ?? undefined} data-testid="v3-painel-aviso">{aviso ?? (pode ? '' : motivoSemDecidir(linha))}</p>
+      <p className="min-h-[15px] shrink-0 break-words text-[11px] leading-[15px] text-destructive" data-testid="v3-painel-aviso">{aviso ?? (pode ? '' : motivoSemDecidir(linha))}</p>
       <div className="flex shrink-0 items-center gap-2">
         <Button size="sm" variant="outline" className="h-8 flex-1 text-[12px] text-destructive" disabled={ocupado || !pode} onClick={() => void decidir(false)} data-testid="v3-recusar">Recusar</Button>
         <Button size="sm" className="h-8 flex-1 bg-emerald-700 text-[12px] text-white hover:bg-emerald-800" disabled={ocupado || !pode} onClick={() => void decidir(true)} data-testid="v3-aprovar">Aprovar</Button>
@@ -270,7 +270,7 @@ export function PainelDaAprovacaoV3({ clienteId, linhas, indice, onIndice, nomes
       <DialogContent data-testid="v3-painel"
         className={cn('flex flex-col gap-0 overflow-hidden p-0', celular ? 'h-[100dvh] max-h-[100dvh] w-screen max-w-none rounded-none' : 'h-[min(560px,92vh)] max-w-[900px]')}>
         <div className="flex h-[40px] shrink-0 items-center gap-2 bg-primary px-3 pr-10 text-primary-foreground">
-          <DialogTitle className="min-w-0 flex-1 truncate text-[13px]" title={linha.fornecedor}>{linha.fornecedor}</DialogTitle>
+          <DialogTitle className="min-w-0 flex-1 break-words text-[13px]">{linha.fornecedor}</DialogTitle>
           <DialogDescription className="sr-only">decidir este pagamento</DialogDescription>
           <div className="rounded bg-white/95 text-foreground">{nav}</div>
         </div>
@@ -296,9 +296,9 @@ export function PainelDaAprovacaoV3({ clienteId, linhas, indice, onIndice, nomes
             <div className="flex min-h-0 flex-col gap-2 overflow-hidden p-3">
               <div className="shrink-0">
                 <div className="text-[22px] font-bold leading-[26px] tabular-nums text-destructive" data-testid="v3-painel-valor">{saida(linha.valor)}</div>
-                <div className="truncate text-[12.5px] font-semibold" title={linha.fornecedor}>{linha.fornecedor}</div>
+                <div className="break-words text-[12.5px] font-semibold">{linha.fornecedor}</div>
                 <div className="flex min-w-0 items-center text-[11px] text-muted-foreground">
-                  <span className="min-w-0 truncate" title={linha.descricao}>{linha.descricao || '—'}</span>
+                  <span className="min-w-0 break-words">{linha.descricao || '—'}</span>
                   {parcela && <span className="ml-1 shrink-0 rounded border px-1 text-[8.5px] font-bold leading-[12px]">{parcela.numero}/{parcela.total}</span>}
                 </div>
               </div>
