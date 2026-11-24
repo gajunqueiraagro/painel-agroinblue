@@ -873,8 +873,22 @@ if (tela === 'mesclar') {
   const listaBase = q.get('n') === 'longo' ? CONTAS_BANC.CONTAS_LONGAS : CONTAS_BANC.CONTAS;
   /* CARTAO-LANCAMENTO-01 — `&cartao=1`: o cartão SINTÉTICO (k9) com os dias digitados (fecha 3, vence 10) — o modal abre nele */
   const lista = q.get('cartao') === '1' ? listaBase.map((c: any) => (c.id === 'k9' ? { ...c, dia_fechamento: 3, dia_vencimento: 10 } : c)) : listaBase;
+  /* CONTAS-OF-LINHA-01 — a coluna "Open Finance" com os 5 estados (SINTÉTICO): k1 Itaú conectado (lido hoje 07:40), k2 Bradesco ligado mas o
+     último aviso do item pede o titular (⚠ Reconectar), k3 BTG e k5 Bradesco Pessoal "Conectar", k4 Dinheiro "—"; `&of=link` = um link do
+     titular vivo (as não ligadas viram "Link enviado"); `&of=conectar` abre o modal do "Conectar" da 1ª linha que o tem */
+  const hojeAs = (h: number, m: number) => { const d = new Date(); d.setHours(h, m, 0, 0); return d.toISOString(); };
+  const OF_EVENTOS = [
+    { evento: 'item/created', item_id: 'it-itau', cliente_id: 'cli', client_user_id: 'cli', connector_id: '601', recebido_em: '2026-11-16T20:10:37Z' },
+    { evento: 'item/created', item_id: 'it-brad', cliente_id: 'cli', client_user_id: 'cli', connector_id: '602', recebido_em: '2026-11-17T10:00:00Z' },
+    { evento: 'item/login_error', item_id: 'it-brad', cliente_id: 'cli', client_user_id: 'cli', connector_id: '602', recebido_em: '2026-11-22T10:00:00Z' },
+  ];
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financeiro_contas_bancarias' ? (e.in.id ? lista.filter((c: any) => e.in.id.includes(c.id)) : lista)
+      : t === 'openfinance_eventos' ? OF_EVENTOS
+      : t === 'openfinance_contas_permitidas' ? [{ item_id: 'it-itau', conta_bancaria_id: 'k1', final4: '7225', ativo: true },
+          { item_id: 'it-brad', conta_bancaria_id: 'k2', final4: '0001', ativo: true }]
+      : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'k1', lido_em: hojeAs(7, 40) }]
+      : t === 'openfinance_convites' ? (q.get('of') === 'link' ? [{ expira_em: new Date(Date.now() + 20 * 3600e3).toISOString(), usado_em: null, revogado_em: null }] : [])
       : t === 'bancos_referencia' ? CONTAS_BANC.BANCOS
       : t === 'financeiro_saldos_bancarios_v2' ? [{ saldo_final: 30943.91, saldo_data: '2026-08-31' }] : [],
     rpc: (fn: string, a: any) => fn === 'fn_conta_bancaria_painel' ? CONTAS_BANC.PAINEL
@@ -883,6 +897,7 @@ if (tela === 'mesclar') {
       : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 12, ultimo: '2026-10-10' }] : null,
   };
   montar(<div className="h-full"><FinV2ContasTab /></div>);
+  if (q.get('of') === 'conectar') setTimeout(() => { const b = document.querySelector('[data-testid="of-conectar"]'); if (b instanceof HTMLElement) b.click(); }, 600);
   const abre = q.get('v');
   if (abre) setTimeout(() => {
     /* CARTAO-LANCAMENTO-01 — `&cartao=1` abre a linha do cartão (a tela ordena a lista: a 1ª linha não é a 1ª do banco) */
