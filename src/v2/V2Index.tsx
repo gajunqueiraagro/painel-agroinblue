@@ -445,6 +445,9 @@ export default function V2Index() {
         // FIN-MODAL-FECHO-01 item 2 — contrato genérico ?oc_id=<id> abre a Central de Operações
         // Comerciais, que localiza e abre a operação por tipo (compra hoje; venda/abate estáveis).
         if (qs.get('oc_id')) return 'operacoes-comerciais';
+        /* CARTAO-VENC-FATURA-01 — o link "Abrir o cadastro do cartão" do lançamento abre a tela pedida numa aba nova (`?secao=`) */
+        const secao = qs.get('secao');
+        if (ehSectionConhecida(secao)) return secao;
       }
     } catch { /* URL indisponível */ }
     return 'home';

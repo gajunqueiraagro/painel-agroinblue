@@ -301,6 +301,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   dia mais frequente do cartão em 12 meses (`fn_cartao_dias_de_vencimento`); "Parcelar este lançamento" pela RPC (divisão às N) + docs às N.
 - P74b: voltar para à vista SÓ por `fn_parcelamento_voltar_a_vista` (sem parcela paga; a 1/N volta pelo `avista_original`, N−1 canceladas
   "voltou para à vista"); `fn_parcelamento_excluir` cancela a compra inteira, inclusive a 1/N — não é a volta.
+- CARTAO-VENC-FATURA-01: o vencimento no cartão é a FATURA em TODA porta (Novo, + Da nota, prévia da nota, Parcelar este, Excel sem vencimento) por
+  UMA lib (`pagamentoNoCartao.ts`: `faturaDaCompra`/`vencimentoPelaFatura`) e UMA leitura (`useDiasDaFatura`); só a data DIGITADA fica; compra no dia do fechamento = fatura seguinte; parcela k na fatura k.
 - P101: abaixo de 1000px a prévia da nota tem ABAS (Arquivo | Nota e fornecedor | Parcelas e lançamento; `useLarguraDaJanela`) e o "Novo a
   partir da nota" perde a coluna CNPJ — nunca exceção "de 1000px para cima" no gate. P102: o Editar obrigação tem cenário (`obrigacao-*`).
 - P104: rótulo e frase NUNCA em `uma-linha-que-rola` fora de campo (corta seco; o gate só o pega em tabela ou com `semRolarNoLugar`) — fonte

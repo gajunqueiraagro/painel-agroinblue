@@ -22,9 +22,9 @@ import {
 import { GradeDeParcelas, type ModoDasParcelas } from '@/components/financiamentos/GradeDeParcelas';
 import { brCentavos, motivoNaoSalva, parcelasDoMensal, type ParcelaLivre } from '@/lib/financiamentos/parcelasLivres';
 import {
-  MAX_PARCELAS_DO_CARTAO, MIN_PARCELAS_DO_CARTAO, diaMaisFrequente, parcelasDoCartao, primeiraFatura, rotuloDaSugestao,
+  MAX_PARCELAS_DO_CARTAO, MIN_PARCELAS_DO_CARTAO, faturaDaCompra, parcelasDoCartao, rotuloDaSugestao,
 } from '@/lib/financeiro/pagamentoNoCartao';
-import { diasDoCartao } from '@/lib/financeiro/diasDoCartao';
+import { useDiasDaFatura } from '@/hooks/useDiasDaFatura';
 import {
   fraseDaConfirmacao, parcelarEsteLancamento, travaDoParcelar, type GravadoresDoParcelar, type LancamentoParaParcelar,
 } from '@/lib/financeiro/parcelarLancamento';
@@ -129,7 +129,6 @@ export function ParcelarEsteLancamento({ clienteId, lancamento, situacao, vencim
   const [nTexto, setNTexto] = useState('');
   const [primeira, setPrimeira] = useState('');
   const [editada, setEditada] = useState(false);
-  const [dia, setDia] = useState<number | null>(null);
   const [modo, setModo] = useState<ModoDasParcelas>('mensal');
   const [livres, setLivres] = useState<ParcelaLivre[]>([]);
   const [base, setBase] = useState<ParcelaLivre[] | null>(null);
@@ -137,21 +136,19 @@ export function ParcelarEsteLancamento({ clienteId, lancamento, situacao, vencim
   const [gravando, setGravando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  useEffect(() => {
-    let vivo = true;
-    if (!aberto || !conta?.cartao) { setDia(null); return; }
-    void diasDoCartao(conta.id).then((d) => { if (vivo) setDia(diaMaisFrequente(d)); }, () => { if (vivo) setDia(null); });
-    return () => { vivo = false; };
-  }, [aberto, conta?.id, conta?.cartao]);
-  const sugerida = dia ? primeiraFatura(lancamento.dataCompetencia, dia) : '';
+  /* CARTAO-VENC-FATURA-01 — a 1ª fatura pela MESMA regra do Novo lançamento (`faturaDaCompra`: o cadastro do cartão, fechamento e
+     vencimento; sem eles, o dia das faturas); a parcela k na fatura k */
+  const diasDoCartaoAberto = useDiasDaFatura(aberto && conta?.cartao ? conta.id : null);
+  const dia = diasDoCartaoAberto.vencimento?.dia ?? null;
+  const sugerida = dia ? faturaDaCompra(lancamento.dataCompetencia, dia, diasDoCartaoAberto.fechamento) : '';
   useEffect(() => { if (!editada) setPrimeira(sugerida); }, [sugerida, editada]);
   const sugeridaAtiva = !!sugerida && !editada && primeira === sugerida;
 
   const n = /^\d+$/.test(nTexto.trim()) ? Number(nTexto.trim()) : 0;
   const nValido = n >= MIN_PARCELAS_DO_CARTAO && n <= MAX_PARCELAS_DO_CARTAO;
   const mensal = useMemo(() => (nValido && primeira
-    ? parcelasDoMensal(parcelasDoCartao(lancamento.valorCent, n, primeira).map((x) => ({ numero: Number(x.numero), dataVencimento: x.vencimento, valor: x.valorCent / 100 })))
-    : []), [nValido, primeira, lancamento.valorCent, n]);
+    ? parcelasDoMensal(parcelasDoCartao(lancamento.valorCent, n, primeira, MAX_PARCELAS_DO_CARTAO, sugeridaAtiva ? dia : null).map((x) => ({ numero: Number(x.numero), dataVencimento: x.vencimento, valor: x.valorCent / 100 })))
+    : []), [nValido, primeira, lancamento.valorCent, n, sugeridaAtiva, dia]);
   const grade = modo === 'livres' ? livres : mensal;
   const nGrade = grade.length;
   const motivo = modo === 'livres' ? (livres.length < MIN_PARCELAS_DO_CARTAO ? 'O parcelado pede ao menos duas parcelas.' : motivoNaoSalva(livres, lancamento.valorCent, 'o lançamento'))

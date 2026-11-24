@@ -45,10 +45,10 @@ import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { GradeDeParcelas, type ModoDasParcelas } from '@/components/financiamentos/GradeDeParcelas';
 import { motivoNaoSalva, parcelasDoMensal, type ParcelaLivre } from '@/lib/financiamentos/parcelasLivres';
 import {
-  FORMAS_DO_PARCELADO, FRASE_NOTA_SEM_DUPLICATAS, MIN_PARCELAS_DO_CARTAO, comPagamento, comoAbre, diaMaisFrequente, fraseDoRodapeDoCartao,
-  maxParcelasDe, pagaEmGrade, parcelasDoCartao, primeiraFatura, rotuloDaSugestao, type ComoFoiPago,
+  FORMAS_DO_PARCELADO, FRASE_NOTA_SEM_DUPLICATAS, MIN_PARCELAS_DO_CARTAO, comPagamento, comoAbre, faturaDaCompra, fraseDoRodapeDoCartao,
+  maxParcelasDe, pagaEmGrade, parcelasDoCartao, rotuloDaSugestao, type ComoFoiPago,
 } from '@/lib/financeiro/pagamentoNoCartao';
-import { diasDoCartao } from '@/lib/financeiro/diasDoCartao';
+import { useDiasDaFatura } from '@/hooks/useDiasDaFatura';
 import type { ParcelaDoPayload } from '@/lib/financiamentos/montarPayloadParcelamento';
 import { gravarParcelamento } from './LancamentoV2Dialog';
 import { ondeEsta } from './LancamentoDoXml';
@@ -274,7 +274,6 @@ export function NotaFiscalDialog({
   const [nCartaoTexto, setNCartaoTexto] = useState('');
   const [primeira, setPrimeira] = useState('');
   const [primeiraEditada, setPrimeiraEditada] = useState(false);
-  const [diaSugerido, setDiaSugerido] = useState<number | null>(null);
   const [modoCartao, setModoCartao] = useState<ModoDasParcelas>('mensal');
   const [livresCartao, setLivresCartao] = useState<ParcelaLivre[]>([]);
   const [baseLivresCartao, setBaseLivresCartao] = useState<ParcelaLivre[] | null>(null);
@@ -284,20 +283,17 @@ export function NotaFiscalDialog({
   const nomeDoCartao = cartao ? (cartao.nome_exibicao || cartao.nome_conta) : '';
   const nCartao = /^\d+$/.test(nCartaoTexto.trim()) ? Number(nCartaoTexto.trim()) : 0;
   const nCartaoValido = nCartao >= MIN_PARCELAS_DO_CARTAO && nCartao <= maxParcelas;
-  /* a 1ª fatura SUGERIDA: o dia mais frequente do cartão nos últimos 12 meses, no mês seguinte à emissão (sem histórico: vazio) */
-  useEffect(() => {
-    let vivo = true;
-    if (!cartaoId) { setDiaSugerido(null); return; }
-    void diasDoCartao(cartaoId).then((d) => { if (vivo) setDiaSugerido(diaMaisFrequente(d)); }, () => { if (vivo) setDiaSugerido(null); });
-    return () => { vivo = false; };
-  }, [cartaoId]);
+  /* CARTAO-VENC-FATURA-01 — a 1ª fatura SUGERIDA pela MESMA regra do Novo lançamento (`faturaDaCompra`): o cadastro do cartão (fechamento
+     e vencimento; sem eles, o dia mais frequente das faturas) sobre a emissão; a parcela k na fatura k */
+  const diasDoCartaoDaNota = useDiasDaFatura(cartaoId || null);
+  const diaSugerido = diasDoCartaoDaNota.vencimento?.dia ?? null;
   /* a sugestão da 1ª fatura é só do cartão (no parcelado o 1º vencimento é digitado) */
-  const primeiraSugerida = como === 'cartao' && diaSugerido ? primeiraFatura(n.emissao, diaSugerido) : '';
+  const primeiraSugerida = como === 'cartao' && diaSugerido ? faturaDaCompra(n.emissao, diaSugerido, diasDoCartaoDaNota.fechamento) : '';
   useEffect(() => { if (!primeiraEditada) setPrimeira(primeiraSugerida); }, [primeiraSugerida, primeiraEditada]);
   const sugeridaAtiva = !!primeiraSugerida && !primeiraEditada && primeira === primeiraSugerida;
   const mensalDoCartao = useMemo(() => (nCartaoValido && primeira
-    ? parcelasDoMensal(parcelasDoCartao(n.totais.notaCent, nCartao, primeira, maxParcelas).map((x) => ({ numero: Number(x.numero), dataVencimento: x.vencimento, valor: x.valorCent / 100 })))
-    : []), [nCartaoValido, primeira, n.totais.notaCent, nCartao, maxParcelas]);
+    ? parcelasDoMensal(parcelasDoCartao(n.totais.notaCent, nCartao, primeira, maxParcelas, sugeridaAtiva ? diaSugerido : null).map((x) => ({ numero: Number(x.numero), dataVencimento: x.vencimento, valor: x.valorCent / 100 })))
+    : []), [nCartaoValido, primeira, n.totais.notaCent, nCartao, maxParcelas, sugeridaAtiva, diaSugerido]);
   const gradeDoCartao = modoCartao === 'livres' ? livresCartao : mensalDoCartao;
   const parcelasEscolhidas = useMemo(() => gradeDoCartao.map((x, i) => ({ numero: String(i + 1), vencimento: x.vencimento, valorCent: x.valorCent })), [gradeDoCartao]);
   const doXml = useMemo(() => comPagamento(doXmlLido, como, emGrade ? parcelasEscolhidas : [], formaDoParcelado), [doXmlLido, como, emGrade, parcelasEscolhidas, formaDoParcelado]);
@@ -785,6 +781,14 @@ export function NotaFiscalDialog({
   const nParcelas = p.duplicatas.length;
   const cabeAqui = nParcelas >= 2;
   const semDuplicata = nDuplicatasDaNota === 0;
+  /* CARTAO-VENC-FATURA-01 — à vista numa conta de CARTÃO: o vencimento é a FATURA em que a emissão cai (a mesma regra do Novo
+     lançamento, `faturaDaCompra`), nunca a emissão; a data que o operador digitar aqui fica */
+  const cartaoAVista = !emGrade && !cabeAqui && contaId !== '__none__' && contas.find((c) => c.id === contaId)?.tipo_conta === 'cartao' ? contaId : null;
+  const diasDoCartaoAVista = useDiasDaFatura(cartaoAVista);
+  const faturaAVista = cartaoAVista && diasDoCartaoAVista.vencimento ? faturaDaCompra(n.emissao, diasDoCartaoAVista.vencimento.dia, diasDoCartaoAVista.fechamento) : '';
+  const [vencimentoDigitado, setVencimentoDigitado] = useState(false);
+  useEffect(() => { if (faturaAVista && !vencimentoDigitado) setVencimento(faturaAVista); }, [faturaAVista, vencimentoDigitado]);
+  const pelaFaturaAVista = !!faturaAVista && vencimento === faturaAVista;
   const culturasDaSafra = useCulturasDaSafra(lavoura && safraId ? safraId : null);
   const safrasDaLavoura = useMemo(() => safras.filter((sf) => (sf.escopo_negocio ?? '') === 'agricultura' || sf.id === safraId), [safras, safraId]);
 
@@ -1834,7 +1838,8 @@ export function NotaFiscalDialog({
                         {/* P104 — o rótulo da sugestão em duas linhas RESERVADAS, fonte menor: nunca rola escondido no lugar */}
                         <span className={cn('mb-0.5 block h-[26px] overflow-hidden whitespace-normal break-words text-[9.5px] font-normal leading-[13px] text-muted-foreground',
                           sugeridaAtiva && 'text-amber-800', modoCartao === 'mensal' && !primeira && 'text-destructive')}
-                          data-testid="nota-cartao-rotulo-fatura" title={sugeridaAtiva ? 'O dia mais frequente das faturas deste cartão nos últimos 12 meses, no mês seguinte à emissão.' : undefined}>
+                          data-testid="nota-cartao-rotulo-fatura" title={sugeridaAtiva ? (diasDoCartaoDaNota.vencimento?.origem === 'digitado' ? 'A fatura em que a emissão cai, pelo fechamento e o vencimento do cadastro do cartão.'
+                            : `O dia mais frequente das faturas deste cartão nos últimos 12 meses. ${diasDoCartaoDaNota.aviso ?? ''}`.trim()) : undefined}>
                           {sugeridaAtiva && diaSugerido ? rotuloDaSugestao(nomeDoCartao, diaSugerido) : como === 'parcelado' ? '1º vencimento' : '1ª fatura'}</span>
                         <DatePicker value={modoCartao === 'livres' ? (livresCartao[0]?.vencimento ?? '') : primeira} disabled={modoCartao === 'livres'} data-testid="nota-cartao-fatura"
                           onChange={(v) => { setPrimeira(v); setPrimeiraEditada(true); }}
@@ -1966,16 +1971,17 @@ export function NotaFiscalDialog({
                 </div>
                 </>)}
                 <div className="col-span-2 min-w-0" data-testid="nota-vencimento">
-                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', !emGrade && !cabeAqui && semDuplicata && 'text-amber-800')}>
-                    {como === 'cartao' ? 'Vencimento · pelas faturas do cartão' : como === 'parcelado' ? 'Vencimento · pelas parcelas' : cabeAqui ? 'Vencimento · pelas parcelas da nota' : semDuplicata ? 'Vencimento · nota sem duplicata: confira o vencimento'
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', !emGrade && !cabeAqui && semDuplicata && !pelaFaturaAVista && 'text-amber-800')}
+                    title={pelaFaturaAVista ? diasDoCartaoAVista.aviso ?? 'A fatura em que a emissão cai, pelo cadastro do cartão.' : undefined}>
+                    {como === 'cartao' ? 'Vencimento · pelas faturas do cartão' : pelaFaturaAVista ? 'Vencimento · pela fatura do cartão' : como === 'parcelado' ? 'Vencimento · pelas parcelas' : cabeAqui ? 'Vencimento · pelas parcelas da nota' : semDuplicata ? 'Vencimento · nota sem duplicata: confira o vencimento'
                       : como === 'avista' ? 'Vencimento · à vista' : 'Vencimento · da duplicata'}
                   </span>
                   {emGrade && !cabeAqui
                     ? <div className="flex h-[22px] items-center rounded-md border bg-muted/40 px-2 text-[10.5px] tabular-nums">—</div>
                     : cabeAqui
                     ? <div className="flex h-[22px] items-center rounded-md border bg-muted/40 px-2 text-[10.5px] tabular-nums">{dataInteira(p.duplicatas[0]?.vencimento)} a {dataInteira(p.duplicatas[nParcelas - 1]?.vencimento)}</div>
-                    : <DatePicker value={vencimento} onChange={setVencimento} data-testid="nota-vencimento-campo"
-                        className={cn('h-[22px] text-[10.5px]', semDuplicata && 'border-amber-400 bg-amber-50', !vencimento && 'border-destructive')} />}
+                    : <DatePicker value={vencimento} onChange={(v) => { setVencimento(v); setVencimentoDigitado(true); }} data-testid="nota-vencimento-campo"
+                        className={cn('h-[22px] text-[10.5px]', semDuplicata && !pelaFaturaAVista && 'border-amber-400 bg-amber-50', !vencimento && 'border-destructive')} />}
                 </div>
               </div>
             </section>
