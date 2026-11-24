@@ -2462,6 +2462,10 @@ const CENARIOS = [
   { nome: 'financeiro-faixa-totais', url: 'tela=financeiro', regiao: '[data-testid="faixa-totais"]', tamanhos: TAMANHOS_DO_CONTRATO,
     botoesDentro: '[data-testid="faixa-totais"]',
     antes: async (p) => { for (let i = 0; i < 10; i++) await clicarRotulo([/^Macro$/, /^Subcentro$/, /^Centro$/, /^Mostrar$/, /^Ocultar$/][i % 5])(p); } },
+  /* FIN-PRONTO-PAGAR-01 — o seletor "Pagamento" em Faltando: a tabela só com os pontos laranja (o ponto antes do status, sem coluna nova) */
+  { nome: 'financeiro-pronto-faltando', url: 'tela=financeiro', regiao: '[data-testid="quadro-lancamentos"]',
+    tamanhos: [[1240, 700], [1024, 600], [1280, 800], [1920, 1080], ...TAMANHOS_DO_CONTRATO],
+    antes: async (p) => { await clicarRotulo(/^Faltando/)(p); await p.locator('[data-testid="ponto-pronto"][data-pronto="nao"]').first().waitFor({ timeout: 8000 }); } },
 ];
 /* UI-TEXTO-LONGO-01 — o que tem de ter a mesma altura com texto curto e longo (o que não existe na tela é pulado nos dois lados) */
 const ALTURAS_DO_MODAL = ['[role="dialog"]', '[role="dialog"] aside', '[data-testid="grade-de-parcelas"]'];

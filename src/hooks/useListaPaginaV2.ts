@@ -132,7 +132,7 @@ export function useListaPaginaV2(clienteId: string | null | undefined, pedido: P
         const t = lerPaginaV2(r.data);
         if (!t) throw new Error('resposta da lista fora do formato');
         if (t.total !== anterior.pagina.total) return carregar(true);
-        base = { ...base, totais: t.totais, semCaixa: t.semCaixa, usoPorFornecedor: t.usoPorFornecedor };
+        base = { ...base, totais: t.totais, semCaixa: t.semCaixa, usoPorFornecedor: t.usoPorFornecedor, prontoPagar: t.prontoPagar };
       }
       const lida = trocarLinhasV2(base, so);
       ultima.current = { recorte, pagina: lida };

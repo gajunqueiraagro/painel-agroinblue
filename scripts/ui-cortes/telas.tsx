@@ -276,9 +276,25 @@ function paginaDaBancada(base0: any[], a: any) {
   const base = new URLSearchParams(location.search).get('div') !== '1' ? base0 : base0.map((l, k) => (k === 0
     ? { ...l, valor: -9583, sinal: -1, tipo_operacao: '2-Saídas', valor_parte: 1055, partes_total: 2, partes_casadas: 1 }
     : k === 1 ? { ...l, valor_parte: Math.abs(Number(l.valor)), partes_total: 2, partes_casadas: 2 } : l));
-  const caixa = base.filter((l) => l.sem_movimentacao_caixa !== true).slice(0, corte === null ? undefined : Number(corte));
+  /* FIN-PRONTO-PAGAR-01 — o código da regra (o banco o calcula; aqui SINTÉTICO, um por linha) nas saídas ainda a pagar; a contagem é do
+     recorte sem o filtro de pagamento e o filtro `pronto_pagar` corta a página (a regra do banco: "falta%" = faltando) */
+  const CODIGOS = [['falta_forma', null], ['pronto_boleto', 'Boleto'], ['falta_chave', 'PIX'], ['nada_a_fazer', 'Débito Automático'],
+    ['pronto_chave_cadastro', 'PIX'], ['falta_dados_bancarios', 'Transferência']];
+  const comCodigo = base.map((l, k) => {
+    const aPagar = l.tipo_operacao === '2-Saídas' && l.status_transacao !== 'realizado' && l.sem_movimentacao_caixa !== true;
+    const [codigo, forma] = aPagar ? CODIGOS[k % CODIGOS.length] : [null, null];
+    return { ...l, pronto_pagar: codigo, forma_efetiva: forma };
+  });
+  const todosCaixa = comCodigo.filter((l) => l.sem_movimentacao_caixa !== true).slice(0, corte === null ? undefined : Number(corte));
+  const pp = a?.p_filtros?.pronto_pagar;
+  const caixa = !pp || pp === 'todos' ? todosCaixa : todosCaixa.filter((l) => l.pronto_pagar && (String(l.pronto_pagar).startsWith('falta') === (pp === 'faltando')));
+  const comPonto = todosCaixa.filter((l) => l.pronto_pagar);
+  const falta = comPonto.filter((l) => String(l.pronto_pagar).startsWith('falta'));
+  const soma = (xs: any[]) => Math.round(xs.reduce((t, l) => t + Math.abs(Number(l.valor)), 0) * 100) / 100;
   const por = Number(a?.p_por_pagina) || 200, pag = Number(a?.p_pagina) || 0;
   return {
+    pronto_pagar: { prontos: comPonto.length - falta.length, prontos_valor: soma(comPonto.filter((l) => !String(l.pronto_pagar).startsWith('falta'))),
+      faltando: falta.length, faltando_valor: soma(falta) },
     versao: 'bancada', pagina: pag, por_pagina: por, total_linhas: caixa.length,
     linhas: caixa.slice(pag * por, (pag + 1) * por).map((l) => ({ ...l, conciliado: false })),
     totais: (({ entradas, saidas, transferencias, entradasSemCaixa, saidasSemCaixa }) => ({ entradas, saidas, transferencias,

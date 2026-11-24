@@ -119,7 +119,9 @@ describe('FinanceiroV2Tab — a coluna ST', () => {
     const fixas = [...larg.matchAll(/^\s*(\d+),\s*$/gm)].map((m) => Number(m[1]));
     for (const w of [60, 94, 78]) expect(fixas, String(w)).toContain(w);
     for (const velho of [64, 77, 70, 90, 88]) expect(fixas, String(velho)).not.toContain(velho);
-    expect(tela).toContain('const rotulo = <RotuloDoStatus st={st} />;');
+    /* FIN-PRONTO-PAGAR-01: o ponto ANTES do status, o rótulo o mesmo `RotuloDoStatus` */
+    expect(tela).toContain('<span className="min-w-0 flex-1"><RotuloDoStatus st={st} /></span>');
+    expect(tela).toContain('<PontoProntoPagar codigo={codigoProntoDaLinha(l)} forma={formaEfetivaDaLinha(l)}');
     expect(peca).toContain('<span className={cn(STATUS_PILULA_BASE, st.stPilula)} data-status={st.stKey}>{st.stLabel}</span>');
     expect(tela).not.toContain('text-[10px] leading-tight ${stColor}`}');
   });

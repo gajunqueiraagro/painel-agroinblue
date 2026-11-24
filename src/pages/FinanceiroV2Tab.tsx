@@ -120,12 +120,16 @@ import {
   lerPorPaginaV2, guardarPorPaginaV2, POR_PAGINA_V2, TOTAIS_VAZIOS, porPaginaV2DoTexto, textoDoPorPaginaV2, type PorPaginaV2, type PorPaginaV2Texto,
   fornecedoresDoFiltroV2,
 } from '@/lib/financeiro/listaPaginaV2';
+import { codigoProntoDaLinha, formaEfetivaDaLinha, type FiltroPronto } from '@/lib/financeiro/prontoParaPagar';
+import { PontoProntoPagar } from '@/components/financeiro-v2/PontoProntoPagar';
 import { RODAPE_REGUA, TextoReservado, reservaDeNumero } from '@/components/ui/regua-tabela';
 /* a volta do financiamento (ano, meses, contas) — P94: guardada POR CLIENTE (`chaveDoCliente`) */
 const CHAVE_ESTADO_FIN = 'financeiro_v2_state';
 
 /* a reserva dos totais do topo: o maior valor que a faixa mostra (dezenas de milhões) */
 const RESERVA_TOTAL = 'R$ 00.000.000,00';
+/* FIN-PRONTO-PAGAR-01 — a contagem do seletor e dos totais Prontos/Faltando reserva 5 algarismos (o NJ tem ~5.700 linhas no ano) */
+const RESERVA_CONTAGEM_PRONTO = '00.000';
 
 /**
  * A memória da busca dos comboboxes desta tela.
@@ -1400,13 +1404,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [porPagina, setPorPaginaEstado] = useState<PorPaginaV2>(() => lerPorPaginaV2(null));
   const [paginaV2, setPaginaV2] = useState(0);
   const escolherPorPagina = useCallback((v: PorPaginaV2) => { setPorPaginaEstado(v); guardarPorPaginaV2(null, v); }, []);
+  /* FIN-PRONTO-PAGAR-01 — o seletor "Pagamento" (Todos · Prontos · Faltando); a contagem vem do banco, do recorte sem ele */
+  const [prontoPagarFiltro, setProntoPagarFiltro] = useState<FiltroPronto>('todos');
+  /* a aba em que o modal do lançamento abre (o ponto abre na Pagamento); limpa ao fechar */
+  const [abaDoLancamento, setAbaDoLancamento] = useState<'pagamento' | undefined>(undefined);
   const filtrosV2 = useMemo(() => filtrosDaPaginaV2({
     fazendaId, anos: anosSelecionados, meses: mesesSelecionados, dimensao: dataPor, tipoOperacao, status: statusSelecionados,
     contaOrigem, contaDestino, macro: macroFiltro, grupo: grupoFiltro, centro: centroFiltro, subcentro: subcentroFiltro,
     safra: safraFiltro, cultura: culturaFiltro, atividade: atividadeFiltro, produto: produtoFiltro, documento: documentoFiltro,
-    fornecedor: fornecedorFiltro, fornecedores: conjuntoDoFornecedor, modoSemCaixa,
+    fornecedor: fornecedorFiltro, fornecedores: conjuntoDoFornecedor, modoSemCaixa, prontoPagar: prontoPagarFiltro,
   }), [fazendaId, anosSelecionados, mesesSelecionados, dataPor, tipoOperacao, statusSelecionados, contaOrigem, contaDestino, macroFiltro,
-       grupoFiltro, centroFiltro, subcentroFiltro, safraFiltro, culturaFiltro, atividadeFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, conjuntoDoFornecedor, modoSemCaixa]);
+       grupoFiltro, centroFiltro, subcentroFiltro, safraFiltro, culturaFiltro, atividadeFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, conjuntoDoFornecedor, modoSemCaixa, prontoPagarFiltro]);
   const ordemV2 = useMemo(() => ordemDaPaginaV2(sortField, sortDir, nivelClassif), [sortField, sortDir, nivelClassif]);
   const chaveDoRecorte = JSON.stringify([filtrosV2, ordemV2, porPagina]);
   useEffect(() => { setPaginaV2(0); }, [chaveDoRecorte]);
@@ -1787,6 +1795,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setProdutoFiltro('');
     setDocumentoFiltro('');
     setFornecedorFiltro('__all__');
+    setProntoPagarFiltro('todos');
     setAtividadeFiltro('__all__');
     setSafraFiltro('__all__');
     setCulturaFiltro('__all__');
@@ -2708,6 +2717,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
             Transf.: <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista ? formatMoeda(totalTransferencias) : '—'} />
           </span>
+          {/* FIN-PRONTO-PAGAR-01 — Prontos/Faltando do recorte (as saídas ainda a pagar), ao lado de Entradas/Saídas; "—" = o banco não mandou */}
+          <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold" data-testid="totais-pronto"
+            title="Saídas ainda a pagar neste recorte: prontas (a forma de pagamento tem o que precisa) e faltando algo. Passe o mouse no ponto de cada linha.">
+            <span className="inline-flex items-center gap-1 text-[#1F7A4D]"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-[#1F7A4D]" />Prontos{' '}
+              <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.prontos.toLocaleString('pt-BR') : '—'} />
+              <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista?.prontoPagar ? formatMoeda(paginaDaLista.prontoPagar.prontosValor) : '—'} /></span>
+            <span className="inline-flex items-center gap-1 text-[#9a5b00]"><span aria-hidden className="inline-block h-2 w-2 rounded-full bg-[#E08A00]" />Faltando{' '}
+              <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.faltando.toLocaleString('pt-BR') : '—'} />
+              <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista?.prontoPagar ? formatMoeda(paginaDaLista.prontoPagar.faltandoValor) : '—'} /></span>
+          </span>
           <span className="text-muted-foreground"><TextoReservado reserva={reservaDeNumero(5)} alinhar="direita" texto={paginaDaLista ? totalLancamentosFiltrados.toLocaleString('pt-BR') : '—'} /> lanç.</span>
           {/* P94 — O LUGAR DOS AVISOS DO FILTRO, RESERVADO: sempre desenhado (vazio sem aviso), com a largura que sobra (`flex-1`), numa
               linha que rola no lugar; mínimo de 160px, para caber ao menos o começo do aviso numa janela estreita — o aviso que
@@ -2763,6 +2782,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 ? `Sem caixa (só DRE): ${paginaDaLista ? formatMoeda(paginaDaLista.semCaixa.total) : '—'} — na seção abaixo da lista`
                 : 'Também o sem caixa (entregas, barter, consumo), na seção abaixo da lista' },
               { valor: 'so_dre', rotulo: 'Só c/ DRE', title: 'Só os lançamentos sem caixa que compõem o DRE' },
+            ]} />
+            {/* FIN-PRONTO-PAGAR-01 — o seletor "Pagamento"; a contagem é a do recorte sem ele (não encolhe ao escolher) */}
+            <span className="text-muted-foreground">Pagamento</span>
+            <Segmentado altura={20} valor={prontoPagarFiltro} onEscolher={setProntoPagarFiltro} opcoes={[
+              { valor: 'todos', rotulo: 'Todos', title: 'Todos os lançamentos' },
+              { valor: 'prontos', rotulo: <>Prontos <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.prontos.toLocaleString('pt-BR') : '—'} /></>,
+                title: 'Saídas a pagar com o que a forma de pagamento precisa (boleto ligado, chave PIX, dados bancários) ou que não precisam de nada' },
+              { valor: 'faltando', rotulo: <>Faltando <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.faltando.toLocaleString('pt-BR') : '—'} /></>,
+                title: 'Saídas a pagar em que falta algo: a forma, o boleto, a chave PIX ou os dados bancários' },
             ]} />
           </span>
         </div>
@@ -3226,7 +3254,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <CelulaStatus separador title={[stTitle ?? (stPilula || stEstagio ? null : stLabel), icone ? `origem: ${icone.significado}` : null].filter(Boolean).join(' · ') || undefined}
                             onClick={icone ? (e) => e.stopPropagation() : undefined}>
                           {(() => {
-                            const rotulo = <RotuloDoStatus st={st} />;
+                            /* FIN-PRONTO-PAGAR-01 — o ponto ANTES do status (lugar reservado mesmo sem ponto); o clique abre na aba Pagamento */
+                            const rotulo = (
+                              <span className="flex min-w-0 items-center gap-1">
+                                <PontoProntoPagar codigo={codigoProntoDaLinha(l)} forma={formaEfetivaDaLinha(l)}
+                                  onAbrir={() => { setAbaDoLancamento('pagamento'); openEdit(l); }} />
+                                <span className="min-w-0 flex-1"><RotuloDoStatus st={st} /></span>
+                              </span>
+                            );
                             if (!icone) return rotulo;
                             return (
                               <MinimodalOrigemLancamento
@@ -3401,9 +3436,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       <LancamentoV2Dialog
         open={dialogOpen}
+        abaInicial={abaDoLancamento}
         onClose={() => {
           const idAberto = editingLanc?.id ?? null;
-          setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setLinhaXmlAberta(null); onCloseDialog?.();
+          setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setLinhaXmlAberta(null); setAbaDoLancamento(undefined); onCloseDialog?.();
           const salvou = salvouPorCimaDaRegra.current;
           if (camadas.aberta('lanc')) { camadas.fechar('lanc', salvou ? 'salvou' : 'fechou', idAberto); salvouPorCimaDaRegra.current = false; }
           if (lancSobreANota.current) {
