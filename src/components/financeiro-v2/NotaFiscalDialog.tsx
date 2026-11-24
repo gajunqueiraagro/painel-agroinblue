@@ -69,6 +69,7 @@ import { VisualizadorDeDocumento } from './VisualizadorDeDocumento';
 import { BarraDeEtapas, ResumoDoConfirmar, type CartaoDoConfirmar, type ChecagemDoConfirmar, type EtapaDaNota } from './EtapasDaNota';
 import { abrirAbaDoDanfe, mostrarDanfe } from '@/lib/fiscal/abrirDanfe';
 import { useItensDaNotaDaTela } from '@/hooks/useItensDaNota';
+import { diferencaDaNota, motivoQueVale, somaPassaDaNotaTrava, type EscolhaDaDiferenca } from '@/lib/financeiro/nfe/diferencaDaNota';
 import { dividir, dividirPelosItens, percentuaisDosItens, porContaDosItens } from '@/lib/financeiro/divisaoDaClassificacao';
 import { participacaoDoHistorico, previstosQueAtualizam, valorPelaParticipacao, type PrevistoQueAtualiza } from '@/lib/financeiro/nfe/atualizaPrevisto';
 import type { EstadoDaPrevia } from './PreviaCompletar';
@@ -478,6 +479,8 @@ export function NotaFiscalDialog({
   const faltamEscolhidas = faltamDaNota.filter((x) => acaoDaFalta(x.n) === 'criar');
   /* "No sistema hoje" — a fazenda, o subcentro e o fornecedor de cada achado como estão no banco (só leitura; falhou = a aba diz) */
   const [comoHoje, setComoHoje] = useState<Consulta<ComoEstaHoje[]> | null>(null);
+  /* DA-NOTA-JUROS-01 — o motivo do pago ≠ nota escolhido pelo operador (nulo = o sugerido) */
+  const [escolhaDaDiferenca, setEscolhaDaDiferenca] = useState<EscolhaDaDiferenca | null>(null);
   const idsDosAchados = (jaLancada?.alvos ?? []).map((l) => l.id).join(',');
   useEffect(() => {
     if (!idsDosAchados) { setComoHoje(null); return; }
@@ -853,12 +856,21 @@ export function NotaFiscalDialog({
      "falta R$ X" não é estado final de um registro. O quadro continua à vista; a frase fica no rodapé e o "Revisar e completar" apaga. */
   const somaDosLigadosCent = jaLancada ? alvosEscolhidos.reduce((t, l) => t + (parDoPrevisto.get(l.id)?.valorNovoCent ?? l.valorCent), 0)
     + faltamQueNascem.reduce((t, f) => t + f.valorCent, 0) : 0;
+  /* DA-NOTA-JUROS-01 — PAGO ≠ NOTA NUNCA TRAVA (regra de 18/11): com tudo pago, a diferença ganha motivo (juros a mais, desconto a menos) e só
+     "Não é juros" devolve a guarda da soma (compra errada). O motivo vai ao banco (`p_diferenca`): juros divide o MESMO pagamento. */
+  const diferencaNaNota = jaLancada && caminho !== 'criar' ? diferencaDaNota({
+    alvos: alvosEscolhidos.map((l) => ({ pago: l.conciliado || l.status === 'realizado' || l.status === 'conciliado' || !!l.pagamento, vencimento: l.vencimento, pagamento: l.pagamento })),
+    somaCent: somaDosLigadosCent, notaCent: notaQueContaCent, nascem: faltamQueNascem.length,
+    vencimentoDaNota: p.duplicatas.length ? p.duplicatas[p.duplicatas.length - 1].vencimento : null,
+  }) : null;
+  const motivoDaDiferenca = motivoQueVale(diferencaNaNota, escolhaDaDiferenca);
+  const somaTrava = somaPassaDaNotaTrava(somaDosLigadosCent, notaQueContaCent, motivoDaDiferenca);
   const recusaDaCompra = !jaLancada || bloqueio || caminho === 'criar' ? null
     : jaLancada.compraAmbigua ? 'Duas compras deste fornecedor parecem esta nota: abra a nota pela parcela da compra certa. Nada será gravado.'
-    : somaDosLigadosCent > notaQueContaCent + 1 ? 'Soma passa da nota. Nada gravado.'
+    : somaTrava ? 'Soma passa da nota. Nada gravado.'
       : null;
   /* o porquê da recusa (o title; a frase da tela é curta) */
-  const porQueDaRecusa = recusaDaCompra && somaDosLigadosCent > notaQueContaCent + 1
+  const porQueDaRecusa = recusaDaCompra && somaTrava
     ? `As parcelas que receberiam a nota somam R$ ${reais(somaDosLigadosCent)}, mais que ${pares.length && participacaoPct < 100 ? `${participacaoPct}% da nota` : 'a nota'} (R$ ${reais(notaQueContaCent)}). Confira se todas são desta compra.`
     : recusaDaCompra;
   /* P163-2 — o MODO DA NOTA JÁ LANÇADA: as abas no lugar dos blocos; "Criar um lançamento novo (duplica)" sai dele (pelo ⋯ do rodapé) */
@@ -1028,7 +1040,7 @@ export function NotaFiscalDialog({
         criados.push({ id, numero: f.n });
       }
       /* 2 */
-      const r = await completarComANota(clienteId, [...pedido, ...criados.map((x) => ({ id: x.id }))], { juntar: juntarAgora, chave: n.chave || null, simular: false, valorNotaCent: notaQueContaCent });
+      const r = await completarComANota(clienteId, [...pedido, ...criados.map((x) => ({ id: x.id }))], { juntar: juntarAgora, chave: n.chave || null, simular: false, valorNotaCent: notaQueContaCent, diferenca: motivoDaDiferenca });
       const recusa = r.ok === false ? r.motivo : !r.valor.ok ? (r.valor.recusas[0] ?? 'O banco recusou.') : null;
       if (recusa || r.ok === false) {
         const nao = await cancelarCriados(criados.map((x) => x.id), recusa ?? 'recusa');
@@ -2028,7 +2040,8 @@ export function NotaFiscalDialog({
                   todasIniciais={{ descricaoBase: baseDaDescricao(p.descricao), favorecidoId: favorecidoId ?? null, fazendaId: fazendaId || null, contaId: contaEscolhida,
                     planoContaId: planoId || null, numeroDocumento: formatNFNumber(p.numeroDocumento || n.numero),
                     competencia: n.emissao || null, safraId: lavoura && safraId ? safraId : null }}
-                  onConfirmar={completarComNota} opcoes={opcoesDaPrevia} semRodape aoMudarEstado={setEstadoDaPrevia} />
+                  onConfirmar={completarComNota} opcoes={opcoesDaPrevia} semRodape aoMudarEstado={setEstadoDaPrevia}
+                  diferenca={diferencaNaNota ? { d: diferencaNaNota, motivo: motivoDaDiferenca, escolha: escolhaDaDiferenca, onEscolher: setEscolhaDaDiferenca } : null} />
               </div>
             )}
 
@@ -2053,7 +2066,7 @@ export function NotaFiscalDialog({
                   {alvosEscolhidos.length > pares.length && <><span className="shrink-0 text-muted-foreground">·</span>
                     <span className="shrink-0">{alvosEscolhidos.length - pares.length} vincula</span></>}
                   <span className="shrink-0 text-muted-foreground">·</span>
-                  <span data-testid="nota-resultado-soma" className={cn('shrink-0 tabular-nums', somaDosLigadosCent > notaQueContaCent + 1 && 'text-destructive')}
+                  <span data-testid="nota-resultado-soma" className={cn('shrink-0 tabular-nums', somaTrava && 'text-destructive')}
                     title={participacaoPct < 100 ? `${participacaoPct}% da nota de R$ ${reais(n.totais.notaCent)}` : `a nota é R$ ${reais(n.totais.notaCent)}`}>R$ {reais(somaDosLigadosCent)}</span>
                   <span className="shrink-0 text-muted-foreground">·</span>
                   <label className="flex shrink-0 items-center gap-1" data-testid="nota-participacao"
@@ -2070,7 +2083,7 @@ export function NotaFiscalDialog({
                     <span className="shrink-0 text-muted-foreground" data-testid="nota-parte-de-outro"
                       title="Só informativa: não vira lançamento deste cliente, não entra no DRE, no caixa nem no Livro Caixa.">outro paga R$ {reais(parteDeOutroCent)}</span></>}
                 </>) : (<>
-                <span data-testid="nota-resultado-soma" className={cn('shrink-0', somaDosLigadosCent > n.totais.notaCent + 1 && 'text-destructive')}
+                <span data-testid="nota-resultado-soma" className={cn('shrink-0', somaTrava && 'text-destructive')}
                   title={Math.abs(somaDosLigadosCent - n.totais.notaCent) <= 1 ? undefined : `a nota é R$ ${reais(n.totais.notaCent)}`}>
                   {alvosEscolhidos.length + nACriar} parcela{alvosEscolhidos.length + nACriar === 1 ? '' : 's'} · R$ {reais(somaDosLigadosCent)} {Math.abs(somaDosLigadosCent - n.totais.notaCent) <= 1 ? '= nota' : somaDosLigadosCent < n.totais.notaCent ? '< nota' : '> nota'}</span>
                 <span className="shrink-0 text-muted-foreground">·</span>
@@ -2126,7 +2139,8 @@ export function NotaFiscalDialog({
           ) : null}
           {!bloqueio && !erro && modoJa && posicaoPendente ? (
             <span className="min-w-0 uma-linha-que-rola text-amber-900" data-testid="nota-cartao-falta-posicao">⚠ Diga a posição das parcelas{noCartao?.cartao ? ' no cartão' : ''} (aba Parcelas × sistema).</span>
-          ) : !bloqueio && !erro && jaLancada && modoJa && estadoDaPrevia?.impedimento ? (
+          ) : !bloqueio && !erro && jaLancada && modoJa && estadoDaPrevia?.impedimento && !recusaDaCompra ? (
+            /* DA-NOTA-JUROS-01 (3) — a recusa da tela e a do banco são a MESMA (a soma): uma frase só no rodapé, nunca as duas espremidas */
             <span className="min-w-0 uma-linha-que-rola text-destructive" title={estadoDaPrevia.impedimento} data-testid="nota-previa-impede">⚠ {estadoDaPrevia.impedimento}</span>
           ) : !bloqueio && !erro && semCompra && remessa ? (
             /* NOTA-PAGTO-PARCELADO-01 P3 — a nota que não é compra: o aviso em DESTAQUE no rodapé (o selo do bloco Nota diz o mesmo); nunca bloqueia */

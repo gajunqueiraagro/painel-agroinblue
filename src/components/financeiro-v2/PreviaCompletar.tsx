@@ -27,6 +27,8 @@ import { reais } from '@/lib/financeiro/nfe/formatos';
 import { completarComANota, sugestaoDosItensDaNota } from '@/lib/financeiro/nfeConsultas';
 import { sugestaoParaAsParcelas, type ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
 import { Ajuda } from '@/components/ui/ajuda';
+import { Segmentado } from '@/components/ui/segmentado';
+import { numerosDaDiferenca, porqueDaDiferenca, type DiferencaDaNota, type EscolhaDaDiferenca, type MotivoDaDiferenca } from '@/lib/financeiro/nfe/diferencaDaNota';
 import {
   CAMPO_DA_COLUNA, COLUNAS_OPCIONAIS, ROTULO_DA_COLUNA, camposQueMudam, chaveDaGrade, colunasQueAparecem, fraseDoEfeitoNoDre, pedidoDaGrade,
   type AlvoDaPrevia, type CampoDaPrevia, type ColunaCompletar, type ResultadoCompletar, type ValoresParaTodas,
@@ -70,7 +72,10 @@ export interface EstadoDaPrevia { pode: boolean; gravando: boolean; impedimento:
   mudam: readonly string[] }
 
 export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, todasIniciais, atualizarNaoPagas, juntar, chave, onConfirmar, valorNotaCent = null,
-  embutida = false, opcoes, cabecalho, semRodape = false, aoMudarEstado }: {
+  embutida = false, opcoes, cabecalho, semRodape = false, aoMudarEstado, diferenca = null }: {
+  /** DA-NOTA-JUROS-01 — tudo pago e o pago ≠ nota: a linha "pago · nota · diferença" com o motivo (sugerido ou escolhido) e a troca; o motivo
+   *  que vale vai à prévia do banco (`p_diferenca`) */
+  diferenca?: { d: DiferencaDaNota; motivo: MotivoDaDiferenca | null; escolha: EscolhaDaDiferenca | null; onEscolher: (e: EscolhaDaDiferenca) => void } | null;
   open: boolean;
   /** Nota já lançada (Gabriel 29/10 10:38) — UM botão só: o rodapé da prévia sai e o modal da nota grava pelo `aoMudarEstado` */
   semRodape?: boolean;
@@ -122,13 +127,15 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
 
   const pedido = useMemo(() => pedidoDaGrade(alvos, todas, marcadas, celulas, atualizarNaoPagas), [alvos, todas, marcadas, celulas, atualizarNaoPagas]);
   /* a prévia do BANCO a cada mudança (a última resposta vence; a que chega atrasada é ignorada) */
+  /* DA-NOTA-JUROS-01 — o motivo que vale vai à prévia do banco (sem ele, a guarda da soma de sempre) */
+  const motivoDaDiferenca = diferenca?.motivo ?? null;
   const pedidoSeq = useRef(0);
   useEffect(() => {
     if (!open) return;
     const seq = ++pedidoSeq.current;
     setConferindo(true);
     const t = setTimeout(() => {
-      void completarComANota(clienteId, pedido, { juntar, chave, simular: true, valorNotaCent }).then((r) => {
+      void completarComANota(clienteId, pedido, { juntar, chave, simular: true, valorNotaCent, diferenca: motivoDaDiferenca }).then((r) => {
         if (seq !== pedidoSeq.current) return;
         setConferindo(false);
         if (r.ok === false) { setFalha(r.motivo); return; }
@@ -136,7 +143,7 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
       });
     }, 250);
     return () => clearTimeout(t);
-  }, [open, clienteId, pedido, juntar, chave, valorNotaCent]);
+  }, [open, clienteId, pedido, juntar, chave, valorNotaCent, motivoDaDiferenca]);
 
   const linhaDe = (id: string) => previa?.linhas.find((l) => l.id === id) ?? null;
   const n = alvos.length;
@@ -317,6 +324,30 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
       <span className="shrink-0 font-semibold">{n} parcela{n === 1 ? '' : 's'}</span>
       {sugestaoNaTela}
     </div>
+    {/* DA-NOTA-JUROS-01 — pago ≠ nota com tudo pago: os números cada um no seu lugar + o motivo (sugerido em âmbar; trocar = "não é"); nunca trava */}
+    {diferenca && (() => {
+      const nums = numerosDaDiferenca(diferenca.d);
+      const mais = diferenca.d.difCent > 0;
+      const valor: EscolhaDaDiferenca = diferenca.escolha ?? diferenca.d.sugerido;
+      return (
+        <div className="flex h-[24px] shrink-0 items-center gap-2 px-4 text-[10px]" data-testid="previa-diferenca" title={porqueDaDiferenca(diferenca.d)}>
+          <span className="shrink-0 text-muted-foreground">pago</span><span className="shrink-0 font-medium tabular-nums" data-testid="previa-diferenca-pago">{nums.pago}</span>
+          <span className="shrink-0 text-muted-foreground">· nota</span><span className="shrink-0 font-medium tabular-nums" data-testid="previa-diferenca-nota">{nums.nota}</span>
+          <span className="shrink-0 text-muted-foreground">· diferença</span>
+          <span className={cn('shrink-0 font-semibold tabular-nums', mais ? 'text-amber-800' : 'text-emerald-800')} data-testid="previa-diferenca-valor">{nums.diferenca}</span>
+          <Segmentado altura={20} fonte={9.5} valor={valor} onEscolher={diferenca.onEscolher} sugestao={diferenca.escolha === null}
+            opcoes={mais
+              ? [{ valor: 'juros', rotulo: 'Juros/multa', title: 'A diferença vai para Despesas Financeiras, no mesmo pagamento' },
+                 { valor: 'conferir', rotulo: 'Não é juros', title: 'A soma passa da nota: confira se todos são desta compra' }]
+              : [{ valor: 'desconto', rotulo: 'Desconto', title: 'Pago a menos: o lançamento fica como está' },
+                 { valor: 'conferir', rotulo: 'Não é desconto', title: 'Confira o que falta pagar desta nota' }]} />
+          <Ajuda titulo="Pago × nota" oQueE="A diferença entre o que foi pago e a nota."
+            porQue={mais ? 'Pago a mais depois do vencimento costuma ser juros ou multa: a nota não deixa de ser desta compra.' : 'Pago a menos costuma ser desconto.'}
+            comoFazer={mais ? 'Juros/multa: o pagamento fica dividido em duas contas (a da nota e Despesas Financeiras); valor, caixa e conciliação não mudam.'
+              : 'Desconto: nada muda no lançamento.'} />
+        </div>
+      );
+    })()}
     <div className="min-h-0 flex-1 overflow-auto px-4 py-1" data-testid="previa-rolagem">
       <table className="w-full table-fixed border-collapse" style={{ minWidth: larguraMin }} data-testid="previa-tabela">
         <colgroup>

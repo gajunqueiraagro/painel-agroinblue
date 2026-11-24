@@ -1570,6 +1570,59 @@ describe('NOTA-PAGA-A-VISTA-01 — a nota inteira paga à vista num lançamento'
     expect(pedidoGravado().opcoes.juntar).toBe(false);
     expect(g.lancamento).not.toHaveBeenCalled();
   });
+  /* o valor difere da nota: o pago não é achado "à vista" — o operador o VINCULA e a parcela da nota não nasce (o caso do NJ: só o pago no pedido) */
+  const soOPagoRecebe = async () => {
+    const acao = (v: string) => screen.getAllByTestId('nota-acao').find((b) => b.getAttribute('data-acao') === v);
+    const fora = acao('deixar');
+    if (!fora) throw new Error('o pago não nasceu fica de fora');
+    fireEvent.keyDown(fora, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('nota-acao-vincular'));
+    const cria = acao('criar');
+    if (cria) {
+      fireEvent.keyDown(cria, { key: 'Enter' });
+      const opc = screen.queryByTestId('nota-acao-deixar') ?? screen.queryByTestId('nota-acao-jaPaga');
+      if (!opc) throw new Error('a parcela da nota não tem como ficar de fora');
+      fireEvent.click(opc);
+    }
+  };
+  /* DA-NOTA-JUROS-01 (Gabriel 24/11 17:03, o molde da NF 26.185 do NJ: nota R$ 3.441,75, pago 1 dia depois R$ 3.446,34) — PAGO ≠ NOTA NUNCA TRAVA:
+     a nota SINTÉTICA de R$ 1.966,56 e o pago de R$ 1.971,15 (+4,59) */
+  it('JUROS1 pago a mais com tudo pago: sem a recusa; "pago · nota · diferença" com Juros/multa sugerido; "Não é juros" devolve a guarda; o motivo vai ao banco', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [{ ...AVISTA, valorCent: 197115, pagamento: '2026-10-11' }] });
+    const { comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores });
+    await naAbaParcelas();
+    await soOPagoRecebe();
+    expect(screen.queryByTestId('nota-recusa-compra')).toBeNull();
+    fireEvent.click(within(screen.getByTestId('nota-abas-ja')).getByText(/Como vai ficar/));
+    const linha = await screen.findByTestId('previa-diferenca');
+    expect([within(linha).getByTestId('previa-diferenca-pago').textContent, within(linha).getByTestId('previa-diferenca-nota').textContent,
+      within(linha).getByTestId('previa-diferenca-valor').textContent]).toEqual(['R$ 1.971,15', 'R$ 1.966,56', '+R$ 4,59']);
+    expect(linha.getAttribute('title')).toContain('Juros/multa: o pagamento fica dividido');
+    /* a prévia do banco já pergunta com o motivo */
+    await waitFor(() => expect(consultas.completarComANota.mock.calls.some((c) => c[2].simular && Reflect.get(c[2], 'diferenca') === 'juros')).toBe(true));
+    /* trocar: "Não é juros" = a guarda da soma volta (a frase curta no rodapé) */
+    fireEvent.click(within(linha).getByText('Não é juros'));
+    expect((await screen.findByTestId('nota-recusa-compra')).textContent).toBe('⚠ Soma passa da nota. Nada gravado.');
+    fireEvent.click(within(screen.getByTestId('previa-diferenca')).getByText('Juros/multa'));
+    await waitFor(() => expect(screen.queryByTestId('nota-recusa-compra')).toBeNull());
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['avista']);
+    expect(Reflect.get(pedidoGravado().opcoes, 'diferenca')).toBe('juros');
+  });
+  it('JUROS2 pago a menos com tudo pago: Desconto sugerido, nunca trava; a nota que bate não mostra a linha', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [{ ...AVISTA, valorCent: 190000 }] });
+    const { comoGravadores } = gravadoresFalsos();
+    await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores });
+    await naAbaParcelas();
+    await soOPagoRecebe();
+    expect(screen.queryByTestId('nota-recusa-compra')).toBeNull();
+    fireEvent.click(within(screen.getByTestId('nota-abas-ja')).getByText(/Como vai ficar/));
+    const linha = await screen.findByTestId('previa-diferenca');
+    expect(within(linha).getByTestId('previa-diferenca-valor').textContent).toBe('−R$ 66,56');
+    expect(within(linha).getByText('Desconto')).toBeTruthy();
+  });
   it('V3 pelo "+ Adicionar documento" do lançamento já pago (a porta 2): o aberto é o à vista — anexa e vincula, sem forçar as parcelas', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [{ ...AVISTA, por: ['lancamento'] }] });
     const { g, comoGravadores } = gravadoresFalsos();

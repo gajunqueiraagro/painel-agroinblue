@@ -1922,6 +1922,19 @@ const CENARIOS = [
       await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
       await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
     } })),
+  /* DA-NOTA-JUROS-01 (Gabriel 24/11 17:03) — pago ≠ nota com tudo pago NUNCA trava: o pago (+4,59) vinculado, a parcela da nota fica de fora, e o
+     "Como vai ficar" com a linha "pago · nota · diferença" + Juros/multa sugerido (âmbar) e o rodapé sem frase cortada. SINTÉTICO. */
+  { nome: 'nota-pdf-ja-juros', url: 'tela=nota-pdf&v=juros', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-acao"][data-acao="deixar"]').first().click(); await p.locator('[data-testid="nota-acao-vincular"]').click(); await p.waitForTimeout(300);
+      const cria = p.locator('[data-testid="nota-acao"][data-acao="criar"]');
+      if (await cria.count()) { await cria.first().click(); await p.locator('[data-testid="nota-acao-deixar"], [data-testid="nota-acao-jaPaga"]').first().click(); await p.waitForTimeout(300); }
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="previa-diferenca"]').waitFor({ timeout: 5000 });
+    } },
   /* NOTA-ATUALIZA-PREVISTO-01 — o caso da Vera (SINTÉTICO): "É esta" no PREVISTO de R$ 1.000 + "paga 70 %": a aba Parcelas (o Resultado
      "1 atualiza · 0 cria · R$ … · paga 70 % · outro paga R$ …", o resumo em colunas) e a Como vai ficar (o valor de hoje riscado → o novo) */
   ...[['parcelas', 'O que já existe'], ['ficar', 'Como vai ficar']].map(([a, rotulo]) => ({
