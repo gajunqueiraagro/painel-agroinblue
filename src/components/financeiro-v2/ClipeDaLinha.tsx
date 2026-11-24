@@ -18,7 +18,10 @@ import { ItensDaNotaDialog } from '@/components/financeiro-v2/ItensDaNotaDialog'
 import { assinarDocumento, type LancDocumento } from '@/hooks/useLancamentoDocumentos';
 import { lerLinhasDoClipe } from '@/lib/financeiro/documentosDoClipe';
 import { dataBR } from '@/lib/datas/dataBR';
-import { oQueAbrir, type LinhaDeDocumento } from '@/lib/financeiro/notaDosDocumentos';
+import { chaveDoDanfeSobDemanda, oQueAbrir, type LinhaDeDocumento } from '@/lib/financeiro/notaDosDocumentos';
+import { xmlDaCaixaDaReceita } from '@/lib/fiscal/danfeDasNotasGuardadas';
+import { danfePdfDoXml } from '@/lib/fiscal/danfePdf';
+import { VisualizadorDeDocumento } from '@/components/financeiro-v2/VisualizadorDeDocumento';
 import { tipoDoSelo } from '@/lib/financeiro/tipoDoDocumento';
 import { cn } from '@/lib/utils';
 
@@ -43,6 +46,9 @@ export function ClipeDaLinha({ clienteId, lancamentoId, qtd, resumo }: {
 }) {
   const [estado, setEstado] = useState<Estado>({ fase: 'fechado' });
   const [itensDe, setItensDe] = useState<LancDocumento | null>(null);
+  /* DANFE-SOB-DEMANDA-01 — o DANFE gerado na hora (nada gravado) e o "gerando" (sem duplo clique) */
+  const [danfe, setDanfe] = useState<{ bytes: ArrayBuffer; nome: string } | null>(null);
+  const gerando = useRef(false);
   /* SEM DUPLO CLIQUE: o segundo clique durante a leitura não lê de novo (nem abre a segunda aba) */
   const lendo = useRef(false);
   if (qtd <= 0 || !clienteId) return (
@@ -68,7 +74,7 @@ export function ClipeDaLinha({ clienteId, lancamentoId, qtd, resumo }: {
     if (r.ok === false) { setEstado({ fase: 'erro', frase: r.motivo }); return; }
     /* um só, com arquivo: abre direto (com 1 no clipe o popover nem aparece) — menos a NF com PDF E XML (NOTA-RECEITA-DANFE-ANEXO-01):
        o popover mostra os dois ("PDF · DANFE" e "XML · Itens") */
-    if (r.valor.length === 1 && oQueAbrir(r.valor[0]) && !(r.valor[0].pdf?.url && r.valor[0].xml?.url)) {
+    if (r.valor.length === 1 && oQueAbrir(r.valor[0]) && !(r.valor[0].pdf?.url && r.valor[0].xml?.url) && !chaveDoDanfeSobDemanda(r.valor[0])) {
       setEstado({ fase: 'fechado' }); void abrir(r.valor[0]); return;
     }
     setEstado({ fase: 'lista', linhas: r.valor });
@@ -80,10 +86,26 @@ export function ClipeDaLinha({ clienteId, lancamentoId, qtd, resumo }: {
     void ler();
   };
   const xmlDe = async (d: LancDocumento): Promise<ArrayBuffer | null> => {
-    const url = d.url ? await assinarDocumento(d.url, d.origem) : null;
+    /* DANFE-SOB-DEMANDA-01: sem arquivo guardado, o XML da Receita pela chave */
+    if (!d.url) { const c = (d.chaveAcesso ?? '').replace(/\D/g, ''); return c.length === 44 ? xmlDaCaixaDaReceita(clienteId, c) : null; }
+    const url = await assinarDocumento(d.url, d.origem);
     if (!url) return null;
     const r = await fetch(url);
     return r.ok ? r.arrayBuffer() : null;
+  };
+  /* DANFE-SOB-DEMANDA-01 — o DANFE do XML (o MESMO gerador do DANFE-LAYOUT-02, `danfePdfDoXml`) aberto no visualizador; nada é gravado */
+  const gerarDanfe = async (l: LinhaDeDocumento, chave: string) => {
+    if (gerando.current) return;
+    gerando.current = true;
+    try {
+      const bytes = await xmlDe(l.xml ?? l.principal);
+      if (!bytes) { toast.error('Esta nota não tem o XML guardado nem na Receita: não dá para gerar o DANFE.'); return; }
+      const r = await danfePdfDoXml(new File([bytes], `NFe${chave}.xml`, { type: 'application/xml' }));
+      if (r.ok === false) { toast.error(r.frase); return; }
+      setDanfe({ bytes: await new Response(r.pdf).arrayBuffer(), nome: r.pdf.name });
+    } catch (e) {
+      console.error('[ClipeDaLinha] DANFE', e); toast.error('Não consegui gerar o DANFE agora. Tente de novo.');
+    } finally { gerando.current = false; }
   };
 
   return (
@@ -121,19 +143,30 @@ export function ClipeDaLinha({ clienteId, lancamentoId, qtd, resumo }: {
                 <colgroup><col style={{ width: 92 }} /><col style={{ width: 250 }} /><col style={{ width: 70 }} /></colgroup>
                 <tbody>
                   {estado.linhas.flatMap((l) => {
+                    /* DANFE-SOB-DEMANDA-01 — a NF sem PDF: "PDF · DANFE" (gerado do XML na hora) e "XML · Itens" */
+                    const chaveDanfe = chaveDoDanfeSobDemanda(l);
+                    if (chaveDanfe) {
+                      const doc = l.xml ?? l.principal;
+                      return [
+                        { key: `${doc.id}-danfe`, d: l.principal, nome: 'PDF · DANFE', title: 'DANFE gerado do XML na hora (não fica gravado)', linha: l, testId: 'clipe-documento-danfe',
+                          acao: () => { void gerarDanfe(l, chaveDanfe); } },
+                        { key: `${doc.id}-xml`, d: l.principal, nome: 'XML · Itens', title: `${doc.nome || 'XML'} · abre os itens da nota`, linha: l, testId: 'clipe-documento-xml',
+                          acao: () => { setItensDe(doc); } },
+                      ];
+                    }
                     /* NOTA-RECEITA-DANFE-ANEXO-01 — a NF com PDF E XML vira DUAS linhas: o PDF (o DANFE) e o XML (os itens) */
                     if (l.pdf?.url && l.xml?.url) {
                       const { pdf, xml } = l;
                       return [
-                        { key: `${pdf.id}-pdf`, d: l.principal, nome: 'PDF · DANFE', title: pdf.nome || 'DANFE', linha: { ...l, xml: null }, testId: 'clipe-documento-pdf' },
-                        { key: `${xml.id}-xml`, d: l.principal, nome: 'XML · Itens', title: `${xml.nome || 'XML'} · abre os itens da nota`, linha: { ...l, pdf: null }, testId: 'clipe-documento-xml' },
+                        { key: `${pdf.id}-pdf`, d: l.principal, nome: 'PDF · DANFE', title: pdf.nome || 'DANFE', linha: { ...l, xml: null }, testId: 'clipe-documento-pdf', acao: null },
+                        { key: `${xml.id}-xml`, d: l.principal, nome: 'XML · Itens', title: `${xml.nome || 'XML'} · abre os itens da nota`, linha: { ...l, pdf: null }, testId: 'clipe-documento-xml', acao: null },
                       ];
                     }
                     const nome = l.pdf?.nome || l.principal.nome || '—';
-                    return [{ key: l.principal.id, d: l.principal, nome, title: nome, linha: l, testId: 'clipe-documento-unico' }];
-                  }).map(({ key, d, nome, title, linha: l, testId }) => {
-                    const temArquivo = !!oQueAbrir(l);
-                    const abrirEsta = () => { if (!temArquivo) return; setEstado({ fase: 'fechado' }); void abrir(l); };
+                    return [{ key: l.principal.id, d: l.principal, nome, title: nome, linha: l, testId: 'clipe-documento-unico', acao: null }];
+                  }).map(({ key, d, nome, title, linha: l, testId, acao }) => {
+                    const temArquivo = !!acao || !!oQueAbrir(l);
+                    const abrirEsta = () => { if (!temArquivo) return; setEstado({ fase: 'fechado' }); if (acao) acao(); else void abrir(l); };
                     return (
                       <tr key={key} data-testid="clipe-documento" data-qual={testId} tabIndex={temArquivo ? 0 : -1} aria-disabled={!temArquivo}
                         onClick={abrirEsta} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirEsta(); } }}
@@ -149,6 +182,10 @@ export function ClipeDaLinha({ clienteId, lancamentoId, qtd, resumo }: {
             </>)}
         </PopoverContent>
       </Popover>
+      {danfe && (
+        <VisualizadorDeDocumento open bytes={danfe.bytes} nome={danfe.nome} onFechar={() => setDanfe(null)}
+          onNovaAba={() => { const u = URL.createObjectURL(new Blob([danfe.bytes], { type: 'application/pdf' })); window.open(u, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(u), 60_000); }} />
+      )}
       {itensDe && clienteId && (
         <ItensDaNotaDialog clienteId={clienteId} chave={(itensDe.chaveAcesso ?? '').replace(/\D/g, '')} onClose={() => setItensDe(null)}
           lerArquivo={() => xmlDe(itensDe)} />

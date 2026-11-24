@@ -3,20 +3,23 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const chamadas: { fn: string; a: Record<string, unknown> }[] = [];
+const nomesPedidos: Record<string, unknown>[] = [];
 vi.mock('@/integrations/supabase/client', () => {
   const tabelas: Record<string, unknown[]> = {
     cliente_membros: [{ user_id: 'u1', perfil: 'gestor_cliente', ativo: true }, { user_id: 'u2', perfil: 'campo', ativo: true }],
-    financeiro_aprovadores: [], financeiro_bpo_config: [], profiles: [{ id: 'u1', nome: 'Gestor Sintético', email: 'g@x' }],
+    /* BPO-NOMES-LARGURA-01: `profiles` com a forma REAL (id da linha ≠ user_id) — o guia não lê mais daqui; o nome vem da fn_nomes_dos_autores */
+    financeiro_aprovadores: [], financeiro_bpo_config: [], profiles: [{ id: 'linha-1', user_id: 'u1', nome: 'Nome Errado de Profiles', email: 'g@x' }],
   };
   const q = (t: string) => { const o = { select: () => o, eq: () => o, in: () => o, limit: () => o, then: (r: (v: unknown) => unknown) => r({ data: tabelas[t] ?? [], error: null }) }; return o; };
-  return { supabase: { from: (t: string) => q(t), rpc: (fn: string, a: Record<string, unknown>) => { chamadas.push({ fn, a }); return Promise.resolve({ data: { ok: true, simulado: a.p_simular, aguardando_ao_ligar: 7 }, error: null }); } } };
+  return { supabase: { from: (t: string) => q(t), rpc: (fn: string, a: Record<string, unknown>) => { if (fn === 'fn_nomes_dos_autores') { nomesPedidos.push(a); return Promise.resolve({ data: [{ user_id: 'u1', nome: 'Gestor Sintético', email: 'g@x', situacao: 'membro ativo' }], error: null }); } chamadas.push({ fn, a }); return Promise.resolve({ data: { ok: true, simulado: a.p_simular, aguardando_ao_ligar: 7 }, error: null }); } } };
 });
 vi.mock('@/hooks/useLarguraDaJanela', () => ({ useLarguraDaJanela: () => 1366 }));
 
 import { GuiaDaAprovacao } from './GuiaDaAprovacao';
 import { alternarDia, candidatosAAprovador, foraDosDiasDePagamento, fraseDaPreviaDoLigar, textoDosDias } from '@/lib/financeiro/guiaDaAprovacao';
+import { rotuloDaPessoa } from '@/lib/acessos/nomesDosAutores';
 
-beforeEach(() => { chamadas.length = 0; });
+beforeEach(() => { chamadas.length = 0; nomesPedidos.length = 0; });
 
 describe('as regras do guia', () => {
   it('os dias de pagamento: texto, aviso fora do dia (só aviso) e alternar', () => {
@@ -32,8 +35,19 @@ describe('as regras do guia', () => {
   it('candidatos a aprovador: só gestor/financeiro ATIVO (a regra da fn_bpo_aprovador_gravar), com o nome e o "já aprova"', () => {
     const c = candidatosAAprovador(
       [{ user_id: 'a', perfil: 'gestor_cliente', ativo: true }, { user_id: 'b', perfil: 'financeiro', ativo: false }, { user_id: 'c', perfil: 'campo', ativo: true }],
-      [{ id: 'a', nome: 'Ana' }], [{ user_id: 'a' }]);
+      new Map([['a', { nome: 'Ana', email: null }]]), [{ user_id: 'a' }]);
     expect(c).toEqual([{ userId: 'a', rotulo: 'Ana', perfil: 'gestor_cliente', jaAprova: true }]);
+  });
+  it('BPO-NOMES-LARGURA-01: o rótulo é nome → e-mail → "usuário removido"; nunca "Usuário sem nome"', () => {
+    expect(rotuloDaPessoa({ nome: 'Ana', email: 'a@x' })).toBe('Ana');
+    expect(rotuloDaPessoa({ nome: '  ', email: 'a@x' })).toBe('a@x');
+    expect(rotuloDaPessoa({ nome: null, email: null })).toBe('usuário removido');
+    expect(rotuloDaPessoa(undefined)).toBe('usuário removido');
+    const c = candidatosAAprovador(
+      [{ user_id: 'a', perfil: 'gestor_cliente', ativo: true }, { user_id: 'b', perfil: 'financeiro', ativo: true }, { user_id: 'z', perfil: 'financeiro', ativo: true }],
+      new Map([['a', { nome: '', email: 'gestor@exemplo' }], ['b', { nome: 'Bia', email: 'b@x' }]]), []);
+    expect(c.map((x) => x.rotulo)).toEqual(['Bia', 'gestor@exemplo', 'usuário removido']);
+    expect(c.some((x) => /sem nome/i.test(x.rotulo))).toBe(false);
   });
   it('a frase da prévia', () => {
     expect(fraseDaPreviaDoLigar({ aguardando: 14, desde: '2026-11-19', aprovador: 'Ana', dias: [1, 3] }))
@@ -82,6 +96,9 @@ describe('o modal', () => {
     expect(await screen.findByTestId('guia-previa')).toBeTruthy();
     expect(chamadas.every((c) => c.a.p_simular === true)).toBe(true);
     expect(screen.getByTestId('guia-previa').textContent).toContain('7 saídas em aberto');
+    /* o nome veio da fonte única, pedido por user_id e pelo cliente (nunca de `profiles`) */
+    expect(screen.getByTestId('guia-previa').textContent).toContain('aprova Gestor Sintético');
+    expect(nomesPedidos).toEqual([{ p_cliente_id: 'cli', p_ids: ['u1', 'u2'] }]);
     expect(screen.getByTestId('guia-avancar').textContent).toBe('Ligar');
     fireEvent.click(screen.getByTestId('guia-avancar'));
     await waitFor(() => expect(onLigou).toHaveBeenCalled());

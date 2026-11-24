@@ -47,6 +47,7 @@ import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { EscolherContasDoBanco } from '@/components/financeiro-v2/EscolherContasDoBanco';
 import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
+import * as FAT from './dados/fatura';
 import * as CONC from './dados/conciliacao';
 import { FAZENDAS_VG as FAZENDAS_VG02, bancoVG02 } from './dados/visaoGeral02';
 import { V2Home } from '@/v2/pages/V2Home';
@@ -460,6 +461,9 @@ if (tela === 'mesclar') {
     docDoClipe('dc5', 'lf2', 'nf', 'NF 000.000.519.pdf', '2026-10-05', { numero: '519' }),
     docDoClipe('dc6', 'lf2', 'nf', 'NF 000.000.519.xml', '2026-10-05', { numero: '519', tipo: 'application/xml', url: 'cli/lf2/dc6.xml' }),
     docDoClipe('dc7', 'lf2', 'boleto', 'Boleto parcela 1.pdf', '2026-10-20'),
+    /* DANFE-SOB-DEMANDA-01 — lf4: a NF só com o XML da Receita (sem arquivo guardado): o clipe mostra "PDF · DANFE" (gerado na hora) e "XML · Itens". SINTÉTICO. */
+    docDoClipe('dc8', 'lf4', 'nf', 'NF 337107 (XML da Receita)', '2026-11-18', { numero: '337107', serie: '300', tipo: 'application/xml', url: null,
+      chave_acesso: '50261106057223030240553000003371071561590540' }),
     /* ANEXO-COL-ALINHA-01 — lf3 com 12 (o contador de 2 dígitos: o clipe não sai do lugar). SINTÉTICOS. */
     ...Array.from({ length: 12 }, (_, i) => docDoClipe(`dc3-${i}`, 'lf3', 'recibo', `Recibo sintético ${i + 1}.pdf`, '2026-10-07')),
   ];
@@ -1725,8 +1729,12 @@ if (tela === 'mesclar') {
       : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'itau', saldo: 12410.6, saldo_em: '2031-10-20T11:00:00Z', lido_em: '2031-10-20T11:00:00Z' }]
       /* BPO-GUIA-01 — o passo 6 do guia (só admin): os gestores do cliente, um com nome comprido */
       : t === 'cliente_membros' ? [{ user_id: 'g1', perfil: 'gestor_cliente', ativo: true }, { user_id: 'g2', perfil: 'financeiro', ativo: true }]
-      : t === 'profiles' ? [{ id: 'g1', nome: 'Gestor Sintético com Nome Comprido da Silva' }, { id: 'g2', nome: 'Financeiro Exemplo' }] : [],
-    rpc: (fn: string, a: any) => fn === 'fn_aprovacao_lista' ? (v === 'vera' ? LINHAS_VERA : LINHAS)
+      /* BPO-NOMES-LARGURA-01 — `profiles` na forma REAL (id da linha ≠ user_id; o guia não lê mais daqui). O nome vem da fonte única; o
+         financeiro sem nome no cadastro chega com o e-mail (a regra da fn_nomes_dos_autores) */
+      : t === 'profiles' ? [{ id: 'linha-1', user_id: 'g1', nome: 'Nome Errado de Profiles' }] : [],
+    rpc: (fn: string, a: any) => fn === 'fn_nomes_dos_autores' ? [{ user_id: 'g1', nome: 'Gestor Sintético com Nome Comprido da Silva', email: 'gestor@exemplo.com', situacao: 'membro ativo' },
+        { user_id: 'g2', nome: 'financeiro@exemplo.com', email: 'financeiro@exemplo.com', situacao: 'membro ativo' }]
+      : fn === 'fn_aprovacao_lista' ? (v === 'vera' ? LINHAS_VERA : LINHAS)
       : fn === 'fn_aprovacao_alertas' ? [{ alerta: 'pago_sem_aprovacao', lancamento_id: 'x1', data: '2031-10-13', valor: -2140, valor_aprovado: null, fornecedor: NOMES[0] },
           { alerta: 'aprovado_nao_pago', lancamento_id: 'x2', data: '2031-10-14', valor: -5990, valor_aprovado: -5990, fornecedor: NOMES[1] },
           { alerta: 'pago_diferente', lancamento_id: 'x3', data: '2031-10-12', valor: -99999999.99, valor_aprovado: -99999999.98, fornecedor: NOMES[2] }]
@@ -1835,6 +1843,9 @@ if (tela === 'mesclar') {
       : t === 'conciliacao_bancaria_itens' && v === 'nj10' ? CONC.ITENS_NJ10.filter((i) => !e?.in?.extrato_id || e.in.extrato_id.includes(i.extrato_id))
       : t === 'extrato_bancario_v2' && e?.sel?.startsWith('id, importacao_id') ? (semArquivos ? [] : (v === 'nj10' ? CONC.LIGACOES_NJ10 : CONC.LIGACOES).filter((l) => !e?.eq?.conta_bancaria_id || e.eq.conta_bancaria_id === 'cc1'))
       : t === 'extrato_bancario_v2' && e?.eq?.importacao_id ? CONC.MOVIMENTOS_DO_ARQUIVO
+      /* CARTAO-FATURA-IMPORT-01 — `&v=fatura`: a prévia da fatura no painel do cartão (o que já está no sistema + o histórico; o plano) */
+      : t === 'financeiro_lancamentos_v2' && v === 'fatura' && e?.sel?.startsWith('id, conta_bancaria_id, data_vencimento') ? FAT.LANCAMENTOS_DA_FATURA
+      : t === 'financeiro_plano_contas' && v === 'fatura' ? FAT.PLANO_DA_FATURA
       : t === 'financeiro_lancamentos_v2' && e?.sel?.includes('status_transacao, conta_bancaria_id') ? (v === 'sr' ? CONC.CANDIDATOS_SR : [])
       : t === 'conciliacao_bancaria_itens' ? []
       /* BAIXA-DESCONTO-BANCO-01 — a parte paga com desconto da NF do dia 03 (`&v=desconto-depois`) */
@@ -1929,6 +1940,10 @@ if (tela === 'mesclar') {
     if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
     /* NOTA-PAGTO-PARCELADO-01 P3 — `&natureza=conserto`: a mesma nota como REMESSA PARA CONSERTO (CFOP 6915): o aviso "não é compra" */
     if (q.get('natureza') === 'conserto') { lido.nota.naturezaOperacao = 'REMESSA DE MERCADORIA OU BEM PARA CONSERTO OU REPARO'; lido.nota.cfops = ['6915']; }
+    /* DA-NOTA-ETAPAS-01 — a nota NÃO FINANCEIRA (o molde da NF 7.891, SINTÉTICO): `&natureza=demonstracao` (5912: "Registrar bem de terceiro") e
+       `&natureza=devolucao` (1202: sem bem de terceiro) */
+    if (q.get('natureza') === 'demonstracao') { lido.nota.naturezaOperacao = 'REMESSA PARA DEMONSTRACAO'; lido.nota.cfops = ['5912']; }
+    if (q.get('natureza') === 'devolucao') { lido.nota.naturezaOperacao = 'DEVOLUCAO DE VENDA DE MERCADORIA'; lido.nota.cfops = ['1202']; }
     /* NOTA-PAGTO-PARCELADO-01 P1 — `&outros=1`: os lançamentos SOLTOS do mesmo fornecedor no período: a 4ª parcela desta nota paga por um PIX à
        parte (491,64: marcada, a soma confere com a nota) e duas de outras compras. SINTÉTICOS. */
     const OUTROS = q.get('outros') === '1' ? ([
@@ -1986,7 +2001,9 @@ if (tela === 'mesclar') {
       },
       /* NOTA-JA-LANCADA-01 — `v=jalancada`: 3 das 4 parcelas ja' lancadas (2 pagas, 1 programada, conciliada uma) num cadastro SEM CNPJ
          de nome comprido; a serie-irma de 1 centavo a mais; a 4a falta. Dados SINTETICOS. */
-      rpc: (fn: string, a?: any) => fn === 'fn_nota_ja_lancada' && (v === 'jalancada' || v === 'cancelados') ? [
+      rpc: (fn: string, a?: any) => fn === 'fn_bem_terceiro_registrar' ? { motivo: 'demonstracao', fornecedor: 'Agro Sintetica Insumos Agropecuarios Ltda', nf: '000.000.937',
+          data: '2026-09-20', total: 1966.56, itens: lido.nota.itens.map((i, k) => ({ n: k + 1, descricao: i.descricao, quantidade: 1, valor: i.valorCent / 100 })) }
+        : fn === 'fn_nota_ja_lancada' && (v === 'jalancada' || v === 'cancelados') ? [
         /* NOTA-CONTAS-NA-CRIACAO-01 D — `v=cancelados`: os mesmos, e mais 2 CANCELADOS desta nota no fim (selo cinza) */
         ...(v === 'cancelados' ? CANCELADOS_DA_NOTA : []),
         ...[['2026-10-20', 'realizado'], ['2026-11-20', 'realizado'], ['2026-12-20', 'programado']].map(([venc, st], i) => ({

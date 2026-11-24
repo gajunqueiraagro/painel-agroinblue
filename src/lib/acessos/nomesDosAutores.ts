@@ -38,6 +38,20 @@ export function lerNomesDosAutores(dado: unknown): NomeDoAutor[] | null {
 
 export const mapaDosNomes = (lista: readonly NomeDoAutor[]) => new Map(lista.map((n) => [n.userId, n]));
 
+/** Quem a fonte unica nao trouxe (a RPC devolve todo id pedido; sem linha = o perfil sumiu). */
+export const FRASE_PESSOA_SEM_CADASTRO = 'usuário removido';
+
+/**
+ * O RÓTULO DE UMA PESSOA em toda tela de acessos — BPO-NOMES-LARGURA-01 (Gabriel 23/11 17:30): o nome do cadastro -> senao o e-mail ->
+ * senao "usuário removido". Nunca "Usuário sem nome", nunca "—" para quem tem e-mail.
+ */
+export function rotuloDaPessoa(p: { nome?: string | null; email?: string | null } | null | undefined): string {
+  const nome = typeof p?.nome === 'string' ? p.nome.trim() : '';
+  if (nome) return nome;
+  const email = typeof p?.email === 'string' ? p.email.trim() : '';
+  return email || FRASE_PESSOA_SEM_CADASTRO;
+}
+
 export const FRASE_SEM_AUTOR = 'autor não registrado';
 /** A rotina de quem grava sem se declarar (`_fn_trilha_via`, P116). */
 export const ROTINA_SEM_NOME = 'manutenção';

@@ -76,6 +76,18 @@ export interface NotaNaLista extends LinhaRecebida {
   ignorada?: IgnoradaDaNota | null;
   /** NOTA-IGNORAR-01 — só SUGESTÃO, nunca automático: a última nota deste emitente foi ignorada (a frase do selo) */
   sugestaoIgnorar?: { motivo: MotivoIgnorar; frase: string } | null;
+  /** NOTA-LANCAR-SEM-DELAY-01 — lançada AGORA nesta tela (o selo "agora"; a releitura confere em segundo plano) */
+  lancadaAgora?: boolean;
+}
+
+/** NOTA-LANCAR-SEM-DELAY-01 — a chave do XML da Receita pelo nome do arquivo (`NFe<chave>.xml`, `nomeDoXml`); outro nome = nula */
+export const chaveDoNomeDoXml = (nome: string | null | undefined): string | null => /^NFe(\d{44})\.xml$/.exec(nome ?? '')?.[1] ?? null;
+/** NOTA-LANCAR-SEM-DELAY-01 (Gabriel 23/11: "a nota levava ~3 s para sair do A lançar → risco de lançar 2×") — a nota que acabou de ser lançada
+ *  sai do "A lançar" NA HORA (vai a "Já no sistema" com o selo "agora"), sem esperar a releitura; a releitura, quando chega, confere. */
+export function marcarLancadasAgora(lista: readonly NotaNaLista[], chaves: ReadonlySet<string>): NotaNaLista[] {
+  if (chaves.size === 0) return [...lista];
+  return lista.map((n): NotaNaLista => (!chaves.has(n.chave) ? n
+    : n.sit === 'nova' || n.sit === 'pode_estar' ? { ...n, sit: 'no_sistema', candidatos: [], lancadaAgora: true } : { ...n, lancadaAgora: true }));
 }
 
 /* NOTA-IGNORAR-01 (Gabriel 23/11) — o "Ignorar" da nota: sai do "A lançar" para a aba "Ignoradas" (motivo, quem, quando); desfazer volta.

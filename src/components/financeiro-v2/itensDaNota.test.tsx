@@ -51,7 +51,7 @@ describe('ItensDaNota — Valores e Fiscal', () => {
     expect(linhas.map((l) => l.lastElementChild?.textContent)).toEqual(['99,50', '217,00', '50,00']);
     expect(cabecalhos()).toEqual(['Nº', 'Cód. forn.', 'Descrição na nota', 'Qtd', 'Un', 'Unitário', 'Total', 'Desc.', 'Acrésc.', 'Líquido']);
     expect(rodape()).toEqual(['', '', '3 itens', '', '', '', '350,00', '10,00', '26,50', '366,50']);
-    expect(screen.getByTestId('itens-prova').textContent).toBe('✓ Soma dos itens = valor da nota');
+    expect(screen.getByTestId('itens-prova').textContent).toBe('✓ Soma = valor da nota');
     expect(screen.getByTestId('itens-tributos').textContent).toContain('R$ 20,00');
     /* NOTA-PARCELAR-01 (P-c) — o selo diz só a conta (uma linha); o "manda no DRE e no caixa" vai no title */
     const selo = screen.getByTestId('itens-conta-do-lancamento');
@@ -81,7 +81,7 @@ describe('ItensDaNota — Valores e Fiscal', () => {
   it('PDF com desconto do total: "desconto/frete rateados"; o PDF sem desconto nao marca', () => {
     const { unmount } = render(<ItensDaNota cabecalho={{ ...CAB, origem: 'pdf' }} lidos={doPdf()} />);
     expect(screen.getByText('desconto/frete rateados')).toBeTruthy();
-    expect(screen.getByTestId('itens-prova').textContent).toBe('✓ Soma dos itens = valor da nota');
+    expect(screen.getByTestId('itens-prova').textContent).toBe('✓ Soma = valor da nota');
     unmount();
     render(<ItensDaNota cabecalho={{ ...CAB, origem: 'pdf' }} lidos={doPdf(danfeSinteticoSemDuplicata())} />);
     expect(screen.queryByText('desconto/frete rateados')).toBeNull();

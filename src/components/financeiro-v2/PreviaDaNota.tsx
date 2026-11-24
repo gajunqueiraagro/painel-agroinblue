@@ -64,7 +64,8 @@ export function PreviaDaNota({ bytes, marcas, tamanho, divergentes = [] }: {
         <span className="m-auto px-2 text-center text-[10px] text-muted-foreground">Não foi possível desenhar o PDF aqui; o que foi lido está à direita.</span>
       ) : (
         <div className="relative" style={tamanho && escala ? { width: tamanho.largura * escala, height: tamanho.altura * escala } : undefined}>
-          <canvas ref={tela} aria-hidden="true" />
+          {/* o pdfjs desenha depois (assíncrono): até lá o canvas teria o tamanho padrão (300×150) e passaria do quadro — ocupa o quadro já medido */}
+          <canvas ref={tela} aria-hidden="true" className="block h-full w-full" />
           {escala > 0 && marcas.filter((m) => m.pagina === 1).map((m, i) => (
             <span key={i} aria-hidden="true" data-testid="nota-marca" data-campo={m.campo}
               className={divergentes.includes(m.campo) ? 'absolute rounded-[1px] bg-red-500/30 outline outline-1 outline-red-600' : 'absolute rounded-[1px] bg-amber-300/40 outline outline-1 outline-amber-500'}

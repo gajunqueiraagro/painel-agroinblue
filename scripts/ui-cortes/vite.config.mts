@@ -24,6 +24,8 @@ export default defineConfig({
     { find: /^@\/hooks\/useEvolucaoDoMes$/, replacement: m('evolucaoMes.ts') },
     /* MAPA-02b (D4) — o fundo do mapa é neutro e local: nenhum tile do Google nem do OSM nos gates */
     { find: /^@\/lib\/mapa\/camadaDoFundo$/, replacement: m('fundo.ts') },
+    /* CARTAO-FATURA-IMPORT-01 — a fatura do cartão: linhas sintéticas para "fatura-bancada*.pdf"; o resto, o leitor de verdade */
+    { find: /^@\/lib\/oc\/leitura\/linhasDoPdf$/, replacement: m('linhasDoPdf.ts') },
     { find: '@', replacement: path.resolve(RAIZ, 'src') } ] },
   css: { postcss: RAIZ },
   server: { fs: { allow: [RAIZ] } },
