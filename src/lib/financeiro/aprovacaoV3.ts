@@ -72,6 +72,8 @@ const TEXTO_DO_PRONTO: Record<string, string> = {
   pronto: 'pronto ✓', falta_boleto: 'falta boleto', falta_guia: 'falta guia', falta_chave: 'falta chave Pix',
   falta_dados_bancarios: 'falta dados bancários', falta_forma: 'falta forma', falta_outro: 'falta dados do pagamento',
   falta_nota: 'falta nota', falta_recibo: 'falta recibo', falta_holerite: 'falta holerite',
+  /* D1 (Gabriel 12:48): seguro e impostos de veículos/máquinas aceitam a nota OU a guia (o código vem no lote 118670) */
+  falta_nota_ou_guia: 'falta nota ou guia',
 };
 export function textoDoPronto(codigo: string | null): string {
   return codigo ? TEXTO_DO_PRONTO[codigo] ?? '—' : '—';
@@ -86,7 +88,8 @@ export function siglaDaForma(forma: string | null): SiglaDaForma {
   if (!f) return { sigla: '—', nome: 'sem forma de pagamento', cor: 'transparent' };
   if (f.includes('boleto')) return { sigla: 'Bol', nome: 'Boleto', cor: '#d97706' };
   if (f.includes('pix')) return { sigla: 'Pix', nome: 'Pix', cor: '#0d9488' };
-  if (f.includes('autom')) return { sigla: 'DA', nome: 'Débito automático', cor: '#7c3aed' };
+  /* "Debito Auto" (11 lançamentos no proto, 24/11) também é débito automático; "Débito em Conta" NÃO (decisão do Gabriel pendente) */
+  if (f.includes('autom') || /d[eé]bito\s*auto/.test(f)) return { sigla: 'DA', nome: 'Débito automático', cor: '#7c3aed' };
   if (f.includes('transfer') || f === 'ted' || f === 'doc') return { sigla: 'TED', nome: 'Transferência (TED)', cor: '#2563eb' };
   if (f.includes('cart')) return { sigla: 'Cartão', nome: 'Cartão de crédito', cor: '#db2777' };
   if (f.includes('débito') || f.includes('debito')) return { sigla: 'Déb.', nome: 'Débito', cor: '#7c3aed' };
@@ -101,8 +104,13 @@ export function siglaDaForma(forma: string | null): SiglaDaForma {
  */
 export const ehDebitoAutomatico = (forma: string | null): boolean => siglaDaForma(forma).sigla === 'DA';
 export function comRegraDoDebitoAutomatico(linhas: readonly LinhaV3[]): LinhaV3[] {
-  return linhas.map((l) => (l.aba === 'aprovar' && ehDebitoAutomatico(l.forma)
-    ? { ...l, aba: 'aprovados', estado: 'aprovado_da', possoDecidir: false, daPelaRegra: true } : l));
+  return linhas.map((l) => {
+    if (!ehDebitoAutomatico(l.forma)) return l;
+    if (l.aba === 'aprovar') return { ...l, aba: 'aprovados', estado: 'aprovado_da', possoDecidir: false, daPelaRegra: true };
+    /* com o lote no banco, o DA já vem aprovado pela regra (`aprovado_regra`): o mesmo selo "aprovado · DA" */
+    if (l.aba === 'aprovados' && l.estado === 'aprovado_regra') return { ...l, daPelaRegra: true };
+    return l;
+  });
 }
 
 /** o último pagamento (realizado/conciliado) a cada fornecedor, da leitura em ordem de data decrescente: o 1º de cada um */

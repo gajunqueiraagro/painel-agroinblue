@@ -35,6 +35,7 @@ describe('textoDoPronto — UM texto humano, nunca o código', () => {
     expect(textoDoPronto('falta_recibo')).toBe('falta recibo');
     expect(textoDoPronto('falta_holerite')).toBe('falta holerite');
     expect(textoDoPronto('falta_chave')).toBe('falta chave Pix');
+    expect(textoDoPronto('falta_nota_ou_guia')).toBe('falta nota ou guia');
   });
   it('código desconhecido ou nulo = "—" (o erro de 11:26: "falta_boleto" cru no painel)', () => {
     expect(textoDoPronto('codigo_novo')).toBe('—');
@@ -48,6 +49,8 @@ describe('siglaDaForma e numeroDaNf', () => {
     expect(siglaDaForma('PIX').sigla).toBe('Pix');
     expect(siglaDaForma('Transferência').sigla).toBe('TED');
     expect(siglaDaForma('Débito Automático').sigla).toBe('DA');
+    expect(siglaDaForma('Debito Auto').sigla).toBe('DA');
+    expect(siglaDaForma('Débito em Conta').sigla).toBe('Déb.');
     expect(siglaDaForma(null).sigla).toBe('—');
   });
   it('o nº da NF sem zeros e com milhar; sem NF = "—"', () => {
@@ -107,11 +110,14 @@ describe('DÉBITO AUTOMÁTICO — já autorizado no banco (Gabriel 24/11 17:40)'
     crua({ lancamento_id: 'da', forma: 'Débito Automático', valor: -1300, favorecido_id: 'fda', vencimento: '2026-12-07' }),
     crua({ lancamento_id: 'pix', forma: 'PIX', valor: -100 }),
     crua({ lancamento_id: 'da-pago', forma: 'Débito Automático', aba: 'pagos', estado: 'aprovado', posso_decidir: false }),
+    crua({ lancamento_id: 'da-banco', forma: 'Débito Automático', aba: 'aprovados', estado: 'aprovado_regra', posso_decidir: false }),
+    crua({ lancamento_id: 'pix-limite', forma: 'PIX', aba: 'aprovados', estado: 'aprovado_regra', posso_decidir: false }),
   ]);
   const comRegra = comRegraDoDebitoAutomatico(linhas);
   it('o DA de "Para aprovar" vai para Aprovados como "aprovado · DA" (sem caixa, fora do total); o resto não muda', () => {
     expect(comRegra.map((l) => [l.id, l.aba, l.daPelaRegra, l.possoDecidir])).toEqual([
-      ['da', 'aprovados', true, false], ['pix', 'aprovar', false, true], ['da-pago', 'pagos', false, false]]);
+      ['da', 'aprovados', true, false], ['pix', 'aprovar', false, true], ['da-pago', 'pagos', false, false],
+      ['da-banco', 'aprovados', true, false], ['pix-limite', 'aprovados', false, false]]);
     const c = contarAbas(comRegra);
     expect(c.aprovar).toEqual({ n: 1, total: 100 });
     expect(motivoSemDecidir(comRegra[0])).toContain('Débito automático');
