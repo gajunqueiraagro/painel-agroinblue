@@ -139,6 +139,9 @@ const TODAS = [
   email('r1', 'm8', { arquivo_nome: 'nota-3300.xml', tipo: 'xml', estado: 'nota', lancamento_id: 'x1', lido_em: '2026-11-17T21:00:00Z', recebido_em: '2026-11-15T10:00:00Z' }),
   email('r2', 'm8', { arquivo_nome: 'boleto com nome de arquivo bem comprido já resolvido na caixa de entrada 2026-11.pdf', estado: 'boleto', boleto_id: 'g-3',
     lido_em: '2026-11-17T21:00:00Z', recebido_em: '2026-11-15T10:00:00Z' }),
+  /* CAIXA-GUARDAR-01: o e-mail cujo boleto foi GUARDADO sem lançamento (g-1) — o selo "guardado · sem lançamento" e o Desfazer completo */
+  email('r3', 'm8', { arquivo_nome: 'boleto-fornecedor-f.pdf', estado: 'boleto', boleto_id: 'g-1', lido_em: '2026-11-17T21:05:00Z',
+    recebido_em: '2026-11-14T13:00:00Z' }),
   /* ignorados (um de antes da regra, um com detalhe longo) */
   email('i1', 'm9', { arquivo_nome: '50261104402825000193550010001220481372684150.xml', tipo: 'xml', estado: 'dispensado', ignorado_motivo: 'anterior_a_regra',
     dispensado_em: '2026-11-17T19:35:00Z', recebido_em: '2026-11-17T19:27:00Z' }),

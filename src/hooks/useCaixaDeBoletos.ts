@@ -10,6 +10,9 @@
  *   o que já gravou fica (nunca some calado).
  * ⚠ SENHA: só na memória do gesto (a leitura de novo); nunca no estado, nunca no banco.
  * ⚠ LEITURA QUE TERMINA DEPOIS DE A TELA SAIR não escreve (OC-ABRIR-LENTO-01): `vivo` guarda.
+ * ⚠ CAIXA-GUARDAR-01 (D1 a): DESFAZER O GUARDADO = o boleto vai para `descartado` (MOTIVO_DO_DESFEITO, `fn_boleto_marcar`, trilha) e o
+ *   e-mail dele volta para A resolver (`fn_entrada_voltar`) — uma linha só depois; "Guardar" o boleto descartado REABRE o mesmo (`novo`).
+ *   São 2 RPCs de hoje, nesta ordem: falhou a 2ª, a frase diz e o boleto já está fora da caixa (o e-mail segue em Resolvidos).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { caixaApiDoBanco, type CaixaApi, type DocumentoDaCaixa, type ListaDaCaixa, type RespostaDeEntrar } from '@/lib/financeiro/boleto/caixaApi';
@@ -19,7 +22,7 @@ import { lerNota } from '@/lib/financeiro/nfe/lerNota';
 import type { BoletoNormalizado } from '@/lib/financeiro/linhaDigitavel';
 import { entradaEmailApiDoBanco, rotuloDoMotivo, type EntradaDoEmail, type EntradaEmailApi, type MotivoDeIgnorar } from '@/lib/financeiro/boleto/entradaEmailApi';
 import {
-  FRASE_NEM_BOLETO_NEM_NOTA, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes, numeroDaNotaComPontos,
+  FRASE_NEM_BOLETO_NEM_NOTA, MOTIVO_DO_DESFEITO, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes, numeroDaNotaComPontos,
   type ConsultaDaNota, type ConsultaDoBoleto, type FonteParaMontar, type GrupoDaCaixa, type LinhaDaCaixa, type Lido, type ResumoDaNota,
 } from '@/lib/financeiro/boleto/caixaPorEmail';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
@@ -208,7 +211,8 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
       linhas: linhasDasFontes(arrastados, notas, boletos, hoje, podeLancar, feitos), fontesAntigas: [],
     }] : [];
     const gGuardados = lista ? grupoDosGuardados(lista.itens, boletos, hoje, feitos) : null;
-    return [...gLocal, ...doEmail, ...(gGuardados ? [gGuardados] : [])];
+    /* CAIXA-GUARDAR-01: os guardados PRIMEIRO (no NJ ficavam depois de 15 e-mails, fora da janela) */
+    return [...(gGuardados ? [gGuardados] : []), ...gLocal, ...doEmail];
   }, [entradas, lidos, notas, boletos, hoje, podeLancar, feitos, locais, lista]);
 
   const resolvidos = useMemo(() => (entradas ?? []).filter((e) => e.estado === 'boleto' || e.estado === 'nota'), [entradas]);
@@ -349,13 +353,18 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   }), [fazer, garantirNaCaixa, parcela, anexarAosLancamentos, resolverSeCompleto, recarregar]);
 
   const guardar = useCallback((l: LinhaDaCaixa) => fazer(l.chave, async () => {
+    /* CAIXA-GUARDAR-01: o boleto tirado da caixa volta a ser o MESMO (`novo`) — o índice (cliente, código de barras) nunca duplica */
+    if (l.boletoGuardadoId && l.previa?.ok === true && l.previa.jaExiste && l.previa.boleto.situacao === 'descartado') {
+      const r = await api.marcar(l.boletoGuardadoId, 'novo', null);
+      if (r.ok === false) return r.erro;
+    }
     const g = await garantirNaCaixa(l);
     if (g.ok === false) return g.frase;
     marcarFeito(l.chave);
     const m = await resolverSeCompleto(l.fontes[0], l.chave, g.id);
     await recarregar();
     return m ?? g.aviso;
-  }), [fazer, garantirNaCaixa, resolverSeCompleto, recarregar]);
+  }), [fazer, api, garantirNaCaixa, resolverSeCompleto, recarregar]);
 
   /** Vincular a nota que já está num lançamento: as entradas (XML e PDF) viram 'nota' com o lançamento. */
   const vincularNota = useCallback((l: LinhaDaCaixa) => fazer(l.chave, async () => {
@@ -399,23 +408,45 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     return null;
   }), [fazer, ehDoEmail, entradaApi, api, recarregar]);
 
+  /** A entrada que volta para A resolver é lida e consultada DE NOVO (a prévia antiga diria o boleto de antes do gesto). */
+  const esquecerEntrada = useCallback((entradaId: string) => {
+    pedidos.current.delete(`ler:${entradaId}`);
+    for (const p of [...pedidos.current]) if (p.startsWith(`bol:${entradaId}#`)) pedidos.current.delete(p);
+    setBoletos((x) => Object.fromEntries(Object.entries(x).filter(([k]) => !k.startsWith(`${entradaId}#`))));
+    setFeitos((x) => new Set([...x].filter((c) => !c.includes(entradaId))));
+  }, []);
+
   /** Voltar para "A resolver": a entrada ignorada ou resolvida (o Desfazer), ou o boleto descartado (volta a "novo"). */
   const voltar = useCallback((alvo: { entradaId: string } | { boletoId: string }) => fazer('voltar', async () => {
     const r = 'entradaId' in alvo ? await entradaApi.voltar(alvo.entradaId) : await api.marcar(alvo.boletoId, 'novo', null);
     if (r.ok === false) return r.erro;
     if ('entradaId' in alvo) {
-      pedidos.current.delete(`ler:${alvo.entradaId}`);
-      setFeitos((x) => new Set([...x].filter((c) => !c.includes(alvo.entradaId))));
+      esquecerEntrada(alvo.entradaId);
     } else {
       pedidos.current.delete(`bol:guardado:${alvo.boletoId}`);
       setFeitos((x) => new Set([...x].filter((c) => c !== `guardado:${alvo.boletoId}`)));
     }
     await recarregar();
     return null;
-  }), [fazer, entradaApi, api, recarregar]);
+  }), [fazer, entradaApi, api, recarregar, esquecerEntrada]);
+
+  /** CAIXA-GUARDAR-01 — Desfazer o GUARDADO (A resolver ou Resolvidos): o boleto sai da caixa com o motivo e o(s) e-mail(s) dele voltam. */
+  const desfazerGuardado = useCallback((boletoId: string) => fazer('desfazer', async () => {
+    const r = await api.marcar(boletoId, 'descartado', MOTIVO_DO_DESFEITO);
+    if (r.ok === false) return r.erro;
+    pedidos.current.delete(`bol:guardado:${boletoId}`);
+    setFeitos((x) => new Set([...x].filter((c) => c !== `guardado:${boletoId}`)));
+    for (const e of (entradas ?? []).filter((x) => x.boletoId === boletoId && x.estado === 'boleto')) {
+      const v = await entradaApi.voltar(e.id);
+      if (v.ok === false) { await recarregar(); return `O boleto saiu da caixa, mas o e-mail não voltou para A resolver: ${v.erro}`; }
+      esquecerEntrada(e.id);
+    }
+    await recarregar();
+    return null;
+  }), [fazer, api, entradas, entradaApi, recarregar, esquecerEntrada]);
 
   return {
     lista, entradas, erro, grupos, resolvidos, ignorados, descartados, sugestoes, ocupado,
-    receber, arquivoDe, nomeDaFonte, tentarSenha, vincularBoleto, guardar, vincularNota, ignorar, voltar, recarregar,
+    receber, arquivoDe, nomeDaFonte, tentarSenha, vincularBoleto, guardar, vincularNota, ignorar, voltar, desfazerGuardado, recarregar,
   };
 }
