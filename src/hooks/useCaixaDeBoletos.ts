@@ -35,12 +35,14 @@ import { itensDoPdf, type PdfjsMinimo } from '@/lib/financeiro/nfe/lerNotaPdf';
 import { montarLinhas } from '@/lib/oc/leitura/montarLinhas';
 import { lerFolha, pareceFolha, type FolhaLida } from '@/lib/folha/lerFolha';
 import { acharChaveNFe } from '@/lib/oc/leitura/chaveNFe';
+import { lerResumoDoContador, type ResumoLido } from '@/lib/folha/lerResumoDoContador';
 
 /** A leitura de UM arquivo pela caixa (injetável: a bancada e os testes passam a sua). */
 export type LeituraDaCaixa =
   | { k: 'nota'; nota: ResumoDaNota }
   | { k: 'boletos'; boletos: BoletoNormalizado[]; beneficiario: ParteDoBoleto; pagador: ParteDoBoleto; paginaDeCada?: number[]; totalDePaginas?: number }
   | { k: 'folha'; folha: FolhaLida }
+  | { k: 'resumo'; resumo: ResumoLido }
   | { k: 'nada'; frase: string }
   | { k: 'senha'; errada: boolean }
   | { k: 'erro'; frase: string };
@@ -86,6 +88,9 @@ export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (
   const f = paginas ? lerFolha(paginas) : null;
   if (f && f.ok === true) return { k: 'folha', folha: f.folha };
   if (f && f.ok === false && f.motivo === 'nao_fecha') return { k: 'nada', frase: `Folha que não fecha: ${f.frase} Fale com o consultor.` };
+  /* FOLHA-RESUMO-CONTADOR-01: o "Extrato Mensal" do contador (o FGTS por empresa) */
+  const resumo = paginas ? lerResumoDoContador(paginas) : null;
+  if (resumo && resumo.ok === true) return { k: 'resumo', resumo: resumo.resumo };
   const pelaChave = notaPelaChave(paginas ? paginas.flat().join('\n') : null, nomeDoArquivo);
   if (pelaChave) return { k: 'nota', nota: pelaChave };
   return { k: 'nada', frase: paginas && pareceFolha(paginas) ? FRASE_FOLHA_AINDA_NAO : FRASE_NEM_BOLETO_NEM_NOTA };

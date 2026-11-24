@@ -319,6 +319,18 @@ const CENARIOS = [
     ['ver quem está sem recibo', clicar('[data-testid="ver-sem-recibo"]')], ['esconder', clicar('[data-testid="ver-sem-recibo"]')],
     ['aprovar', clicar('[data-testid="aprovar-folha"]')],
   ] },
+  /* FOLHA-RESUMO-CONTADOR-01 — a prévia do resumo do contador: Prever, abrir o Desfazer e ver o que volta não movem a faixa do documento,
+     o cabeçalho da tabela, a faixa da descrição nem o rodapé (o quadro da tabela é `data-desloca-livre`) */
+  { nome: 'resumo-da-caixa', url: 'tela=caixa-boletos&caso=resumo_ok', regiao: '[data-testid="resumo-do-contador"]',
+    antes: async (p) => {
+      await espera(p, 900);
+      await p.locator('[data-testid="input-da-caixa"]').setInputFiles([{ name: 'extrato.pdf', mimeType: 'application/pdf',
+        buffer: Buffer.from('%PDF Extrato Mensal 13 ficticio com nome de arquivo comprido de exemplo.pdf') }]);
+      await espera(p, 900); await clicar('[data-testid="acao-abrir_resumo"]')(p); await espera(p, 800);
+    }, estados: [
+    ['prever', clicar('[data-testid="prever-fgts"]')], ['abrir o desfazer', clicar('[data-testid="desfazer-resumo"]')],
+    ['motivo + ver o que volta', async (p) => { await p.locator('[data-testid="motivo-desfazer-resumo"]').fill('o contador mandou de novo'); await clicar('[data-testid="prever-desfazer-resumo"]')(p); }],
+  ] },
   /* BOLETO D3c — o endereço de boletos: trocar de modo (ver → trocar → prévia → cancelar → revogar) e de provedor não move o bloco do
      endereço, o da ação, as abas do passo a passo nem o rodapé (os blocos têm altura fixa; a lista dos passos é `data-desloca-livre`) */
   { nome: 'endereco-boletos', url: 'tela=caixa-boletos', regiao: '[data-testid="endereco-de-boletos"]',

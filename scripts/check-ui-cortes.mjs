@@ -1514,6 +1514,27 @@ const CENARIOS = [
             await p.locator('[data-testid="prever-desfazer"]').click(); await p.waitForTimeout(500); } },
         ];
       })(),
+      /* FOLHA-RESUMO-CONTADOR-01 — a prévia do resumo do contador ("Extrato Mensal", dado SINTÉTICO, `dados/resumoDoContador.ts`), arrastado:
+         o pior caso (nome no teto, FGTS no teto, a soma que não fecha, uma empresa sem fazenda = Prever apagado); sem pendência e gravado;
+         o já aplicado com o Desfazer aberto e o que volta */
+      ...(() => {
+        const RR = '[data-testid="resumo-do-contador"]';
+        const abrir = async (p) => {
+          await pronto(p);
+          await p.locator('[data-testid="input-da-caixa"]').setInputFiles([{ name: 'extrato.pdf', mimeType: 'application/pdf',
+            buffer: Buffer.from('%PDF Extrato Mensal 13 ficticio com nome de arquivo comprido de exemplo.pdf') }]);
+          await p.waitForTimeout(900); await p.locator('[data-testid="acao-abrir_resumo"]').first().click(); await p.waitForTimeout(800);
+        };
+        return [
+          { nome: 'caixa-resumo-previa', url: URL, tamanhos: T, regiao: RR, antes: abrir },
+          { nome: 'caixa-resumo-gravado', url: `${URL}&caso=resumo_ok`, tamanhos: T, regiao: RR, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="prever-fgts"]').click(); await p.waitForTimeout(700); } },
+          { nome: 'caixa-resumo-desfazer', url: `${URL}&caso=resumo_aplicado`, tamanhos: T, regiao: RR, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="desfazer-resumo"]').click();
+            await p.locator('[data-testid="motivo-desfazer-resumo"]').fill('o contador mandou o resumo de novo com o valor certo');
+            await p.locator('[data-testid="prever-desfazer-resumo"]').click(); await p.waitForTimeout(500); } },
+        ];
+      })(),
     ];
   })(),
   /* BOLETO D3c — o endereço de boletos (dado SINTÉTICO: o slug no teto de 40): ver; trocar sem motivo (vermelho) e com a prévia; revogar;

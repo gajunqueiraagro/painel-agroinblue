@@ -8,6 +8,7 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 import { respostaDaFolha, type DocumentoDoPedido, type ItemDoPedido, type RespostaDaFolha } from './folhaNaCaixa';
+import { respostaDoResumo, type DocumentoDoResumo, type ItemDoResumo, type RespostaDoResumo } from './resumoNaCaixa';
 
 export type Resultado<T> = { ok: true; dados: T } | { ok: false; erro: string };
 export const BUCKET_DA_FOLHA = 'folha-documentos';
@@ -56,5 +57,33 @@ export const folhaCaixaApiDoBanco: FolhaCaixaApi = {
       { contentType: 'application/pdf', upsert: false });
     if (error) { console.error('[folha na caixa] upload', error); return { ok: false, erro: 'O PDF não subiu.' }; }
     return { ok: true, dados: true };
+  },
+};
+
+/* ═══ FOLHA-RESUMO-CONTADOR-01 — o resumo do contador ("Extrato Mensal"): a previsão do FGTS por fazenda ═══ */
+export interface ResumoCaixaApi {
+  /** CAEPF (só dígitos) → fazenda_id: os vivos do cliente (`fiscal_caepf`, RLS por tenant) */
+  fazendasPorCaepf: (clienteId: string) => Promise<Resultado<Map<string, string>>>;
+  prever: (clienteId: string, documento: DocumentoDoResumo, itens: ItemDoResumo[], simular: boolean) => Promise<Resultado<RespostaDoResumo>>;
+}
+export const resumoCaixaApiDoBanco: ResumoCaixaApi = {
+  async fazendasPorCaepf(clienteId) {
+    const { data, error } = await (supabase as any).from('fiscal_caepf').select('caepf, fazenda_id').eq('cliente_id', clienteId).is('substituida_em', null);
+    if (error) { console.error('[resumo do contador] caepf', error); return { ok: false, erro: fraseDoErroDaFolha(error) }; }
+    const m = new Map<string, string>();
+    for (const r of Array.isArray(data) ? data : []) {
+      if (r && typeof r.caepf === 'string' && typeof r.fazenda_id === 'string') m.set(r.caepf.replace(/\D/g, ''), r.fazenda_id);
+    }
+    return { ok: true, dados: m };
+  },
+  async prever(clienteId, documento, itens, simular) {
+    const { data, error } = await (supabase as any).rpc('fn_folha_resumo_fgts_aplicar', { p_cliente: clienteId, p_documento: documento, p_itens: itens, p_simular: simular });
+    if (error) {
+      console.error('[resumo do contador] prever', error);
+      if (simular && ehJaAplicado(error)) return { ok: true, dados: { jaAplicado: true, previsoes: [], pendencias: [], soma: null } };
+      return { ok: false, erro: fraseDoErroDaFolha(error) };
+    }
+    const r = respostaDoResumo(data);
+    return r ? { ok: true, dados: r } : { ok: false, erro: 'O banco respondeu algo que eu não entendi. Nada foi gravado.' };
   },
 };
