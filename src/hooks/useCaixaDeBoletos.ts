@@ -25,16 +25,20 @@ import { lerNota } from '@/lib/financeiro/nfe/lerNota';
 import type { BoletoNormalizado } from '@/lib/financeiro/linhaDigitavel';
 import { entradaEmailApiDoBanco, rotuloDoMotivo, type EntradaDoEmail, type EntradaEmailApi, type MotivoDeIgnorar } from '@/lib/financeiro/boleto/entradaEmailApi';
 import {
-  FRASE_NEM_BOLETO_NEM_NOTA, MOTIVO_DO_DESFEITO, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes, numeroDaNotaComPontos,
+  FRASE_FOLHA_AINDA_NAO, FRASE_NEM_BOLETO_NEM_NOTA, MOTIVO_DO_DESFEITO, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes, numeroDaNotaComPontos,
   type ConsultaDaNota, type ConsultaDoBoleto, type FonteParaMontar, type GrupoDaCaixa, type LinhaDaCaixa, type Lido, type ResumoDaNota,
 } from '@/lib/financeiro/boleto/caixaPorEmail';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { importarDoApp } from '@/lib/app/falhaDeVersao';
+import { itensDoPdf, type PdfjsMinimo } from '@/lib/financeiro/nfe/lerNotaPdf';
+import { montarLinhas } from '@/lib/oc/leitura/montarLinhas';
+import { lerFolha, pareceFolha, type FolhaLida } from '@/lib/folha/lerFolha';
 
 /** A leitura de UM arquivo pela caixa (injetável: a bancada e os testes passam a sua). */
 export type LeituraDaCaixa =
   | { k: 'nota'; nota: ResumoDaNota }
   | { k: 'boletos'; boletos: BoletoNormalizado[]; beneficiario: ParteDoBoleto; pagador: ParteDoBoleto; paginaDeCada?: number[]; totalDePaginas?: number }
+  | { k: 'folha'; folha: FolhaLida }
   | { k: 'nada'; frase: string }
   | { k: 'senha'; errada: boolean }
   | { k: 'erro'; frase: string };
@@ -42,24 +46,45 @@ export type LerArquivoDaCaixa = (bytes: ArrayBuffer, tipo: 'xml' | 'pdf', senha?
 
 export const FRASE_PDF_IMAGEM = 'O PDF é uma imagem (escaneado): sem linha digitável nem chave legível.';
 
-/** O leitor de verdade: XML → a nota; PDF → os boletos (D7); sem boleto, a nota (o DANFE, pelo `lerNota` de sempre); senão, nada. */
-export const lerDaCaixa: LerArquivoDaCaixa = async (bytes, tipo, senha) => {
+/** O leitor de verdade: XML → a nota; PDF → os boletos (D7); sem boleto, a nota (o DANFE, pelo `lerNota` de sempre); senão, nada
+ *  (o que parece folha diz que a folha ainda não é lida aqui, CAIXA-FOLHA-AVISO-01). `pdfjs`: o do teste (no app, o de sempre). */
+export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (bytes, tipo, senha) => {
   if (tipo === 'xml') {
     const n = await lerNota(bytes);
     if ('nota' in n && n.ok) return { k: 'nota', nota: resumoDaNota(n.nota) };
     return { k: 'nada', frase: 'frase' in n ? n.frase : 'Não consegui ler a nota.' };
   }
-  const b = await lerBoletosDoArquivo(bytes.slice(0), { senha });
+  const b = await lerBoletosDoArquivo(bytes.slice(0), { senha, pdfjs });
   if (b.ok === false) {
     if (b.motivo === 'senha' || b.motivo === 'senha_errada') return { k: 'senha', errada: b.motivo === 'senha_errada' };
     if (b.motivo === 'sem_texto') return { k: 'nada', frase: FRASE_PDF_IMAGEM };
     return { k: 'erro', frase: b.frase };
   }
   if (b.leitura.boletos.length) return { k: 'boletos', ...b.leitura };
-  const n = await lerNota(bytes.slice(0));
+  const n = await lerNota(bytes.slice(0), { pdfjs });
   if (n.ok && n.nota.chave) return { k: 'nota', nota: resumoDaNota(n.nota) };
-  return { k: 'nada', frase: FRASE_NEM_BOLETO_NEM_NOTA };
+  /* FOLHA-NA-CAIXA-01: o recibo do contador (3º tipo); o que só PARECE folha (layout que o lerFolha não lê) avisa */
+  const paginas = await linhasDasPaginas(bytes, senha, pdfjs);
+  const f = paginas ? lerFolha(paginas) : null;
+  if (f && f.ok === true) return { k: 'folha', folha: f.folha };
+  if (f && f.ok === false && f.motivo === 'nao_fecha') return { k: 'nada', frase: `Folha que não fecha: ${f.frase} Fale com o consultor.` };
+  return { k: 'nada', frase: paginas && pareceFolha(paginas) ? FRASE_FOLHA_AINDA_NAO : FRASE_NEM_BOLETO_NEM_NOTA };
 };
+export const lerDaCaixa: LerArquivoDaCaixa = lerDaCaixaCom();
+/** As linhas de cada página (as do `montarLinhas`, como o `lerFolha` pede); falhou a leitura = null (fica o "sem linha digitável"). */
+async function linhasDasPaginas(bytes: ArrayBuffer, senha?: string, pdfjs?: PdfjsMinimo): Promise<string[][] | null> {
+  try {
+    const { paginas } = await itensDoPdf(bytes.slice(0), pdfjs, { senha });
+    return paginas.map((p) => montarLinhas([p]));
+  } catch {
+    return null;
+  }
+}
+/** CAIXA-FOLHA-AVISO-01: o PDF parece recibo de pagamento? */
+export async function pdfPareceFolha(bytes: ArrayBuffer, senha?: string, pdfjs?: PdfjsMinimo): Promise<boolean> {
+  const p = await linhasDasPaginas(bytes, senha, pdfjs);
+  return !!p && pareceFolha(p);
+}
 function resumoDaNota(n: { chave: string; numero: string; emitente: { nome: string }; totais: { notaCent: number }; duplicatas: { vencimento: string }[] }): ResumoDaNota {
   return { chave: n.chave, numero: n.numero, emitente: n.emitente.nome || null, valor: n.totais.notaCent / 100, vencimento: n.duplicatas[0]?.vencimento ?? null };
 }
@@ -230,7 +255,7 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     return [...(gGuardados ? [gGuardados] : []), ...gLocal, ...doEmail];
   }, [entradas, lidos, notas, boletos, hoje, podeLancar, feitos, locais, lista]);
 
-  const resolvidos = useMemo(() => (entradas ?? []).filter((e) => e.estado === 'boleto' || e.estado === 'nota'), [entradas]);
+  const resolvidos = useMemo(() => (entradas ?? []).filter((e) => e.estado === 'boleto' || e.estado === 'nota' || e.estado === 'folha'), [entradas]);
   const ignorados = useMemo(() => (entradas ?? []).filter((e) => e.estado === 'dispensado'), [entradas]);
   const descartados = useMemo(() => (lista?.itens ?? []).filter((i) => i.boleto.situacao === 'descartado'), [lista]);
 
@@ -435,6 +460,17 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     return semDoc;
   }), [fazer, ehDoEmail, entradaApi, entradas, anexarAosLancamentos, recarregar]);
 
+  /** FOLHA-NA-CAIXA-01 — o recibo do contador APLICADO pela prévia: a linha fica feita; a do e-mail vira 'folha' (resolvida). */
+  const folhaFeita = useCallback((l: LinhaDaCaixa) => fazer(l.chave, async () => {
+    marcarFeito(l.chave);
+    for (const f of l.fontes.filter(ehDoEmail)) {
+      const r = await entradaApi.resolver(f, 'folha', null, null);
+      if (r.ok === false) return `Aplicado, mas a linha do e-mail não foi marcada: ${r.erro}`;
+    }
+    await recarregar();
+    return null;
+  }), [fazer, ehDoEmail, entradaApi, recarregar]);
+
   /** Ignorar (D6): as entradas do e-mail com o motivo; o boleto guardado = descartado; o arrastado sai da lista. */
   const ignorar = useCallback((ls: readonly LinhaDaCaixa[], motivo: MotivoDeIgnorar, detalhe: string | null) => fazer('ignorar', async () => {
     const todas = [...new Set(ls.flatMap((l) => l.fontes))];
@@ -493,6 +529,6 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
 
   return {
     lista, entradas, erro, grupos, resolvidos, ignorados, descartados, sugestoes, ocupado,
-    receber, arquivoDe, nomeDaFonte, tentarSenha, vincularBoleto, guardar, vincularNota, ignorar, voltar, desfazerGuardado, recarregar,
+    receber, arquivoDe, nomeDaFonte, tentarSenha, vincularBoleto, guardar, vincularNota, folhaFeita, ignorar, voltar, desfazerGuardado, recarregar,
   };
 }

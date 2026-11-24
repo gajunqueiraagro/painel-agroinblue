@@ -2260,12 +2260,15 @@ if (tela === 'mesclar') {
   const montarCaixa = async () => {
     const { CaixaDeBoletosDialog } = await import('@/components/financeiro-v2/CaixaDeBoletosDialog');
     const { API_CAIXA_BANCADA, PARCELA_BANCADA, LER_CAIXA_BANCADA, API_ENTRADA_BANCADA, API_ENTRADA_BANCADA_SEM_ENDERECO, HOJE_DA_BANCADA } = await import('./dados/caixaBoletos');
+    /* FOLHA-NA-CAIXA-01: o banco da folha em memória; `caso=folha_aplicada` = o documento já aplicado (o Desfazer) */
+    const { apiDaFolhaDaBancada, DIVIDIR_DA_BANCADA } = await import('./dados/folhaDaCaixa');
+    const folha = { api: apiDaFolhaDaBancada(q.get('caso') === 'folha_aplicada'), dividir: DIVIDIR_DA_BANCADA };
     /* BOLETO D3c: `caso=sem_endereco` = o cliente sem endereço (o "Gerar"). D3d: o "hoje" fixo (o antigo não muda com o dia) e o
        "Lançar nota" presente (a tela de Lançamentos); `caso=sem_lancar` = a caixa aberta do Editar lançamento (sem o "Lançar nota") */
     const entrada = q.get('caso') === 'sem_endereco' ? API_ENTRADA_BANCADA_SEM_ENDERECO : API_ENTRADA_BANCADA;
     const aoLancarNota = q.get('caso') === 'sem_lancar' ? undefined : () => {};
     montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} parcela={PARCELA_BANCADA} ler={LER_CAIXA_BANCADA}
-      entrada={entrada} hoje={HOJE_DA_BANCADA} aoLancarNota={aoLancarNota} aoFechar={() => {}} />);
+      entrada={entrada} hoje={HOJE_DA_BANCADA} aoLancarNota={aoLancarNota} aoFechar={() => {}} folha={folha} />);
   };
   void montarCaixa();
 } else if (tela === 'anexar-boletos-caixa') {

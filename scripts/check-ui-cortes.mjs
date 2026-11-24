@@ -1468,6 +1468,24 @@ const CENARIOS = [
         await pronto(p); await p.locator('[data-testid="ignorar-antigos"]').first().click(); await p.waitForTimeout(400);
         await p.locator('[data-testid="motivo-outro"]').click(); await p.locator('[data-testid="confirmar-ignorar"]').click(); await p.waitForTimeout(300); } },
       { nome: 'caixa-boletos-sem-lancar', url: `${URL}&caso=sem_lancar`, tamanhos: T, regiao: R, antes: pronto },
+      /* FOLHA-NA-CAIXA-01 — a prévia do recibo do contador (dado SINTÉTICO, `dados/folhaDaCaixa.ts`): o pior caso (nome no teto, o que divide
+         em 1ª + 2ª, valores no teto, sem lançamento com o "Criar"); com o "Criar" marcado; aplicado (um PDF que não subiu: o "de novo");
+         o já aplicado com o Desfazer aberto e o que volta */
+      ...(() => {
+        const RF = '[data-testid="folha-da-caixa"]';
+        const abrir = async (p) => { await pronto(p); await p.locator('[data-testid="acao-abrir_folha"]').first().click(); await p.waitForTimeout(800); };
+        const criar = async (p) => { await abrir(p); await p.locator('[data-testid="criar-2"]').click(); await p.waitForTimeout(500); };
+        return [
+          { nome: 'caixa-folha-previa', url: URL, tamanhos: T, regiao: RF, antes: abrir },
+          { nome: 'caixa-folha-criar', url: URL, tamanhos: T, regiao: RF, antes: criar },
+          { nome: 'caixa-folha-aplicado', url: URL, tamanhos: T, regiao: RF, antes: async (p) => {
+            await criar(p); await p.locator('[data-testid="aprovar-folha"]').click(); await p.waitForTimeout(900); } },
+          { nome: 'caixa-folha-desfazer', url: `${URL}&caso=folha_aplicada`, tamanhos: T, regiao: RF, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="desfazer-folha"]').click();
+            await p.locator('[data-testid="motivo-desfazer-folha"]').fill('o contador mandou o recibo de novo com o valor certo');
+            await p.locator('[data-testid="prever-desfazer"]').click(); await p.waitForTimeout(500); } },
+        ];
+      })(),
     ];
   })(),
   /* BOLETO D3c — o endereço de boletos (dado SINTÉTICO: o slug no teto de 40): ver; trocar sem motivo (vermelho) e com a prévia; revogar;

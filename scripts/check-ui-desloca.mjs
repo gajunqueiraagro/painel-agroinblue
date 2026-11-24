@@ -311,6 +311,13 @@ const CENARIOS = [
       await espera(p, 900); }],
     ['abrir a senha', clicar('[data-testid="sugestao-de-senha"]')], ['aba Ignorados de novo', botao(/^Ignorados/)], ['aba A resolver de novo', botao(/^A resolver/)],
   ] },
+  /* FOLHA-NA-CAIXA-01 — a prévia do recibo do contador: marcar/desmarcar o "Criar" e aprovar não movem a faixa do documento, o
+     cabeçalho da tabela, a faixa do "sem recibo" nem o rodapé (o quadro da tabela é `data-desloca-livre`) */
+  { nome: 'folha-da-caixa', url: 'tela=caixa-boletos', regiao: '[data-testid="folha-da-caixa"]',
+    antes: async (p) => { await espera(p, 900); await clicar('[data-testid="acao-abrir_folha"]')(p); await espera(p, 800); }, estados: [
+    ['marcar Criar', clicar('[data-testid="criar-2"]')], ['desmarcar Criar', clicar('[data-testid="criar-2"]')], ['marcar de novo', clicar('[data-testid="criar-2"]')],
+    ['aprovar', clicar('[data-testid="aprovar-folha"]')],
+  ] },
   /* BOLETO D3c — o endereço de boletos: trocar de modo (ver → trocar → prévia → cancelar → revogar) e de provedor não move o bloco do
      endereço, o da ação, as abas do passo a passo nem o rodapé (os blocos têm altura fixa; a lista dos passos é `data-desloca-livre`) */
   { nome: 'endereco-boletos', url: 'tela=caixa-boletos', regiao: '[data-testid="endereco-de-boletos"]',
