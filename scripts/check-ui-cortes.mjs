@@ -1514,6 +1514,27 @@ const CENARIOS = [
             await p.locator('[data-testid="prever-desfazer"]').click(); await p.waitForTimeout(500); } },
         ];
       })(),
+      /* FOLHA-RESUMO-CONTADOR-01 — a prévia do resumo do contador ("Extrato Mensal", dado SINTÉTICO, `dados/resumoDoContador.ts`), arrastado:
+         o pior caso (nome no teto, FGTS no teto, a soma que não fecha, uma empresa sem fazenda = Prever apagado); sem pendência e gravado;
+         o já aplicado com o Desfazer aberto e o que volta */
+      ...(() => {
+        const RR = '[data-testid="resumo-do-contador"]';
+        const abrir = async (p) => {
+          await pronto(p);
+          await p.locator('[data-testid="input-da-caixa"]').setInputFiles([{ name: 'extrato.pdf', mimeType: 'application/pdf',
+            buffer: Buffer.from('%PDF Extrato Mensal 13 ficticio com nome de arquivo comprido de exemplo.pdf') }]);
+          await p.waitForTimeout(900); await p.locator('[data-testid="acao-abrir_resumo"]').first().click(); await p.waitForTimeout(800);
+        };
+        return [
+          { nome: 'caixa-resumo-previa', url: URL, tamanhos: T, regiao: RR, antes: abrir },
+          { nome: 'caixa-resumo-gravado', url: `${URL}&caso=resumo_ok`, tamanhos: T, regiao: RR, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="prever-fgts"]').click(); await p.waitForTimeout(700); } },
+          { nome: 'caixa-resumo-desfazer', url: `${URL}&caso=resumo_aplicado`, tamanhos: T, regiao: RR, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="desfazer-resumo"]').click();
+            await p.locator('[data-testid="motivo-desfazer-resumo"]').fill('o contador mandou o resumo de novo com o valor certo');
+            await p.locator('[data-testid="prever-desfazer-resumo"]').click(); await p.waitForTimeout(500); } },
+        ];
+      })(),
     ];
   })(),
   /* BOLETO D3c — o endereço de boletos (dado SINTÉTICO: o slug no teto de 40): ver; trocar sem motivo (vermelho) e com a prévia; revogar;
@@ -1551,6 +1572,58 @@ const CENARIOS = [
       ...[['ligar', 'sem_bem'], ['ligar', 'recusa'], ['ligar', 'previsto'], ['ligar', 'contrato'], ['ligar', 'repetida'], ['criar', 'sem_bem'], ['criar', 'sem_categoria'], ['criar', 'contrato']]
         .map(([a, c]) => ({ nome: `patrimonio-lancamento-${a}-${c}`, url: U(c, a), tamanhos: T, regiao: DIALOGO,
           antes: async (p) => { await espera(p); if (a === 'ligar') { await p.locator('[data-testid="bem-para-ligar"]').first().click(); await espera(p); } } })),
+    ];
+  })(),
+  /* FOLHA-01 · PR B (telas) — Financeiro › Folha de pagamento (dado SINTÉTICO nas formas do proto, `dados/folha.ts`: v=nj 89 funcionários e
+     157 pendências, v=vera 12 e 28; o pior caso: nome de 41+ caracteres, registro de 59, chips demais, valor no teto, documento vencido).
+     As quatro abas, a ficha aberta (cadastro e documentos), o filtro para 1/0 linhas (o quadro tem a mesma altura), o modal do cadastro nas
+     três abas, o Histórico por tipo, as Pendências e o modal de resolver, sem a folha, e o rodapé do Editar lançamento */
+  ...(() => {
+    const T = [[1126, 579], [1280, 800], [1440, 800], [1920, 1080]];
+    const U = (v, extra = '') => `tela=folha&v=${v}&barra=32${extra}`;
+    const linha = (nome) => async (p) => {
+      await p.locator('[data-testid="folha-filtros"] button', { hasText: /^Todos/ }).click(); await p.waitForTimeout(300);
+      await p.locator('[data-testid="folha-busca"]').fill(nome); await p.waitForTimeout(400);
+      await p.locator('[data-testid="folha-linha"]', { hasText: nome }).first().click(); await p.waitForTimeout(600);
+    };
+    const buscar = (txt) => async (p) => { await p.locator('[data-testid="folha-busca"]').fill(txt); await p.waitForTimeout(500); };
+    const filtro = (re) => async (p) => { await p.locator('[data-testid="folha-filtros"] button', { hasText: re }).click(); await p.waitForTimeout(500); };
+    const dialogo = (nome, aba) => async (p) => {
+      if (nome) { await linha(nome)(p); await p.locator('[data-testid="folha-ficha-editar"]').click(); } else await p.locator('[data-testid="folha-novo"]').click();
+      await p.locator('[data-testid="funcionario-dialog"]').waitFor(); await p.waitForTimeout(600);
+      if (aba) { await p.locator('[data-testid="funcionario-dialog"] button', { hasText: new RegExp(`^${aba}`) }).first().click(); await p.waitForTimeout(500); }
+    };
+    const pend = async (p) => { await p.getByRole('tab', { name: /^Pendências/ }).click(); await p.waitForTimeout(600); };
+    const resolver = (acao) => async (p) => { await pend(p); await p.locator(`[data-testid="folha-pendencia-${acao}"]`).first().click();
+      await p.locator('[data-testid="resolver-pendencia"]').waitFor(); await p.waitForTimeout(500); };
+    const LANC = '[data-testid="rodape-da-bancada"]';
+    return [
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}`, url: U(v), tamanhos: T })),
+      { nome: 'folha-nj-desligados', url: U('nj'), tamanhos: T, antes: filtro(/^Desligados/) },
+      { nome: 'folha-nj-busca-1', url: U('nj'), tamanhos: T, antes: buscar('Maria Aparecida') },
+      { nome: 'folha-nj-busca-0', url: U('nj'), tamanhos: T, antes: buscar('zzzz nada') },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-ficha`, url: U(v), tamanhos: T, antes: linha('Antônio Exemplo Prado') })),
+      { nome: 'folha-nj-ficha-longa', url: U('nj'), tamanhos: T, antes: linha('Maria Aparecida Demonstração dos Santos Lima') },
+      { nome: 'folha-nj-ficha-documentos', url: U('nj'), tamanhos: T, antes: async (p) => { await linha('Antônio Exemplo Prado')(p);
+        await p.locator('[data-testid="folha-ficha"] button', { hasText: /^Documentos/ }).click(); await p.waitForTimeout(500); } },
+      ...[['cadastro', null], ['salario', 'Salário e atuação'], ['situacao', 'Situação']].map(([n, a]) => ({
+        nome: `folha-funcionario-${n}`, url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: dialogo('Antônio Exemplo Prado', a) })),
+      { nome: 'folha-funcionario-novo', url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: dialogo(null, null) },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-historico`, url: U(v, '&aba=historico&func=f00'), tamanhos: T })),
+      { nome: 'folha-nj-historico-voltar', url: U('nj', '&aba=historico&func=f00&voltar=1'), tamanhos: T },
+      { nome: 'folha-nj-historico-rescisao', url: U('nj', '&aba=historico&func=f00'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-historico-faixa"] button', { hasText: /^Rescisão/ }).click(); await p.waitForTimeout(500); } },
+      { nome: 'folha-nj-historico-sem-pessoa', url: U('nj', '&aba=historico'), tamanhos: T },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-pendencias`, url: U(v, '&aba=pendencias'), tamanhos: T })),
+      { nome: 'folha-nj-pendencias-recibo', url: U('nj', '&aba=pendencias'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-pendencias-filtros"] button', { hasText: /^Sem recibo/ }).click(); await p.waitForTimeout(500); } },
+      ...['ligar_sugestao', 'cadastrar_desligado', 'descartar'].map((a) => ({ nome: `folha-resolver-${a}`, url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: resolver(a) })),
+      { nome: 'folha-nj-mes', url: U('nj', '&aba=mes'), tamanhos: T },
+      { nome: 'folha-sem-acesso', url: U('nj', '&ok=0'), tamanhos: T },
+      ...['ligado', 'sem'].map((c) => ({ nome: `folha-lancamento-${c}`, url: `tela=folha-lancamento&caso=${c}`, tamanhos: T, regiao: LANC,
+        antes: async (p) => { await p.waitForTimeout(600); } })),
+      { nome: 'folha-lancamento-dialogo', url: 'tela=folha-lancamento&caso=ligado', tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+        await p.locator('[data-testid="lanc-funcionario-trocar"]').click(); await p.locator('[data-testid="lanc-funcionario-dialog"]').waitFor(); await p.waitForTimeout(400); } },
     ];
   })(),
   /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):

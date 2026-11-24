@@ -2389,6 +2389,46 @@ if (tela === 'mesclar') {
     );
   };
   void montarPatrimonioDoLancamento();
+} else if (tela === 'folha') {
+  /* FOLHA-01 · PR B (telas) — Financeiro › Folha de pagamento: a tela real com a API em memória (`dados/folha.ts`, SINTÉTICO nas formas do
+     proto: `v=nj` 89 funcionários / 157 pendências, `v=vera` 12 / 28); `aba=` e `func=` entram como o ↗ do lançamento; `ok=0` = sem a folha */
+  const montarFolha = async () => {
+    const { FolhaTela } = await import('@/components/folha/FolhaTela');
+    const { FolhaApiProvider } = await import('@/hooks/useFolha');
+    const { apiDaFolha, FAZENDAS_DA_FOLHA } = await import('./dados/folha');
+    g.__fazendaBancada = { fazendas: FAZENDAS_DA_FOLHA, fazendaAtual: null, isGlobal: true, fazendaId: '__global__' };
+    const forma = q.get('v') === 'vera' ? 'vera' : 'nj';
+    const abaQ = q.get('aba');
+    const aba = abaQ === 'historico' || abaQ === 'pendencias' || abaQ === 'mes' ? abaQ : 'funcionarios';
+    const func = q.get('func');
+    const entrada = { aba, funcionarioId: func, voltarAoLancamento: q.get('voltar') === '1' ? () => {} : null };
+    montar(<FolhaApiProvider api={apiDaFolha(forma, { folhaOk: q.get('ok') !== '0' })}><FolhaTela entrada={entrada} /></FolhaApiProvider>);
+  };
+  void montarFolha();
+} else if (tela === 'folha-lancamento') {
+  /* FOLHA-01 · PR B (telas) — o "Funcionário" do rodapé do Editar lançamento: o pedaço REAL num rodapé da largura do modal (95%), ao lado do
+     Patrimônio de mentira; `caso=ligado|sem`; `aba=ligar` abre o minimodal */
+  const montarFolhaDoLancamento = async () => {
+    const { FuncionarioDoLancamento } = await import('@/components/folha/FuncionarioDoLancamento');
+    const { FolhaApiProvider } = await import('@/hooks/useFolha');
+    const { apiDaFolha } = await import('./dados/folha');
+    const lanc = q.get('caso') === 'ligado' ? 'lanc-ligado' : 'lanc-sem';
+    montar(
+      <FolhaApiProvider api={apiDaFolha('nj')}>
+        <div className="flex h-screen items-end justify-center bg-muted">
+          <div className="mb-4 flex h-[40px] w-[95vw] items-center gap-2 border-t bg-card px-3" data-testid="rodape-da-bancada">
+            <button type="button" className="h-[22px] shrink-0 rounded border px-[9px] text-[10px]">Documentos (1)</button>
+            <button type="button" className="h-[22px] shrink-0 rounded border px-[9px] text-[10px]">Patrimônio</button>
+            <FuncionarioDoLancamento lancamentoId={lanc} clienteId="cli" onAbrirFuncionario={() => {}} />
+            <div className="flex-1" />
+            <button type="button" className="h-[26px] shrink-0 rounded border px-3 text-[11px]">Cancelar</button>
+            <button type="button" className="h-[26px] shrink-0 rounded bg-primary px-3 text-[11px] text-primary-foreground">Salvar</button>
+          </div>
+        </div>
+      </FolhaApiProvider>,
+    );
+  };
+  void montarFolhaDoLancamento();
 } else if (tela === 'caixa-boletos') {
   /* BOLETO-DDA-API-01 D1c (a) — a caixa de boletos: o modal real com a API e o leitor em memória (`dados/caixaBoletos.ts`, SINTÉTICO);
      o gate solta os PDFs pelo input (o conteúdo é o nome: o leitor da bancada lê por ele) */
@@ -2397,7 +2437,9 @@ if (tela === 'mesclar') {
     const { API_CAIXA_BANCADA, PARCELA_BANCADA, LER_CAIXA_BANCADA, API_ENTRADA_BANCADA, API_ENTRADA_BANCADA_SEM_ENDERECO, HOJE_DA_BANCADA } = await import('./dados/caixaBoletos');
     /* FOLHA-NA-CAIXA-01: o banco da folha em memória; `caso=folha_aplicada` = o documento já aplicado (o Desfazer) */
     const { apiDaFolhaDaBancada, DIVIDIR_DA_BANCADA } = await import('./dados/folhaDaCaixa');
-    const folha = { api: apiDaFolhaDaBancada(q.get('caso') === 'folha_aplicada', q.get('caso') === 'folha_completar'), dividir: DIVIDIR_DA_BANCADA };
+    /* FOLHA-RESUMO-CONTADOR-01: o banco do resumo em memória (`caso=resumo_ok` sem pendência; `caso=resumo_aplicado` = o Desfazer) */
+    const { apiDoResumoDaBancada } = await import('./dados/resumoDoContador');
+    const folha = { api: apiDaFolhaDaBancada(q.get('caso') === 'folha_aplicada', q.get('caso') === 'folha_completar'), dividir: DIVIDIR_DA_BANCADA, resumo: apiDoResumoDaBancada(q.get('caso')) };
     /* BOLETO D3c: `caso=sem_endereco` = o cliente sem endereço (o "Gerar"). D3d: o "hoje" fixo (o antigo não muda com o dia) e o
        "Lançar nota" presente (a tela de Lançamentos); `caso=sem_lancar` = a caixa aberta do Editar lançamento (sem o "Lançar nota") */
     const entrada = q.get('caso') === 'sem_endereco' ? API_ENTRADA_BANCADA_SEM_ENDERECO : API_ENTRADA_BANCADA;

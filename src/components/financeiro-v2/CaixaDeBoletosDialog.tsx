@@ -35,8 +35,10 @@ import { fraseDeFormatoNaoAceito, type RegraDeAceite } from '@/lib/arquivo/aceit
 import { cn } from '@/lib/utils';
 import { useCaixaDeBoletos, type LerArquivoDaCaixa } from '@/hooks/useCaixaDeBoletos';
 import { FolhaDaCaixaDialog } from './FolhaDaCaixaDialog';
+import { ResumoDoContadorDialog } from './ResumoDoContadorDialog';
+import type { EntradaDoResumo } from '@/hooks/useResumoDaCaixa';
 import { toast } from 'sonner';
-import type { FolhaCaixaApi } from '@/lib/folha/folhaCaixaApi';
+import type { FolhaCaixaApi, ResumoCaixaApi } from '@/lib/folha/folhaCaixaApi';
 import type { EntradaDaFolha } from '@/hooks/useFolhaDaCaixa';
 import type { Divisao } from '@/lib/pdf/dividirPdf';
 import type { CaixaApi, ItemDaCaixa } from '@/lib/financeiro/boleto/caixaApi';
@@ -395,7 +397,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
   /** D3 — a tela de Lançamentos recebe o arquivo da nota e abre a prévia do "+ Da nota". Sem ele, a nota só se ignora daqui. */
   aoLancarNota?: (arquivo: File) => void;
   /** FOLHA-NA-CAIXA-01: a bancada e o teste injetam o banco da folha e o divisor de PDF */
-  folha?: { api?: FolhaCaixaApi; dividir?: (b: Uint8Array, g: number[][]) => Promise<Divisao> };
+  folha?: { api?: FolhaCaixaApi; dividir?: (b: Uint8Array, g: number[][]) => Promise<Divisao>; resumo?: ResumoCaixaApi };
 }) {
   const caixa = useCaixaDeBoletos(clienteId, { api, parcela, ler, entrada, hoje, podeLancar: !!aoLancarNota });
   const largura = useLarguraDaJanela();
@@ -410,6 +412,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
   const [painelPorCima, setPainelPorCima] = useState(false);
   const [aIgnorar, setAIgnorar] = useState<LinhaDaCaixa[] | null>(null);
   const [folhaAberta, setFolhaAberta] = useState<{ linha: LinhaDaCaixa; entrada: EntradaDaFolha; desfazer?: boolean } | null>(null);
+  const [resumoAberto, setResumoAberto] = useState<{ linha: LinhaDaCaixa; entrada: EntradaDoResumo } | null>(null);
 
   const linhas = useMemo(() => caixa.grupos.flatMap((g) => g.linhas), [caixa.grupos]);
   const linhaSel = linhas.find((l) => l.chave === selecionada) ?? null;
@@ -473,6 +476,13 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
       if (!arquivo || !l.folha) { setFrase('Não consegui abrir o arquivo da folha.'); return; }
       const doEmail = caixa.entradas?.some((e) => e.id === fonte) ?? false;
       setFolhaAberta({ linha: l, entrada: { clienteId, entradaId: doEmail ? fonte : null, bytes: await arquivo.arrayBuffer(), nomeDoArquivo: arquivo.name, folha: l.folha } });
+      return;
+    }
+    if (a === 'abrir_resumo') {
+      const fonte = l.fontes[0];
+      const arquivo = fonte ? await caixa.arquivoDe(fonte) : null;
+      if (!arquivo || !l.resumo) { setFrase('Não consegui abrir o arquivo do resumo.'); return; }
+      setResumoAberto({ linha: l, entrada: { clienteId, bytes: await arquivo.arrayBuffer(), nomeDoArquivo: arquivo.name, resumo: l.resumo } });
       return;
     }
     if (a === 'lancar_nota') {
@@ -629,6 +639,10 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
               duration: 6000, action: { label: 'Desfazer', onClick: () => setFolhaAberta({ ...aberta, desfazer: true }) },
             });
           }} />
+      )}
+      {resumoAberto && (
+        <ResumoDoContadorDialog entrada={resumoAberto.entrada} clienteNome={clienteNome} api={folha?.resumo} folhaApi={folha?.api} aoFechar={() => setResumoAberto(null)}
+          aoAplicado={() => { void caixa.folhaFeita(resumoAberto.linha).then((r) => setFrase(r)); }} />
       )}
       {aIgnorar && (
         <IgnorarDialog quantos={new Set(aIgnorar.flatMap((l) => l.fontes)).size} sugerido={motivoSugerido(aIgnorar)} aoCancelar={() => setAIgnorar(null)}

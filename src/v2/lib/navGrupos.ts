@@ -18,6 +18,8 @@ export type V2Section =
   // financeiro — visão geral
   | 'financeiro-home' | 'financeiro-dashboard' | 'fluxo-caixa'
   | 'rateio-adm' | 'importacao-extratos' | 'importacao-custeio-txt' | 'recorrencias'
+  // FOLHA-01 · PR B — a folha de pagamento (irmã de Recorrências)
+  | 'folha-pagamento'
   | 'painel-periodo'
   | 'contas-a-pagar-receber'
   | 'importacao-lanc-excel'
@@ -274,6 +276,10 @@ export const NAV_GRUPOS: NavGrupo[] = [
              "Financiamentos", a palavra pela qual o operador conhece a tela. */
           { id: 'financiamentos',      label: 'Financ. e parcelamentos', status: 'needs-wrapper', liberadaClientes: true },
           { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper', liberadaClientes: true },
+          /* FOLHA-01 · PR B (D5, Gabriel 19/11 07:07): só quem tem a marca 'folha' no cliente (`folha_ok`) vê o item — o filtro mora no
+             `secoesVisiveis` (`ocultas`), alimentado pelo V2ContextDrawer; o admin vê sempre (o `folha_ok` dele é verdadeiro).
+             LUGAR (Gabriel 24/11 14:09): logo abaixo de Contratos — Contratos tem dado (25 contratos, 155 lançamentos) e fica. */
+          { id: 'folha-pagamento',     label: 'Folha de pagamento',      status: 'ready', liberadaClientes: true },
           { id: 'recorrencias',        label: 'Recorrências',            status: 'ready', liberadaClientes: true },
           // PR-IMPORT-EXCEL-LANC-01 — planilha no vocabulário DO CLIENTE (de-para de plano
           // de contas). Distinta de 'Importação Extratos', que exige o formato AGROinBLUE.
@@ -449,6 +455,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'contas-a-pagar-receber': 'financeiro',
   'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro', 'aprovar-pagamentos': 'financeiro', 'fin-visao-geral': 'financeiro',
   'recorrencias': 'financeiro',
+  'folha-pagamento': 'financeiro',
   'conciliacao-extrato': 'financeiro',
   'importacao-lanc-excel': 'financeiro',
   'contratos': 'financeiro', 'conciliacao': 'financeiro',
