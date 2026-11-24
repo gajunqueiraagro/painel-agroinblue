@@ -1701,6 +1701,9 @@ const CENARIOS = [
       await p.waitForTimeout(500); } }))),
   { nome: 'contas-lista', url: 'tela=contas&barra=32', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contas-lista-longo', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* CONTAS-OF-LINHA-01 — a coluna "Open Finance" com o link do titular vivo, e o modal do "Conectar" da linha (altura fixa) */
+  { nome: 'contas-of-link', url: 'tela=contas&barra=32&n=longo&of=link', tamanhos: TAMANHOS_DO_CONTRATO },
+  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-conectar-linha"]' },
   { nome: 'contas-inativas', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="mostrar-inativas"]') },
   ...['dados', 'gerente', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-editar-${aba}`, url: `tela=contas&barra=32&v=editar&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
