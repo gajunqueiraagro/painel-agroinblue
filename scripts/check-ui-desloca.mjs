@@ -316,6 +316,7 @@ const CENARIOS = [
   { nome: 'folha-da-caixa', url: 'tela=caixa-boletos', regiao: '[data-testid="folha-da-caixa"]',
     antes: async (p) => { await espera(p, 900); await clicar('[data-testid="acao-abrir_folha"]')(p); await espera(p, 800); }, estados: [
     ['marcar Criar', clicar('[data-testid="criar-2"]')], ['desmarcar Criar', clicar('[data-testid="criar-2"]')], ['marcar de novo', clicar('[data-testid="criar-2"]')],
+    ['ver quem está sem recibo', clicar('[data-testid="ver-sem-recibo"]')], ['esconder', clicar('[data-testid="ver-sem-recibo"]')],
     ['aprovar', clicar('[data-testid="aprovar-folha"]')],
   ] },
   /* BOLETO D3c — o endereço de boletos: trocar de modo (ver → trocar → prévia → cancelar → revogar) e de provedor não move o bloco do

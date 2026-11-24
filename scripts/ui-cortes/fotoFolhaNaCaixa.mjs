@@ -22,6 +22,8 @@ const FLUXOS = [
   ['1-linha-na-caixa', '', async (p) => { await caixa(p); await p.locator('[data-chave^="folha:"]').first().scrollIntoViewIfNeeded(); await p.locator('[data-chave^="folha:"]').first().hover(); await p.waitForTimeout(300); }],
   ['2-previa', '', abrir],
   ['3-criar-marcado', '', criar],
+  ['3c-completar', '&caso=folha_completar', abrir],
+  ['3b-sem-recibo-aberto', '', async (p) => { await abrir(p); await p.locator('[data-testid="ver-sem-recibo"]').click(); await p.waitForTimeout(300); }],
   ['4-aplicado', '', async (p) => { await criar(p); await p.locator('[data-testid="aprovar-folha"]').click(); await p.waitForTimeout(1200); }],
   ['5-ja-aplicado-desfazer', '&caso=folha_aplicada', async (p) => {
     await abrir(p).catch(() => {}); await p.locator('[data-testid="desfazer-folha"]').click();

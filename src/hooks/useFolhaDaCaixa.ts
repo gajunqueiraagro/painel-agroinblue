@@ -47,7 +47,12 @@ export function useFolhaDaCaixa(e: EntradaDaFolha, opcoes: { api?: FolhaCaixaApi
   const previa = useCallback(async (marcados: ReadonlySet<number>) => {
     const p = pedido(marcados);
     if (!p) return;
-    const r = await api.aplicar(clienteId, entradaId, p.documento, p.itens, true);
+    let r: Awaited<ReturnType<FolhaCaixaApi['aplicar']>>;
+    try { r = await api.aplicar(clienteId, entradaId, p.documento, p.itens, true); } catch (e) {
+      /* sem resposta (rede, a API fora do ar): a frase diz, nunca fica "preparando" calado */
+      console.error('[folha na caixa] prévia', e);
+      r = { ok: false, erro: 'Sem resposta do banco (a conexão caiu?). Nada foi gravado — tente de novo.' };
+    }
     if (!vivo.current) return;
     if (r.ok === false) { setFrase(r.erro); setResposta(null); setFase('erro'); return; }
     setResposta(r.dados); setFrase(null); setFase('previa');

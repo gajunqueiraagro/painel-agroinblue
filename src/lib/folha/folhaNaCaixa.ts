@@ -46,17 +46,24 @@ export interface Automatico {
   paginas: number[]; nome: string; lancamentoId: string; antes: number | null; depois: number | null;
   nomeConfere: 'exato' | 'parcial' | null; casouPor: 'funcionario' | 'favorecido' | null;
   /** contrato do Code 6 (FILA 24/11 10:57, 118570): 'dividir' = o 13º inteiro vira a 2ª parcela (`segunda`) e o recibo é a 1ª */
-  acao: 'casar' | 'dividir';
+  acao: 'casar' | 'dividir' | 'anexar';
+  /** 118620 (Code 6) — o COMPLETAR (aplicado antes sem páginas): o valor do recibo, se confere com o de hoje, e o status depois */
+  recibo: number | null; valorConfere: boolean | null; statusDepois: string | null;
   descricaoAntes: string | null; descricao: string | null; vencimentoAntes: string | null; vencimento: string | null; status: string | null;
   segunda: { descricao: string | null; valor: number | null; vencimento: string | null } | null;
 }
-export interface Pendencia { paginas: number[]; nome: string; valor: number | null; pendencia: 'ambiguo' | 'sem_lancamento' }
+export type TipoDePendencia = 'ambiguo' | 'sem_lancamento' | 'completar_dividir' | 'completar_criar';
+export interface Pendencia { paginas: number[]; nome: string; valor: number | null; pendencia: TipoDePendencia }
 export interface SemRecibo { lancamentoId: string; nome: string; valor: number | null }
-export interface ACriar { nome: string; valor: number | null; descricao: string | null; vencimento: string | null }
+export interface ACriar { nome: string; valor: number | null; descricao: string | null; vencimento: string | null;
+  /** 118590 (Code 6): o funcionário não está no cadastro e nasce com o lançamento (a página se guarda nele) */
+  funcionarioNovo: boolean }
 export interface SemFuncionario { paginas: number[]; nome: string }
 export interface DocumentoGravado { documentoId: string; storagePath: string; nome: string; paginas: number[]; lancamentoId: string | null }
 export interface RespostaDaFolha {
   jaAplicado: boolean;
+  /** 118620: o documento já aplicado SEM páginas, reaberto com o arquivo — a prévia liga as páginas (os valores ficam) */
+  completar: boolean;
   automaticos: Automatico[]; criar: ACriar[]; pendencias: Pendencia[]; semRecibo: SemRecibo[]; semFuncionario: SemFuncionario[];
   soma: number | null;
   /** só no aplicar */
@@ -83,17 +90,20 @@ export function respostaDaFolha(j: unknown): RespostaDaFolha | null {
   if (!r || r.ok !== true) return null;
   return {
     jaAplicado: r.ja_aplicado === true,
+    completar: r.completar === true,
     automaticos: lista(r.automaticos).map((a) => ({
       paginas: paginasDe(a.pagina), nome: texto(a.nome) ?? '—', lancamentoId: texto(a.lancamento_id) ?? '', antes: numero(a.antes), depois: numero(a.depois),
       nomeConfere: umDe(a.nome_confere, ['exato', 'parcial'] as const), casouPor: umDe(a.casou_por, ['funcionario', 'favorecido'] as const),
-      acao: a.acao === 'dividir' ? 'dividir' : 'casar',
+      acao: a.acao === 'dividir' ? 'dividir' : a.acao === 'anexar' ? 'anexar' : 'casar',
+      recibo: numero(a.recibo), valorConfere: typeof a.valor_confere === 'boolean' ? a.valor_confere : null, statusDepois: texto(a.status_depois),
       descricaoAntes: texto(a.descricao_antes) ?? texto(a.descricao), descricao: texto(a.descricao_depois) ?? texto(a.descricao),
       vencimentoAntes: texto(a.vencimento_antes) ?? texto(a.vencimento), vencimento: texto(a.vencimento_depois) ?? texto(a.vencimento),
       status: texto(a.status), segunda: segundaDe(a.segunda),
     })),
-    criar: lista(r.criar ?? r.criados).map((c) => ({ nome: texto(c.nome) ?? '—', valor: numero(c.valor), descricao: texto(c.descricao), vencimento: texto(c.vencimento) })),
+    criar: lista(r.criar ?? r.criados).map((c) => ({ nome: texto(c.nome) ?? '—', valor: numero(c.valor), descricao: texto(c.descricao), vencimento: texto(c.vencimento),
+      funcionarioNovo: c.funcionario_novo === true })),
     pendencias: lista(r.pendencias).flatMap((p) => {
-      const pendencia = umDe(p.pendencia, ['ambiguo', 'sem_lancamento'] as const);
+      const pendencia = umDe(p.pendencia, ['ambiguo', 'sem_lancamento', 'completar_dividir', 'completar_criar'] as const);
       return pendencia ? [{ paginas: paginasDe(p.pagina), nome: texto(p.nome) ?? '—', valor: numero(p.valor), pendencia }] : [];
     }),
     semRecibo: lista(r.sem_recibo).map((s) => ({ lancamentoId: texto(s.lancamento_id) ?? '', nome: texto(s.nome) ?? '—', valor: numero(s.valor) })),
@@ -108,7 +118,7 @@ export function respostaDaFolha(j: unknown): RespostaDaFolha | null {
 }
 
 /* ═══ as linhas da prévia ═══ */
-export type OQueAcontece = 'casa' | 'divide' | 'cria' | 'sem_lancamento' | 'ambiguo' | 'sem_resposta';
+export type OQueAcontece = 'casa' | 'divide' | 'anexa' | 'cria' | 'sem_lancamento' | 'ambiguo' | 'completar_dividir' | 'completar_criar' | 'sem_resposta';
 export interface LinhaDaPrevia {
   /** o índice da pessoa no PDF (0…N-1) */
   k: number;
@@ -119,11 +129,30 @@ export interface LinhaDaPrevia {
   descricaoAntes: string | null; vencimentoAntes: string | null;
   /** 'divide': o que continua previsto como 2ª parcela */
   segunda: Automatico['segunda'];
+  /** Gabriel 24/11 (decisão B): o vencimento que fica DEPOIS do prazo legal do 13º (1ª 30/11, 2ª 20/12) — só aviso, nada muda */
+  depoisDoPrazo: boolean;
+  /** completar: o valor de hoje NÃO confere com o recibo (só aviso: o completar não muda valor) */
+  valorDifere: boolean;
+  /** o status depois de aplicar (completar: 'programado') */
+  statusDepois: string | null;
+  /** 'cria' de quem não está no cadastro: o funcionário nasce junto (118590) */
+  funcionarioNovo: boolean;
   nomeParcial: boolean;
   /** o PDF da pessoa se guarda (ela está no cadastro de funcionários) */
   guardaArquivo: boolean;
 }
 const mesmasPaginas = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+/** O prazo legal do 13º na competência do documento: 1ª parcela até 30/11, 2ª até 20/12 (Lei 4.749/65); o mensal não tem aqui. */
+export function prazoLegalDoTipo(folha: Pick<FolhaLida, 'tipo' | 'competencia'>): string | null {
+  const ano = folha.competencia.slice(0, 4);
+  return folha.tipo === '13_1' ? `${ano}-11-30` : folha.tipo === '13_2' ? `${ano}-12-20` : null;
+}
+const depoisDoPrazoLegal = (folha: FolhaLida, vencimento: string | null): boolean => {
+  const prazo = prazoLegalDoTipo(folha);
+  return !!prazo && !!vencimento && vencimento.slice(0, 10) > prazo;
+};
+export const FRASE_DEPOIS_DO_PRAZO = 'vence depois do prazo legal';
 
 /** Uma linha por pessoa do PDF; o que o banco disse dela (pelas páginas, que são únicas no documento). `criar`: as marcadas. */
 export function linhasDaPrevia(folha: FolhaLida, r: RespostaDaFolha, criar: ReadonlySet<number>): LinhaDaPrevia[] {
@@ -131,21 +160,24 @@ export function linhasDaPrevia(folha: FolhaLida, r: RespostaDaFolha, criar: Read
   return folha.pessoas.map((p, k) => {
     const base: LinhaDaPrevia = {
       k, paginas: p.paginas, nome: p.nome, recibo: p.valor, acontece: 'sem_resposta', antes: null, descricao: null, vencimento: null,
-      status: null, descricaoAntes: null, vencimentoAntes: null, segunda: null, nomeParcial: false, guardaArquivo: !r.semFuncionario.some((s) => mesmasPaginas(s.paginas, p.paginas)),
+      status: null, descricaoAntes: null, vencimentoAntes: null, segunda: null, depoisDoPrazo: false, funcionarioNovo: false, valorDifere: false, statusDepois: null, nomeParcial: false, guardaArquivo: !r.semFuncionario.some((s) => mesmasPaginas(s.paginas, p.paginas)),
     };
     const a = r.automaticos.find((x) => mesmasPaginas(x.paginas, p.paginas));
     if (a) {
       return {
-        ...base, acontece: a.acao === 'dividir' ? 'divide' : 'casa', antes: a.antes, descricao: a.descricao, vencimento: a.vencimento, status: a.status,
+        ...base, acontece: a.acao === 'dividir' ? 'divide' : a.acao === 'anexar' ? 'anexa' : 'casa', antes: a.antes,
+        valorDifere: a.acao === 'anexar' && a.valorConfere === false, statusDepois: a.statusDepois, descricao: a.descricao, vencimento: a.vencimento, status: a.status,
         descricaoAntes: a.descricaoAntes !== a.descricao ? a.descricaoAntes : null, vencimentoAntes: a.vencimentoAntes !== a.vencimento ? a.vencimentoAntes : null,
         segunda: a.acao === 'dividir' ? a.segunda : null, nomeParcial: a.nomeConfere === 'parcial',
+        depoisDoPrazo: depoisDoPrazoLegal(folha, a.vencimento),
       };
     }
     const pend = r.pendencias.find((x) => mesmasPaginas(x.paginas, p.paginas));
     if (pend) return { ...base, acontece: pend.pendencia };
     if (criar.has(k)) {
       const c = r.criar[iCriar++];
-      return { ...base, acontece: 'cria', descricao: c?.descricao ?? null, vencimento: c?.vencimento ?? null };
+      return { ...base, acontece: 'cria', descricao: c?.descricao ?? null, vencimento: c?.vencimento ?? null, depoisDoPrazo: depoisDoPrazoLegal(folha, c?.vencimento ?? null),
+        funcionarioNovo: c?.funcionarioNovo ?? false };
     }
     return base;
   });
@@ -158,6 +190,8 @@ export function motivoParaNaoAprovar(folha: FolhaLida, r: RespostaDaFolha | null
   if (r.soma === null || Math.round(r.soma * 100) !== Math.round(folha.total * 100)) return 'a soma dos recibos não confere com o documento';
   const amb = linhas.filter((l) => l.acontece === 'ambiguo').length;
   if (amb) return `${amb} recibo(s) acham mais de um funcionário ou lançamento: confira o cadastro`;
+  const comp = linhas.filter((l) => l.acontece === 'completar_dividir' || l.acontece === 'completar_criar').length;
+  if (comp) return `${comp} recibo(s) pedem mais que ligar a página (dividir ou criar): fale com o consultor`;
   const sem = linhas.filter((l) => l.acontece === 'sem_lancamento').length;
   if (sem) return `${sem} recibo(s) sem lançamento: marque "Criar" ou fale com o consultor`;
   if (linhas.some((l) => l.acontece === 'sem_resposta')) return 'o banco não respondeu sobre todos os recibos';

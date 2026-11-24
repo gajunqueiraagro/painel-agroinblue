@@ -1484,6 +1484,9 @@ const CENARIOS = [
         return [
           { nome: 'caixa-folha-previa', url: URL, tamanhos: T, regiao: RF, antes: abrir },
           { nome: 'caixa-folha-criar', url: URL, tamanhos: T, regiao: RF, antes: criar },
+          { nome: 'caixa-folha-completar', url: `${URL}&caso=folha_completar`, tamanhos: T, regiao: RF, antes: abrir },
+          { nome: 'caixa-folha-sem-recibo', url: URL, tamanhos: T, regiao: RF, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="ver-sem-recibo"]').click(); await p.waitForTimeout(300); } },
           { nome: 'caixa-folha-aplicado', url: URL, tamanhos: T, regiao: RF, antes: async (p) => {
             await criar(p); await p.locator('[data-testid="aprovar-folha"]').click(); await p.waitForTimeout(900); } },
           { nome: 'caixa-folha-desfazer', url: `${URL}&caso=folha_aplicada`, tamanhos: T, regiao: RF, antes: async (p) => {

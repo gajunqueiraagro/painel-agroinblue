@@ -40,10 +40,10 @@ const entrada = {
 };
 const casa = (k: number) => ({ paginas: FOLHA.pessoas[k].paginas, nome: FOLHA.pessoas[k].nome, lancamentoId: `l${k}`, antes: 1000, depois: FOLHA.pessoas[k].valor,
   nomeConfere: 'exato' as const, casouPor: 'funcionario' as const, acao: 'casar' as const, descricaoAntes: 'Folha Pagamento - 13', descricao: 'Folha Pagamento - 13',
-  vencimentoAntes: '2026-12-05', vencimento: '2026-12-05', status: 'previsto', segunda: null });
+  vencimentoAntes: '2026-12-05', vencimento: '2026-12-05', status: 'previsto', segunda: null, recibo: null, valorConfere: null, statusDepois: null });
 const folhaApi = {
   aplicar: vi.fn<FolhaCaixaApi['aplicar']>(async (_c, _e, _d, _i, simular) => ({ ok: true, dados: {
-    jaAplicado: false, automaticos: [casa(0), casa(1)], criar: [], pendencias: [], semRecibo: [], semFuncionario: [], soma: 1530,
+    jaAplicado: false, completar: false, automaticos: [casa(0), casa(1)], criar: [], pendencias: [], semRecibo: [], semFuncionario: [], soma: 1530,
     documentos: simular ? [] : [{ documentoId: 'd0', storagePath: 'cli/m-p1.pdf', nome: 'A', paginas: [1], lancamentoId: 'l0' }, { documentoId: 'd1', storagePath: 'cli/m-p2.pdf', nome: 'B', paginas: [2], lancamentoId: 'l1' }] } })),
   desfazer: vi.fn<FolhaCaixaApi['desfazer']>(), subir: vi.fn<FolhaCaixaApi['subir']>(async () => ({ ok: true, dados: true })),
 };
@@ -78,6 +78,39 @@ describe('FOLHA-NA-CAIXA-01 — a Caixa com o recibo do contador', () => {
     await waitFor(() => expect(folhaApi.subir).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(within(daFolha() ?? linha).getByTestId('no-sistema').textContent).toMatch(/^feito/));
     expect(entrada.resolver).not.toHaveBeenCalled();   // arrastado: não há linha de e-mail a marcar
+  });
+
+  it('ARRASTADO e aplicado (118610): registra o arquivo, sobe no caminho devolvido, vai para Resolvidos com quem e o que gerou', async () => {
+    const md5Do = (await import('@/lib/arquivo/md5')).md5;
+    const registrado = { id: 'arr-1', storagePath: 'cli/entrada/x.pdf', jaExistia: false, estado: 'a_ler' };
+    const reg = vi.fn<NonNullable<EntradaEmailApi['registrarArrastado']>>(async () => ({ ok: true, dados: registrado }));
+    const detalheFolha = { quem: 'Pessoa Ficticia', quando: '2026-11-24T17:02:00Z', folha: { tipo: '13_1', competencia: '2026-11', lancamentos: 2, pessoas: 2 }, boleto: null, nota: null };
+    const res = vi.fn<NonNullable<EntradaEmailApi['resolvidos']>>(async () => ({ ok: true, dados: { 'arr-1': detalheFolha } }));
+    const todasDepois = [entradaDaLinha({ id: 'arr-1', mensagem_id: 'arrastado:x', remetente: null, assunto: null, recebido_em: '2026-11-24T17:00:00Z',
+      arquivo_nome: 'Recibos 13 ficticio.pdf', tipo: 'pdf', tamanho_bytes: 12, storage_path: 'cli/entrada/x.pdf', estado: 'folha', lido_em: '2026-11-24T17:02:00Z', origem: 'arrastado' })];
+    entrada.todas.mockResolvedValue({ ok: true, dados: [] });
+    entrada.resolver.mockClear(); entrada.resolver.mockImplementation(async () => { entrada.todas.mockResolvedValue({ ok: true, dados: todasDepois }); return { ok: true, dados: true }; });
+    api.subirArquivo.mockReset(); api.subirArquivo.mockResolvedValue({ ok: true, dados: true });
+    folhaApi.subir.mockClear();
+    render(<CaixaDeBoletosDialog clienteId="cli" api={api} parcela={parcela} ler={ler} entrada={{ ...entrada, registrarArrastado: reg, resolvidos: res }} hoje="2026-11-24"
+      aoFechar={() => {}} folha={{ api: folhaApi, dividir }} />);
+    const arquivo = new File(['%PDF recibos'], 'Recibos 13 ficticio.pdf', { type: 'application/pdf' });
+    fireEvent.change(await screen.findByTestId('input-da-caixa'), { target: { files: [arquivo] } });
+    const daFolha = () => screen.getAllByTestId('linha-da-caixa').find((tr) => tr.getAttribute('data-chave')?.startsWith('folha:'));
+    await waitFor(() => expect(daFolha()).toBeTruthy());
+    fireEvent.click(within(daFolha() ?? document.body).getByTestId('acao-abrir_folha'));
+    await waitFor(() => expect(screen.getByTestId('aprovar-folha')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('aprovar-folha'));
+    await waitFor(() => expect(entrada.resolver).toHaveBeenCalledWith('arr-1', 'folha', null, null));
+    expect(reg.mock.calls[0][1]).toEqual({ nome: 'Recibos 13 ficticio.pdf', tipo: 'pdf', tamanho: 12, md5: md5Do(new TextEncoder().encode('%PDF recibos')) });
+    expect(api.subirArquivo.mock.calls[0][0]).toBe('cli/entrada/x.pdf');
+    /* em Resolvidos: quem arrastou e o que gerou */
+    fireEvent.click(screen.getByTestId('concluir-folha'));
+    fireEvent.click(screen.getAllByRole('button', { name: /^Resolvidos/ })[0]);
+    const linha = await screen.findByTestId('linha-resolvida');
+    const c = within(linha).getAllByRole('cell').map((x) => x.textContent);
+    expect(c[3]).toBe('arrastado · Pessoa Ficticia');
+    expect(c[5]).toMatch(/^13º 1ª parcela · 11\/2026 · 2 lançamentos/);
   });
 
   it('veio por E-MAIL: a prévia leva a entrada; aplicado, a linha do e-mail vira "folha" (resolvida, sem lançamento)', async () => {

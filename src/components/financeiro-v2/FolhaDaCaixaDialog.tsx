@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { TH_REGUA, TD_REGUA, TD_REGUA_NUM } from '@/components/ui/regua-tabela';
 import { cn } from '@/lib/utils';
 import { dataBR, valorBR, type Selo, type Tom } from '@/lib/financeiro/boleto/caixaDeBoletos';
-import { ROTULO_DO_TIPO, competenciaBR, type LinhaDaPrevia, type OQueAcontece } from '@/lib/folha/folhaNaCaixa';
+import { FRASE_DEPOIS_DO_PRAZO, ROTULO_DO_TIPO, competenciaBR, prazoLegalDoTipo, type LinhaDaPrevia, type OQueAcontece } from '@/lib/folha/folhaNaCaixa';
 import type { FolhaCaixaApi } from '@/lib/folha/folhaCaixaApi';
 import { caixaDeTitulo } from '@/lib/fornecedores/consultaCnpj';
 import type { Divisao } from '@/lib/pdf/dividirPdf';
@@ -25,7 +25,8 @@ const SeloDaFolha = ({ s, testid }: { s: Selo; testid?: string }) => (
   <span className={cn('inline-block shrink-0 rounded-[3px] px-1 text-[9.5px] font-semibold leading-[15px]', TOM[s.tom])} data-testid={testid}>{s.texto}</span>
 );
 export const SELO_DO_QUE_ACONTECE: Record<OQueAcontece, Selo> = {
-  casa: { texto: 'atualiza o valor', tom: 'ok' }, divide: { texto: 'vira a 1ª parcela', tom: 'ok' }, cria: { texto: 'cria o lançamento', tom: 'azul' },
+  casa: { texto: 'atualiza o valor', tom: 'ok' }, anexa: { texto: 'liga a página', tom: 'ok' },
+  completar_dividir: { texto: 'precisa dividir', tom: 'vermelho' }, completar_criar: { texto: 'precisa criar', tom: 'vermelho' }, divide: { texto: 'vira a 1ª parcela', tom: 'ok' }, cria: { texto: 'cria o lançamento', tom: 'azul' },
   sem_lancamento: { texto: 'sem lançamento', tom: 'ambar' }, ambiguo: { texto: 'confira', tom: 'vermelho' }, sem_resposta: { texto: '—', tom: 'cinza' },
 };
 const SUBIDA: Record<Subida, Selo> = { subindo: { texto: 'subindo…', tom: 'cinza' }, ok: { texto: 'guardado', tom: 'ok' }, falhou: { texto: 'não subiu', tom: 'vermelho' } };
@@ -41,16 +42,21 @@ const paginasBR = (p: readonly number[]) => p.join(', ');
 /** Gabriel 24/11 13:18: o nome do PDF (CAIXA ALTA) aparece em Nome Próprio — só na tela; o que vai ao banco é o que veio */
 const nomeNaTela = (n: string) => caixaDeTitulo(n);
 
-export function FolhaDaCaixaDialog({ entrada, clienteNome, aoFechar, aoAplicado, api, dividir }: {
+export function FolhaDaCaixaDialog({ entrada, clienteNome, aoFechar, aoAplicado, aoConcluir, comDesfazerAberto = false, api, dividir }: {
   entrada: EntradaDaFolha; clienteNome?: string | null; aoFechar: () => void;
   /** depois do aplicar (a Caixa marca a linha como feita e, se veio por e-mail, resolve a entrada) */
   aoAplicado?: () => void;
+  /** Gabriel 24/11 14:03: o "Concluir" depois do aplicar (a Caixa fecha e mostra o aviso "13º aplicado · Desfazer") */
+  aoConcluir?: (lancamentos: number) => void;
+  /** o "Desfazer" do aviso reabre a prévia já com o desfazer aberto */
+  comDesfazerAberto?: boolean;
   api?: FolhaCaixaApi; dividir?: (b: Uint8Array, g: number[][]) => Promise<Divisao>;
 }) {
   const f = useFolhaDaCaixa(entrada, { api, dividir });
   const { folha, nomeDoArquivo } = entrada;
   const [motivoDesfazer, setMotivoDesfazer] = useState('');
-  const [abrirDesfazer, setAbrirDesfazer] = useState(false);
+  const [abrirDesfazer, setAbrirDesfazer] = useState(comDesfazerAberto);
+  const [verSemRecibo, setVerSemRecibo] = useState(false);
   const aplicado = f.fase === 'aplicado' || !!f.resposta?.jaAplicado;
   const soma = f.resposta?.soma ?? null;
   const confere = soma !== null && Math.round(soma * 100) === Math.round(folha.total * 100);
@@ -60,6 +66,9 @@ export function FolhaDaCaixaDialog({ entrada, clienteNome, aoFechar, aoAplicado,
   const docDaLinha = (l: LinhaDaPrevia) => f.resposta?.documentos.find((d) => d.paginas.length === l.paginas.length && d.paginas.every((x, i) => x === l.paginas[i]));
 
   const aprovar = async () => { if (await f.aprovar()) aoAplicado?.(); };
+  /** os lançamentos que o aplicar tocou (o que atualiza, divide ou cria) */
+  const lancamentos = f.linhas.filter((l) => l.acontece === 'casa' || l.acontece === 'divide' || l.acontece === 'anexa' || l.acontece === 'cria').length;
+  const acabouDeAplicar = f.fase === 'aplicado';
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) aoFechar(); }}>
@@ -67,7 +76,10 @@ export function FolhaDaCaixaDialog({ entrada, clienteNome, aoFechar, aoAplicado,
         data-testid="folha-da-caixa">
         <div className="flex h-[30px] shrink-0 items-center gap-3 bg-primary px-3 pr-9 text-primary-foreground">
           <DialogTitle className="min-w-0 truncate text-[11px] font-semibold" title={titulo}>{titulo}</DialogTitle>
-          <DialogDescription className="ml-auto shrink-0 text-[10px] text-primary-foreground/85">nada é gravado antes do Aprovar</DialogDescription>
+          <DialogDescription className={cn('ml-auto shrink-0 text-[10px]', aplicado ? 'font-semibold text-green-300' : 'text-primary-foreground/85')} data-testid="estado-da-folha">
+            {acabouDeAplicar ? `✓ Aplicado · ${lancamentos} ${lancamentos === 1 ? 'lançamento' : 'lançamentos'}` : aplicado ? '✓ Já aplicado'
+              : f.resposta?.completar ? 'completar: já aplicado sem as páginas — liga as páginas (os valores ficam)' : 'nada é gravado antes do Aprovar'}
+          </DialogDescription>
         </div>
         {/* a faixa do documento: arquivo · pessoas · total · soma = documento (lugares fixos) */}
         <div className="flex h-[24px] shrink-0 items-center gap-3 border-b px-3 text-[10px]">
@@ -117,10 +129,24 @@ export function FolhaDaCaixaDialog({ entrada, clienteNome, aoFechar, aoAplicado,
                           </button>
                         )}
                       </span>
+                      {l.funcionarioNovo && (
+                        <span className="block pt-[2px] text-[9.5px] leading-[11px] text-blue-800" data-testid={`funcionario-novo-${l.k}`}
+                          title="não está no cadastro de funcionários: o funcionário nasce com o lançamento e a página se guarda nele">funcionário novo</span>
+                      )}
+                      {l.valorDifere && (
+                        <span className="block pt-[2px] text-[9.5px] leading-[11px] text-amber-800" data-testid={`valor-difere-${l.k}`}
+                          title="o completar só liga a página e o status; o valor de hoje fica (confira com o consultor)">valor de hoje ≠ recibo</span>
+                      )}
+                      {l.depoisDoPrazo && (
+                        <span className="block pt-[2px] text-[9.5px] leading-[11px] text-amber-800" data-testid={`prazo-${l.k}`}
+                          title={`o prazo legal desta parcela é ${dataBR(prazoLegalDoTipo(folha))}; o vencimento fica o do lançamento (nada muda)`}>
+                          {FRASE_DEPOIS_DO_PRAZO}
+                        </span>
+                      )}
                     </td>
                     <td className={cn(TD_QUEBRA, l.descricaoAntes && 'text-blue-800')} data-testid={`descricao-${l.k}`}
                       title={l.descricaoAntes ? `${l.descricaoAntes} → ${l.descricao ?? '—'}` : (l.descricao ?? undefined)}>{l.descricao ?? '—'}</td>
-                    <td className={cn(TD_REGUA_NUM, 'text-left', l.vencimentoAntes && 'text-blue-800')} data-testid={`vencimento-${l.k}`}
+                    <td className={cn(TD_REGUA_NUM, 'text-left', l.vencimentoAntes && 'text-blue-800', l.depoisDoPrazo && 'text-amber-800')} data-testid={`vencimento-${l.k}`}
                       title={l.vencimentoAntes ? `${dataBR(l.vencimentoAntes)} → ${dataBR(l.vencimento)}` : undefined}>{dataBR(l.vencimento)}</td>
                     <td className={TD_REGUA_NUM}>{valorBR(l.antes)}</td>
                     <td className={cn(TD_REGUA_NUM, 'font-semibold')}>{valorBR(l.recibo)}</td>
@@ -156,8 +182,23 @@ export function FolhaDaCaixaDialog({ entrada, clienteNome, aoFechar, aoAplicado,
           </table>
         </div>
         {/* o que o documento NÃO trouxe (só aviso; os lançamentos ficam como estão) */}
-        <div className="flex h-[20px] shrink-0 items-center border-t px-3 text-[9.5px] text-muted-foreground" title={textoSemRecibo || undefined} data-testid="sem-recibo">
-          <span className="min-w-0 truncate">{semRecibo.length ? `Sem recibo neste documento (ficam como estão): ${textoSemRecibo}` : 'Todos os lançamentos do tipo nesta competência têm recibo neste documento.'}</span>
+        {/* Gabriel 24/11 14:03: nada cortado — o resumo numa linha e a lista inteira (que quebra) só quando pedida */}
+        <div className="relative flex h-[20px] shrink-0 items-center gap-2 border-t px-3 text-[9.5px] text-muted-foreground" data-testid="sem-recibo">
+          <span>{semRecibo.length
+            ? `${semRecibo.length} ${semRecibo.length === 1 ? 'lançamento' : 'lançamentos'} do tipo sem recibo neste documento (ficam como estão)`
+            : 'Todos os lançamentos do tipo nesta competência têm recibo neste documento.'}</span>
+          {semRecibo.length > 0 && (
+            <button type="button" className={cn(BOTAO, 'w-[76px] whitespace-nowrap border-border bg-card text-center')} onClick={() => setVerSemRecibo((x) => !x)} data-testid="ver-sem-recibo">
+              {verSemRecibo ? 'esconder' : 'ver quem ⓘ'}
+            </button>
+          )}
+          {/* a lista abre POR CIMA (nada se desloca): quebra em linhas, rola se for longa */}
+          {verSemRecibo && semRecibo.length > 0 && (
+            <div className="absolute bottom-full left-3 right-3 z-20 max-h-[96px] overflow-auto whitespace-normal break-words rounded border bg-card px-2 py-1 text-[9.5px] leading-[12px] text-foreground shadow-md"
+              data-testid="lista-sem-recibo">
+              {textoSemRecibo}
+            </div>
+          )}
         </div>
         {abrirDesfazer && (
           <div className="flex h-[28px] shrink-0 items-center gap-2 border-t px-3 text-[10px]" data-testid="faixa-desfazer">
@@ -179,14 +220,19 @@ export function FolhaDaCaixaDialog({ entrada, clienteNome, aoFechar, aoAplicado,
           <span className={cn('min-w-0 flex-1 truncate text-[10px]', f.fase === 'erro' ? 'text-red-700' : 'text-foreground')} title={f.frase ?? f.motivo ?? undefined} data-testid="frase-da-folha">
             {f.frase ?? (aplicado ? (f.fase === 'aplicado' ? 'Aplicado: os valores estão nos lançamentos e cada página nos documentos do funcionário.' : 'Este documento já foi aplicado.') : f.motivo ?? '')}
           </span>
-          <Button variant="outline" size="sm" className="h-[22px] text-[10px]" onClick={aoFechar}>Fechar</Button>
+          {!acabouDeAplicar && <Button variant="outline" size="sm" className="h-[22px] w-[64px] text-[10px]" onClick={aoFechar}>Fechar</Button>}
           {aplicado && (
             <Button variant="outline" size="sm" className="h-[22px] w-[96px] text-[10px]" onClick={() => setAbrirDesfazer((x) => !x)} data-testid="desfazer-folha">Desfazer…</Button>
+          )}
+          {/* o sucesso é óbvio: o primário vira "Concluir" (fecha; a Caixa avisa "13º aplicado · Desfazer") */}
+          {acabouDeAplicar && (
+            <Button size="sm" className="h-[22px] w-[64px] bg-[#E7C873] text-[10px] font-semibold text-foreground hover:bg-[#D9B95F]"
+              onClick={() => { aoConcluir?.(lancamentos); aoFechar(); }} data-testid="concluir-folha">Concluir</Button>
           )}
           {!aplicado && (
             <Button size="sm" className="h-[22px] w-[96px] bg-[#E7C873] text-[10px] text-foreground hover:bg-[#D9B95F]" disabled={f.fase !== 'previa' || !!f.motivo}
               onClick={() => void aprovar()} data-testid="aprovar-folha" title={f.motivo ?? 'grava os valores e guarda a página de cada um'}>
-              {f.fase === 'aplicando' ? 'Aplicando…' : `Aprovar ${folha.pessoas.length}`}
+              {f.fase === 'aplicando' ? 'Aplicando…' : f.resposta?.completar ? `Ligar ${folha.pessoas.length}` : `Aprovar ${folha.pessoas.length}`}
             </Button>
           )}
         </div>

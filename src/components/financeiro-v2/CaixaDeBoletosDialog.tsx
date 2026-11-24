@@ -35,6 +35,7 @@ import { fraseDeFormatoNaoAceito, type RegraDeAceite } from '@/lib/arquivo/aceit
 import { cn } from '@/lib/utils';
 import { useCaixaDeBoletos, type LerArquivoDaCaixa } from '@/hooks/useCaixaDeBoletos';
 import { FolhaDaCaixaDialog } from './FolhaDaCaixaDialog';
+import { toast } from 'sonner';
 import type { FolhaCaixaApi } from '@/lib/folha/folhaCaixaApi';
 import type { EntradaDaFolha } from '@/hooks/useFolhaDaCaixa';
 import type { Divisao } from '@/lib/pdf/dividirPdf';
@@ -334,8 +335,8 @@ function PainelDoArquivo({ vista, arquivo, carregando, aoNovaAba, aoBaixar, larg
   );
 }
 
-function LinhaResolvida({ e, virou: v, ocupado, selecionada, arquivos, aoVer, aoBaixar, aoDesfazer }: {
-  e: EntradaDoEmail; virou: ReturnType<typeof virouDaEntrada>; ocupado: boolean; selecionada: boolean; arquivos: readonly ArquivoDaLinha[];
+function LinhaResolvida({ e, virou: v, quem, ocupado, selecionada, arquivos, aoVer, aoBaixar, aoDesfazer }: {
+  e: EntradaDoEmail; virou: ReturnType<typeof virouDaEntrada>; quem: string | null; ocupado: boolean; selecionada: boolean; arquivos: readonly ArquivoDaLinha[];
   aoVer: () => void; aoBaixar: (fonte: string) => void; aoDesfazer: () => void;
 }) {
   const virou = v.texto;
@@ -344,10 +345,13 @@ function LinhaResolvida({ e, virou: v, ocupado, selecionada, arquivos, aoVer, ao
       <td className={TD_REGUA}><SeloDaCaixa s={e.estado === 'nota' ? TIPO.nota : e.estado === 'folha' ? TIPO.folha : TIPO.boleto} /></td>
       <td className={TD_REGUA_TEXTO} title={e.arquivoNome ?? undefined}>{e.arquivoNome ?? '—'}</td>
       <td className={TD_REGUA}><VerEBaixar arquivos={arquivos} aoVer={aoVer} aoBaixar={aoBaixar} /></td>
-      <td className={TD_REGUA_TEXTO} title={e.remetente ?? undefined}>{nomeDoRemetente(e.remetente)}</td>
+      {/* 118610: o arrastado não tem remetente — "arrastado · quem" */}
+      <td className={TD_REGUA_TEXTO} title={e.origem === 'arrastado' ? `arrastado na Caixa${quem ? ` por ${quem}` : ''}` : (e.remetente ?? undefined)}>
+        {e.origem === 'arrastado' ? `arrastado${quem ? ` · ${quem}` : ''}` : nomeDoRemetente(e.remetente)}
+      </td>
       <td className={cn(TD_REGUA_NUM, 'text-left')}>{dataBR(e.recebidoEm)}</td>
       <td className={TD_REGUA_TEXTO} title={`${virou} · ${e.assunto ?? '—'}`}>{v.selo ? <SeloDaCaixa s={v.selo} /> : virou} · {e.assunto ?? '—'}</td>
-      <td className={cn(TD_REGUA_NUM, 'text-left')}>{dataBR(e.resolvidoEm)}</td>
+      <td className={cn(TD_REGUA_NUM, 'text-left')} title={quem ? `por ${quem}` : undefined}>{dataBR(e.resolvidoEm)}</td>
       <td className={TD_REGUA}>
         <span className="flex justify-end" onClick={(x) => x.stopPropagation()}>
           <button type="button" className={BOTAO_X} disabled={ocupado} onClick={aoDesfazer} data-testid="desfazer-resolvido"
@@ -405,7 +409,7 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
   const [vista, setVista] = useState<Vista | null>(null);
   const [painelPorCima, setPainelPorCima] = useState(false);
   const [aIgnorar, setAIgnorar] = useState<LinhaDaCaixa[] | null>(null);
-  const [folhaAberta, setFolhaAberta] = useState<{ linha: LinhaDaCaixa; entrada: EntradaDaFolha } | null>(null);
+  const [folhaAberta, setFolhaAberta] = useState<{ linha: LinhaDaCaixa; entrada: EntradaDaFolha; desfazer?: boolean } | null>(null);
 
   const linhas = useMemo(() => caixa.grupos.flatMap((g) => g.linhas), [caixa.grupos]);
   const linhaSel = linhas.find((l) => l.chave === selecionada) ?? null;
@@ -557,9 +561,9 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
                   </tr></thead>
                   <tbody>
                     {caixa.resolvidos.map((e) => {
-                      const v = virouDaEntrada(e, caixa.lista?.itens ?? null);
+                      const v = virouDaEntrada(e, caixa.lista?.itens ?? null, caixa.detalhes[e.id]);
                       return (
-                        <LinhaResolvida key={e.id} e={e} virou={v} ocupado={!!caixa.ocupado} selecionada={selecionada === `entrada:${e.id}`}
+                        <LinhaResolvida key={e.id} e={e} virou={v} quem={caixa.detalhes[e.id]?.quem ?? null} ocupado={!!caixa.ocupado} selecionada={selecionada === `entrada:${e.id}`}
                           arquivos={arquivosDe([e.id])} aoVer={() => void ver(vistaDaEntrada(e))} aoBaixar={(f) => void baixar(f)}
                           aoDesfazer={() => void (v.guardadoId ? caixa.desfazerGuardado(v.guardadoId) : caixa.voltar({ entradaId: e.id })).then(setFrase)} />
                       );
@@ -616,7 +620,15 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
       )}
       {folhaAberta && (
         <FolhaDaCaixaDialog entrada={folhaAberta.entrada} clienteNome={clienteNome} api={folha?.api} dividir={folha?.dividir} aoFechar={() => setFolhaAberta(null)}
-          aoAplicado={() => { void caixa.folhaFeita(folhaAberta.linha).then((r) => setFrase(r)); }} />
+          comDesfazerAberto={folhaAberta.desfazer} aoAplicado={() => { void caixa.folhaFeita(folhaAberta.linha).then((r) => setFrase(r)); }}
+          aoConcluir={(n) => {
+            /* Gabriel 24/11 14:03 ("sucesso tem que ser óbvio"): o aviso fica alguns segundos com o Desfazer — por isso a duração própria (P158) */
+            const aberta = folhaAberta;
+            const rotulo = aberta.entrada.folha.tipo === 'mensal' ? 'Folha aplicada' : '13º aplicado';
+            toast.success(`${rotulo} · ${n} ${n === 1 ? 'lançamento' : 'lançamentos'}`, {
+              duration: 6000, action: { label: 'Desfazer', onClick: () => setFolhaAberta({ ...aberta, desfazer: true }) },
+            });
+          }} />
       )}
       {aIgnorar && (
         <IgnorarDialog quantos={new Set(aIgnorar.flatMap((l) => l.fontes)).size} sugerido={motivoSugerido(aIgnorar)} aoCancelar={() => setAIgnorar(null)}

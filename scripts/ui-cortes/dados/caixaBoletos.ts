@@ -166,6 +166,9 @@ export const API_ENTRADA_BANCADA: EntradaEmailApi = {
   /* o conteúdo é o nome do arquivo: o leitor da bancada lê por ele */
   baixar: async (caminho) => ({ ok: true, dados: new Blob([`%PDF ${TODAS.find((p) => p.storagePath === caminho)?.arquivoNome ?? ''}`], { type: 'application/pdf' }) }),
   ignorar: ok, voltar: ok, resolver: ok,
+  /* FOLHA-NA-CAIXA-01b item 4: o que gerou cada resolvido (a folha do e-mail f2) */
+  resolvidos: async () => ({ ok: true, dados: { f2: { quem: 'Pessoa Fictícia da Bancada', quando: '2026-11-17T21:00:00Z',
+    folha: { tipo: 'mensal', competencia: '2026-10', lancamentos: 9, pessoas: 9 }, boleto: null, nota: null } } }),
   notasNoSistema: async () => ({ ok: true, dados: {
     [CHAVE_LONGA]: { lancamentoId: 'l-longo', descricao: 'Ração adensada 30 bs lote 70259 do Fornecedor B Nutrição Animal parcela 1/3', valor: 9999999.99, vencimento: '2026-12-20' },
   } }),

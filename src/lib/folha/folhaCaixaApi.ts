@@ -21,14 +21,15 @@ export interface FolhaCaixaApi {
 }
 
 const ERROS_COM_FRASE = new Set(['P0001', '22023', '42501']);
-/** A frase do banco (as recusas da regra) ou a genérica; o texto cru só no console. */
+/** A frase do banco (as recusas da regra); fora delas, a genérica COM O CÓDIGO (Gabriel 24/11 14:13: o erro do NJ veio calado —
+ *  "não engula"); o texto cru vai ao console e ao title da faixa (`detalheDoErroDaFolha`). */
 export function fraseDoErroDaFolha(e: { code?: string; message?: string } | null): string {
   if (e && e.code && ERROS_COM_FRASE.has(e.code) && e.message) return e.message;
-  return FRASE_SEM_BANCO;
+  return e?.code ? `O banco não respondeu à prévia (código ${e.code}). Nada foi gravado — tente de novo; se repetir, avise o suporte com o código.` : FRASE_SEM_BANCO;
 }
 export const ehJaAplicado = (e: { code?: string; message?: string } | null): boolean => !!e && e.code === 'P0001' && /já foi aplicado/i.test(e.message ?? '');
 
-const VAZIA: RespostaDaFolha = { jaAplicado: true, automaticos: [], criar: [], pendencias: [], semRecibo: [], semFuncionario: [], soma: null, documentos: [] };
+const VAZIA: RespostaDaFolha = { jaAplicado: true, completar: false, automaticos: [], criar: [], pendencias: [], semRecibo: [], semFuncionario: [], soma: null, documentos: [] };
 const inteiro = (x: unknown): number => (typeof x === 'number' && Number.isFinite(x) ? x : 0);
 
 export const folhaCaixaApiDoBanco: FolhaCaixaApi = {
