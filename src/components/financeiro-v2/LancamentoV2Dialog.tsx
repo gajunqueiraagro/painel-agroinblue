@@ -143,7 +143,7 @@ import { consultarSplitDoLancamento, type SplitDoLancamento } from '@/lib/concil
 import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela';
 import { edicaoDaParcela, podeSerParcelaDeContrato, MOTIVO_PARCELA_PAGA } from '@/lib/financiamentos/parcelaNoModal';
 import { gravarParcelaDoModal, lerContratoDaParcela, type ContratoDaParcela } from '@/lib/financiamentos/parcelaNoModalBanco';
-import { camposTravadosDoCasado, consultarCasadoComExtrato, saiDoEstadoDoBanco, FRASE_CASADO_COM_EXTRATO } from '@/lib/financeiro/casadoComExtrato';
+import { camposTravadosDoCasado, consultarCasadoComExtrato, saiDoEstadoDoBanco, FRASE_CASADO_COM_EXTRATO, FRASE_CASADO_NO_RODAPE, TITLE_CASADO_NO_RODAPE } from '@/lib/financeiro/casadoComExtrato';
 import { agendarSeriaRecusado, vaiAgendar, FRASE_AGENDAR_SEM_APROVACAO, FRASE_AGENDAR_NOVO_SEM_APROVACAO } from '@/lib/financeiro/aprovacao';
 import { EnviarParaAprovacaoDialog } from '@/components/financeiro-v2/EnviarParaAprovacaoDialog';
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
@@ -3969,8 +3969,8 @@ export function LancamentoV2Dialog({
                 conta estão em leitura (uma linha, altura do rodapé; os campos não mudam de tamanho nem de lugar). */}
             {casadoComExtrato && (
               <span className="min-w-0 truncate whitespace-nowrap text-[10px] leading-tight text-amber-700 dark:text-amber-400"
-                title={FRASE_CASADO_COM_EXTRATO} data-testid="casado-com-extrato">
-                {FRASE_CASADO_COM_EXTRATO}
+                title={TITLE_CASADO_NO_RODAPE} data-testid="casado-com-extrato">
+                {FRASE_CASADO_NO_RODAPE}
               </span>
             )}
             {edicaoParcela && (edicaoParcela.paga || edicaoParcela.frase) && (
