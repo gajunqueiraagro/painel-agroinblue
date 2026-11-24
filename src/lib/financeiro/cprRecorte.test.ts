@@ -263,7 +263,8 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
     expect(tela).not.toContain(">Banco</span>");
     expect(tela.indexOf('testId="cpr-total"')).toBeGreaterThan(tela.indexOf('overflow-auto rolagem-fina'));
     /* o rodapé é navy, 26px e `sticky bottom-0` DENTRO do scrollport (as colunas de valor alinham com as linhas) */
-    expect(tela).toMatch(/testId="cpr-total" regua=\{regua\} navy\s+className="sticky bottom-0 z-20 h-\[26px\] bg-primary text-\[11px\] font-bold text-primary-foreground"/);
+    /* CPR-LAYOUT-03 (ponto 7): o fim do período a 12px negrito, fundo azul claro e filete navy em cima (a cor do saldo lê nele) */
+    expect(tela).toMatch(/testId="cpr-total" regua=\{regua\}\s+className=\{cn\('sticky bottom-0 z-20 h-\[24px\] border-t-2 border-t-primary text-\[12px\] font-bold text-primary', FUNDO_FIM\)\}/);
     /* CPR-SEM-CORTE-01: UM scrollport só — a lista rola nos dois eixos (overflow-auto), nenhum outro rola na vertical */
     expect(Array.from(tela.matchAll(/overflow-y-auto/g)).length).toBe(0);
     expect(Array.from(tela.matchAll(/overflow-auto rolagem-fina/g)).length).toBe(1);
@@ -481,21 +482,24 @@ describe('CPR-SALDO-DIA-01 — a tela só renderiza (lido da fonte)', () => {
     const dono = readFileSync(resolve(__dirname, 'cprRecorte.ts'), 'utf8');
     expect(dono).not.toContain('incluirVencidos');
   });
-  it('setas e cores num lugar só: ▼ a pagar, ▲ a receber, saldo pelo sinal, de COR_SINAL', () => {
-    const cel = tela.slice(tela.indexOf('function CelValor('), tela.indexOf('function Faixa('));
-    expect(cel).toContain("const negativo = tipo === 'pagar' || (tipo === 'saldo' && valor < 0);");
-    expect(cel).toContain("const seta = semSeta || zero ? '' : negativo ? '▼ ' : '▲ ';");
-    expect(cel).toContain('const tom = navy ? TOM_NO_NAVY : COR_SINAL;');
+  it('cores num lugar só (CPR-LAYOUT-03): Valor "+" verde / "−" vermelho, Saldo verde ≥ 0 / vermelho < 0, sem seta, de COR_SINAL', () => {
+    const cel = tela.slice(tela.indexOf('function CelValor('), tela.indexOf('/**\n * CPR-AJUSTES-20-10 — A FAIXA DE CIMA DO DIA'));
+    expect(cel).toContain("tipo === 'saldo' ? corDoSaldo(valor) : valor < 0 ? COR_SINAL.neg : COR_SINAL.pos");
+    expect(cel).toContain("{tipo === 'saldo' ? saldoSemMoeda(valor) : valorComSinal(valor)}");
+    expect(cel).not.toMatch(/▼|▲/);
+    expect(tela).toContain('const corDoSaldo = (v: number) => (v < 0 ? COR_SINAL.neg : COR_SINAL.pos);');
     expect(tela).toContain("const moedaComSinal = (v: number) => `${v < 0 ? '−' : ''}${formatMoeda(Math.abs(v))}`;");
-    expect(Array.from(tela.matchAll(/#fca5a5|#86efac/g)).length).toBe(2);       // os dois tons do navy, uma vez cada
+    expect(tela).not.toMatch(/#fca5a5|#86efac/);       // o rodapé navy saiu: o fim do período é claro
     expect(tela).not.toMatch(/text-destructive'? : 'text-success|text-success' : 'text-destructive/);
   });
-  it('uma régua por modo (CPR-LARGURA-01: do dono, pelo maior valor do período); as mesmas três colunas de valor nas linhas e nas faixas', () => {
+  it('uma régua por modo (do dono, pelo maior valor do período); CPR-LAYOUT-03: UMA coluna Valor e a Saldo, nas linhas, nas faixas e no cabeçalho', () => {
     expect(tela).toContain('const regua = useMemo(() => reguaDaCpr(ampliado, maiorValor), [ampliado, maiorValor]);');
-    for (const col of ['regua.pagar', 'regua.receber', 'regua.saldo']) expect(Array.from(tela.matchAll(new RegExp(`larg(?:ura=\\{|\\()${col.replace('.', '\\.')}`, 'g'))).length, col).toBe(3);
+    expect(tela).not.toMatch(/regua\.(pagar|receber)\b/);
+    /* valor: cabeçalho, a célula da linha, a linha-resumo dos vencidos e a Faixa · saldo: cabeçalho, linha, linha-resumo e Faixa */
+    for (const [col, n] of [['regua.valor', 4], ['regua.saldo', 4]] as const) expect(Array.from(tela.matchAll(new RegExp(`larg(?:ura=\\{|\\()${col.replace('.', '\\.')}`, 'g'))).length, col).toBe(n);
     expect(tela).not.toMatch(/COL\.(banco|origem|doc|valor)/);
     expect(tela).toContain('origem: ${rotuloOrigem(l.origem_lancamento)} · doc: ${doc || \'—\'}');
-    expect(tela).toContain("title={segmento === 'ambos' ? undefined : MOTIVO_SALDO_DOIS_LADOS}");
+    expect(tela).toContain("title={segmento === 'ambos' ? 'o saldo depois de cada linha, na ordem da lista; fecha no \"Saldo em\" do dia' : MOTIVO_SALDO_DOIS_LADOS}");
     /* CPR-AJUSTES-20-10: o grupo "vencidos anteriores à conciliação · fora do saldo" deixou de existir, e o motivo dele junto */
     expect(tela).not.toContain('MOTIVO_ANTERIORES');
   });
@@ -1042,7 +1046,7 @@ describe('CPR-CAIXA-INICIAL-SEMPRE-01 — a tela parte SEMPRE do Caixa inicial (
       { data: '2026-09-10', entradas: 500, saidas: 0, nEntradas: 1, nSaidas: 0, saldo: 1200 },
       { data: '2026-09-20', entradas: 0, saidas: 1500, nEntradas: 0, nSaidas: 1, saldo: -300 }] });
     expect(rodapeDoPeriodoCpr(r, s)).toEqual({ pagar: { valor: 1500, contas: 1 }, receber: { valor: 500, contas: 1 }, contas: 0, realizados: 2, encerrado: true });
-    expect(tela).toContain('pagar={rodape.pagar} receber={rodape.receber} saldo={serie.fim}');
+    expect(tela).toContain('valor={rodape.receber - rodape.pagar} saldo={serie.fim}');
     expect(src('../../components/financeiro-v2/CprFluxoPrevisto.tsx')).toContain("{encerradoEm ? 'Fluxo de caixa realizado' : 'Fluxo de caixa previsto'}");
   });
   it('o seletor não tem opção montada à mão na tela: a conta escolhida vem do dono', () => {

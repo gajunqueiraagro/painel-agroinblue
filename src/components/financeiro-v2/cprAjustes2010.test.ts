@@ -28,17 +28,19 @@ const conta = (venc: string, valor: number, o: Partial<ContaCpr> = {}): ContaCpr
 });
 const entra = (venc: string, valor: number) => conta(venc, valor, { tipo_operacao: '1-Entradas', conta_bancaria_id: null, conta_destino_id: 'IP' });
 
-describe('(1) A receber ANTES de A pagar', () => {
-  it('no cabeçalho, nas linhas, nas faixas (dia, Caixa inicial, Fim do período) e nos cartões', () => {
+describe('(1) A receber ANTES de A pagar — nos cartões e no PDF; na lista, CPR-LAYOUT-03: UMA coluna Valor (+ verde / − vermelho)', () => {
+  it('o cabeçalho e a faixa têm Valor e Saldo (nada de "A receber"/"A pagar" na grade); os cartões seguem com A receber antes de A pagar', () => {
     const cab = tela.slice(tela.indexOf('data-testid="cpr-cabecalho"'), tela.indexOf('{iCaixaInicial === -1 && linhaDoCaixaInicial}'));
-    expect(cab.indexOf('>A receber<')).toBeGreaterThan(0);
-    expect(cab.indexOf('>A receber<')).toBeLessThan(cab.indexOf('>A pagar<'));
-    /* a linha da conta */
-    expect(tela).toMatch(/<span style=\{larg\(regua\.receber\)\} className="text-right">\{receber \? celValor : null\}<\/span>\n\s+<span style=\{larg\(regua\.pagar\)\} className="text-right">\{receber \? null : celValor\}<\/span>/);
-    /* a faixa (o mesmo componente desenha o Caixa inicial, o "Saldo em", os vencidos e o Fim do período) */
-    const faixa = tela.slice(tela.indexOf('function Faixa('), tela.indexOf('function CelValor(') > tela.indexOf('function Faixa(') ? tela.indexOf('function CelValor(') : undefined);
-    expect(faixa.indexOf("tipo=\"receber\"")).toBeGreaterThan(0);
-    expect(faixa.indexOf("tipo=\"receber\"")).toBeLessThan(faixa.indexOf("tipo=\"pagar\""));
+    expect(cab).not.toContain('>A receber<');
+    expect(cab).not.toContain('>A pagar<');
+    expect(cab.indexOf("cabecalhoOrdenavel('valor'")).toBeGreaterThan(0);
+    expect(cab.indexOf("cabecalhoOrdenavel('valor'")).toBeLessThan(cab.indexOf('>Saldo<'));
+    /* a linha da conta: o valor com o sinal do lado, numa coluna só */
+    expect(tela).toContain('{valorComSinal(receber ? valor : -valor)}');
+    /* a faixa (o mesmo componente desenha o Caixa inicial, o "Saldo em", os blocos e o Fim do período): Valor (líquido) e Saldo */
+    const faixa = tela.slice(tela.indexOf('function Faixa('), tela.indexOf('/** Uma célula da faixa recolhida'));
+    expect(faixa.indexOf('tipo="valor"')).toBeGreaterThan(0);
+    expect(faixa.indexOf('tipo="valor"')).toBeLessThan(faixa.indexOf('tipo="saldo"'));
     /* os cartões e a faixa recolhida do Ampliado */
     expect(tela.indexOf('testId="cpr-card-receber"')).toBeLessThan(tela.indexOf('testId="cpr-card-pagar"'));
     expect(tela.indexOf('<CelRecolhida rotulo="A receber"')).toBeLessThan(tela.indexOf('<CelRecolhida rotulo="A pagar"'));
@@ -66,15 +68,14 @@ describe('(2) o saldo do dia na ÚLTIMA linha do dia', () => {
     /* a data completa e o dia da semana por extenso */
     expect(tela).toContain('"EEEE · dd/MM/yyyy"');
   });
-  it('depois das linhas do dia vem "Saldo em dd/mm/aaaa", com a receber, a pagar e o saldo do grupo, fundo azul claro e negrito', () => {
-    const ini = tela.indexOf('{g.linhas.map((l) => {');
+  it('depois das linhas do dia vem "Saldo em dd/mm/aaaa", com o líquido do dia e o saldo do grupo, fundo azul claro, 12px negrito', () => {
+    const ini = tela.indexOf('const ordenadas = ordenarLinhasCpr(g.linhas, ordem, chavesDaLinha);');
     const fecho = tela.slice(tela.indexOf("{g.tipo === 'dia' && (", ini));
     expect(tela.indexOf("{g.tipo === 'dia' && (", ini)).toBeGreaterThan(ini);
     expect(fecho).toContain("titulo={`Saldo em ${format(parseISO(g.chave), 'dd/MM/yyyy')}`}");
-    expect(fecho).toContain('pagar={g.pagar} receber={g.receber} saldo={g.saldo}');
-    expect(fecho).toContain('font-bold text-primary');
+    expect(fecho).toContain('valor={g.receber - g.pagar} saldo={g.saldo}');
+    expect(fecho).toContain('text-[12px] font-bold text-primary');
     expect(fecho).toContain('FUNDO_DIA');
-    expect(fecho).toContain('fundoNegativo');
   });
   it('o "Saldo em" de cada dia é o saldo CORRIDO da série: anterior + a receber − a pagar', () => {
     const hoje = '2026-10-20';
@@ -116,10 +117,14 @@ describe('(4) o vencido conta no saldo de HOJE, com o selo e o aviso', () => {
     expect(s.partida.saldo).toBe(3896.08);
     expect(s.dias.find((d) => d.data === '2026-10-21')?.saldo).toBe(1999.25);
   });
-  it('a tela: hoje é um dia com os vencidos dentro, o selo "vencido" na linha e o aviso na faixa; o grupo "fora do saldo" não existe', () => {
+  it('o dono: hoje é um dia com os vencidos dentro e o aviso (PDF e Excel); a TELA (CPR-LAYOUT-03) os tira da lista para a faixa do topo', () => {
     expect(tela).toContain('data-testid="cpr-selo-vencido"');
-    expect(tela).toContain('data-testid="cpr-aviso-hoje"');
     expect(tela).toContain("entra' : 'entram'} hoje · confirme se ainda vai acontecer");
+    /* a tela: sem os vencidos no dia, sem o aviso na faixa do dia; a linha-resumo deles abre o dia (contam no saldo de hoje) */
+    expect(tela).toContain("g.linhas.filter((l) => !chavesVencidas.has(chaveDaLinhaCpr(l))), avisoHoje: undefined");
+    expect(tela).not.toContain('data-testid="cpr-aviso-hoje"');
+    expect(tela).toContain('data-testid="cpr-vencidos-no-dia"');
+    expect(tela).toContain('data-testid="cpr-faixa-vencidos"');
     expect(tela).toContain('const th = totaisDeHojeCpr(serie);');
     expect(tela).not.toMatch(/anteriores à conciliação[^`]*fora do saldo/);
     expect(tela).not.toContain('MOTIVO_ANTERIORES');
@@ -136,12 +141,13 @@ describe('(4) o vencido conta no saldo de HOJE, com o selo e o aviso', () => {
   });
 });
 
-describe('CPR-SEM-CORTE-01 — nada de "…" na CPR (P152: só nas 3 células declaradas)', () => {
+describe('CPR-SEM-CORTE-01 — nada de "…" na CPR (P152 + CPR-LAYOUT-03: só nas 5 células declaradas)', () => {
   it('nenhum truncate, text-ellipsis ou line-clamp na tela nem no Fluxo — fora as 3 células do P152, com o title e a exceção do gate', () => {
     /* P152 (D6, Gabriel 28/10 16:04): Descrição, Fornecedor e Subcentro terminam em "…" com o texto inteiro no `title` e
        `data-reticencias-com-title`; nenhum outro lugar */
     const truncados = tela.split('\n').filter((l) => /\btruncate\b/.test(l) && !l.trim().startsWith('/*') && !l.trim().startsWith('*'));
-    expect(truncados).toHaveLength(3);
+    /* CPR-LAYOUT-03: + a NF (só o número; o rótulo inteiro no title) e a linha-resumo dos vencidos de hoje */
+    expect(truncados).toHaveLength(5);
     for (const l of truncados) expect(l).toMatch(/title=\{[^}]+\} data-reticencias-com-title="">/);
     expect(tela).not.toMatch(/text-ellipsis|line-clamp/);
     expect(fluxo).not.toMatch(/\btruncate\b|text-ellipsis|line-clamp/);
@@ -183,7 +189,8 @@ describe('CPR-AJUSTES-20-10b — período futuro', () => {
     expect(r.total.pagar).toEqual({ valor: 21000, contas: 1 });
     expect(r.saemHoje.linhas).toEqual([]);
   });
-  it('a tela: o bloco "Vencidos em aberto · entram no saldo" vem ANTES da linha do Caixa inicial', () => {
+  it('o dono monta o bloco "Vencidos em aberto · entram no saldo" ANTES do Caixa inicial (PDF e Excel); a TELA não o desenha (CPR-LAYOUT-03)', () => {
+    expect(tela).toContain(".filter((g) => g.tipo !== 'vencidos')");
     expect(tela).toContain("titulo: `Vencidos em aberto · ${contas(nVencidos)} · entram no saldo`,");
     expect(tela).toContain("chave: 'vencidos', tipo: 'vencidos', quando: '', antesDoCaixaInicial: true,");
     /* "entre hoje e de" também já está dentro do Caixa inicial previsto: vem antes dele; e o bloco prende a 22px (em 42 cobria a linha) */

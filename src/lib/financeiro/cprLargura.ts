@@ -13,16 +13,30 @@
  *   CRESCE enquanto cliente, período e conta são os mesmos — desligar uma pílula nunca estreita a régua (NADA SE DESLOCA).
  */
 
+/*
+ * CPR-LAYOUT-03 (mock aprovado 15/11 11:25) — A RÉGUA DO MOCK: Comp. · Venc. · Descrição (a sobra) · Fornecedor (até 200) · Subcentro
+ * (até 170) · NF · Status · UMA coluna Valor (118, + verde / − vermelho) · Saldo (118). Saem as colunas Pgto. e a dos selos (o selo do
+ * vínculo vai na frente da descrição, como no mock; a data do pagamento vai no `title` da linha paga).
+ *   - datas a 10,5px ("16/11/26" ~46px) → 48 · NF a 10px só o número (até "999.999.999" ~62px) → 72 · a pílula do status a 10,5px
+ *     ("Programado" ~62px + 2px) → 70;
+ *   - o VALOR a 12px (a linha) e 12px negrito (dia e fim do período): "+99.999.999,99" ≈ 103px → a coluna tem 118 (o mock); acima de
+ *     8 algarismos ela cresce pelo número, em degraus como antes (NADA SE DESLOCA: o teto só cresce no mesmo cliente/período/conta).
+ */
 export interface Regua {
-  comp: number; venc: number; pgto: number; selo: number; safra: number; faz: number;
-  nf: number; status: number; pagar: number; receber: number; saldo: number;
+  comp: number; venc: number; safra: number; faz: number;
+  nf: number; status: number; valor: number; saldo: number;
 }
 
-/** As colunas fixas que não dependem do valor (as de valor saem de `larguraDosValoresCpr`). */
-const FIXAS: Readonly<Pick<Regua, 'comp' | 'venc' | 'pgto' | 'selo' | 'nf' | 'status'>> = { comp: 46, venc: 46, pgto: 46, selo: 16, nf: 76, status: 58 };
+/** As colunas fixas que não dependem do valor. */
+const FIXAS: Readonly<Pick<Regua, 'comp' | 'venc' | 'nf' | 'status'>> = { comp: 48, venc: 48, nf: 72, status: 70 };
 /** O ampliado é a MESMA régua + Safra e Faz. (P152, Gabriel 28/10 15:34, D2). */
 const DO_AMPLIADO: Readonly<Pick<Regua, 'safra' | 'faz'>> = { safra: 56, faz: 26 };
-/** Descrição, Fornecedor e Subcentro: cada um nunca abaixo disto (a lista só rola na horizontal abaixo de ~1.100px de janela). */
+/** A coluna Valor e a Saldo do mock (118px) — o piso. */
+export const VALOR_DO_MOCK_CPR = 118;
+/** Fornecedor e Subcentro: até o tamanho do mock; abaixo disso dividem a sobra com a Descrição (que leva o dobro). */
+export const FORNECEDOR_MAXIMO_CPR = 200;
+export const SUBCENTRO_MAXIMO_CPR = 170;
+/** Descrição, Fornecedor e Subcentro: cada um nunca abaixo disto (a lista só rola na horizontal abaixo disso). */
 export const TEXTO_MINIMO_CPR = 95;
 /** px-3 da linha (24) + o filete de 3px. */
 const MOLDURA = 27;
@@ -30,20 +44,19 @@ const VAO = 4;
 
 /** Os algarismos da parte inteira de |v| ("0,00" tem 1). */
 const algarismos = (v: number): number => String(Math.trunc(Math.abs(Math.round(v * 100) / 100))).length;
-/** O degrau: até 6 algarismos (R$ 999.999,99) · até 8 (R$ 99.999.999,99) · acima, o próprio número. */
+/** O degrau: até 6 algarismos (999.999,99) · até 8 (99.999.999,99) · acima, o próprio número. */
 export const degrauDosAlgarismos = (n: number): number => (n <= 6 ? 6 : n <= 8 ? 8 : n);
 
-/** A largura do valor na faixa (11px negrito, com a seta): `comMenos` = a coluna Saldo, que pode levar "−". */
-export function larguraDoValorCpr(algs: number, comMenos: boolean): number {
+/** A largura do valor a 12px negrito, com o sinal ("+" ou "−") e sem "R$": 7,7 por algarismo, 3,4 por ponto/vírgula, 8 de folga. */
+export function larguraDoValorCpr(algs: number): number {
   const pontos = Math.floor((algs - 1) / 3);
-  return Math.ceil(48.45 + 7.35 * algs + 3.3 * pontos + (comMenos ? 7.4 : 0));
+  return Math.ceil(7.7 * (algs + 2) + 3.4 * (pontos + 1) + 7.7 + 8);
 }
 
-/** As três colunas de valor para o maior valor do período. */
-export function larguraDosValoresCpr(maiorValor: number): Pick<Regua, 'receber' | 'pagar' | 'saldo'> {
-  const n = degrauDosAlgarismos(algarismos(maiorValor));
-  const lado = larguraDoValorCpr(n, false);
-  return { receber: lado, pagar: lado, saldo: larguraDoValorCpr(n, true) };
+/** A coluna Valor e a Saldo para o maior valor do período: 118 (o mock) ou mais, se o número pedir. */
+export function larguraDosValoresCpr(maiorValor: number): Pick<Regua, 'valor' | 'saldo'> {
+  const w = Math.max(VALOR_DO_MOCK_CPR, larguraDoValorCpr(degrauDosAlgarismos(algarismos(maiorValor))));
+  return { valor: w, saldo: w };
 }
 
 /** A régua do modo, para o maior valor do período. */
@@ -51,9 +64,14 @@ export function reguaDaCpr(ampliado: boolean, maiorValor: number): Regua {
   return { ...FIXAS, safra: ampliado ? DO_AMPLIADO.safra : 0, faz: ampliado ? DO_AMPLIADO.faz : 0, ...larguraDosValoresCpr(maiorValor) };
 }
 
+/** As colunas fixas, na ordem do cabeçalho (sem as de texto). */
+export function colunasFixasCpr(r: Regua): number[] {
+  return [r.comp, r.venc, r.safra, r.faz, r.nf, r.status, r.valor, r.saldo].filter((x) => x > 0);
+}
+
 /** A largura mínima da lista: a moldura, as colunas da régua, as três de texto no mínimo e 4px por vão. Abaixo dela a lista rola. */
 export function larguraMinimaCpr(r: Regua): number {
-  const colunas = [r.comp, r.venc, r.pgto, r.selo, r.safra, r.faz, r.nf, r.status, r.receber, r.pagar, r.saldo].filter((x) => x > 0);
+  const colunas = colunasFixasCpr(r);
   return MOLDURA + colunas.reduce((a, b) => a + b, 0) + 3 * TEXTO_MINIMO_CPR + VAO * (colunas.length + 3 - 1);
 }
 
