@@ -3,8 +3,9 @@
  * Contas a Pagar e Receber. Os vencidos saíram da tabela; aqui estão todos, com as MESMAS colunas da lista (Comp. · Venc. · Descrição ·
  * Fornecedor · Subcentro · NF · Status · Valor), toda coluna ordena e o padrão é o vencimento crescente (o mais antigo primeiro).
  * Clicar numa linha abre o lançamento (o mesmo modal da lista). O ● âmbar marca o vencido que não apareceu no extrato já conciliado.
- * ⚠ O "confirmar" (ainda vai acontecer → entra no saldo de hoje; não vai → cancelar com desfazer) espera a decisão D1 do Gabriel:
- * enquanto isso todos seguem contando no saldo de hoje, como a faixa diz, e o rodapé ensina o caminho de hoje (abrir e ajustar).
+ * CPR-D1 (Gabriel 24/11) — a coluna Confirmar: "Vai acontecer" passa o vencimento para hoje (a conta sai daqui e entra no dia de hoje;
+ * o aviso tem Desfazer); "Não vai" cancela (o aviso tem Desfazer, pela `fn_lancamento_descancelar`, lote 118490). Os botões não abrem a
+ * linha; enquanto um grava, os outros esperam.
  */
 import { useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
@@ -23,10 +24,14 @@ const COLUNAS: readonly { coluna: ColunaCpr; largura?: number; alinhar?: 'right'
   { coluna: 'subcentro', largura: 170 }, { coluna: 'nf', largura: 80 }, { coluna: 'status', largura: 80, alinhar: 'center' },
   { coluna: 'valor', largura: 118, alinhar: 'right' },
 ];
+/** A coluna Confirmar (não ordena): os dois botões em lugar fixo, nada se desloca ao gravar. */
+const LARGURA_CONFIRMAR = 172;
 const semMoeda = (v: number) => formatMoeda(Math.abs(v)).replace(/^R\$\s?/, '');
 const dataCurta = (iso: string | null) => (iso ? format(parseISO(iso), 'dd/MM/yy') : '—');
 
-export function CprVencidosDialog<T extends { id: string }>({ aberto, aoFechar, linhas, chaves, chaveDaLinha, foraDoExtrato, receber, abrir }: {
+export function CprVencidosDialog<T extends { id: string }>({
+  aberto, aoFechar, linhas, chaves, chaveDaLinha, foraDoExtrato, receber, abrir, vaiAcontecer, naoVaiAcontecer, motivoNaoVai,
+}: {
   aberto: boolean;
   aoFechar: () => void;
   /** os vencidos em aberto (os que contam no saldo de hoje), do dono do recorte */
@@ -38,8 +43,20 @@ export function CprVencidosDialog<T extends { id: string }>({ aberto, aoFechar, 
   foraDoExtrato: ReadonlySet<string>;
   receber: (l: T) => boolean;
   abrir: (id: string) => void;
+  /** "Ainda vai acontecer": o vencimento passa para hoje (quem grava e avisa é a tela) */
+  vaiAcontecer: (l: T) => Promise<void>;
+  /** "Não vai acontecer": cancela com desfazer (quem grava e avisa é a tela) */
+  naoVaiAcontecer: (l: T) => Promise<void>;
+  /** por que o "Não vai acontecer" está desligado (o ⓘ); `null` = ligado (depois do lote 118490) */
+  motivoNaoVai: string | null;
 }) {
   const [ordem, setOrdem] = useState<OrdemCpr>(ORDEM_PADRAO_CPR);
+  const [gravando, setGravando] = useState<string | null>(null);
+  const confirmar = async (l: T, gesto: (l: T) => Promise<void>) => {
+    if (gravando) return;
+    setGravando(chaveDaLinha(l));
+    try { await gesto(l); } finally { setGravando(null); }
+  };
   const ordenadas = useMemo(() => ordenarLinhasCpr(linhas, ordem, chaves), [linhas, ordem, chaves]);
   const totais = useMemo(() => {
     let pagar = 0, aReceber = 0;
@@ -61,6 +78,7 @@ export function CprVencidosDialog<T extends { id: string }>({ aberto, aoFechar, 
             <table className="w-full table-fixed border-collapse text-[12px]">
               <colgroup>
                 {COLUNAS.map((c) => <col key={c.coluna} style={c.largura ? { width: c.largura } : undefined} />)}
+                <col style={{ width: LARGURA_CONFIRMAR }} />
               </colgroup>
               <thead className="sticky top-0 z-10 bg-primary text-primary-foreground">
                 <tr>
@@ -77,6 +95,7 @@ export function CprVencidosDialog<T extends { id: string }>({ aberto, aoFechar, 
                       </th>
                     );
                   })}
+                  <th className="h-[24px] px-2 text-center text-[11px] font-semibold">Confirmar</th>
                 </tr>
               </thead>
               <tbody>
@@ -100,6 +119,24 @@ export function CprVencidosDialog<T extends { id: string }>({ aberto, aoFechar, 
                       <td className={cn(td, 'text-right tabular-nums', k.valor < 0 ? COR_SINAL.neg : COR_SINAL.pos)}>
                         {k.valor < 0 ? '−' : '+'}{semMoeda(k.valor)}
                       </td>
+                      <td className={cn(td, 'text-center')} onClick={(e) => e.stopPropagation()}>
+                        <span className="inline-flex items-center gap-1">
+                          <button type="button" data-testid="cpr-vencido-vai" disabled={gravando !== null}
+                            onClick={() => { void confirmar(l, vaiAcontecer); }}
+                            title="Ainda vai acontecer: o vencimento passa para hoje e a conta entra no dia de hoje (o aviso tem Desfazer)"
+                            className="h-[18px] w-[86px] rounded border border-primary px-1 text-[10.5px] font-medium text-primary hover:bg-primary hover:text-primary-foreground disabled:opacity-50">
+                            Vai acontecer
+                          </button>
+                          <button type="button" data-testid="cpr-vencido-nao-vai" disabled={motivoNaoVai !== null || gravando !== null}
+                            onClick={() => { void confirmar(l, naoVaiAcontecer); }}
+                            title={motivoNaoVai ?? 'Não vai acontecer: cancela a conta e ela sai do saldo (o aviso tem Desfazer)'}
+                            className="h-[18px] w-[52px] rounded border border-destructive/60 px-1 text-[10.5px] text-destructive hover:bg-destructive hover:text-destructive-foreground disabled:opacity-50">
+                            Não vai
+                          </button>
+                          <span className="inline-block w-[10px] cursor-help text-[10px] text-muted-foreground" data-testid="cpr-vencido-nao-vai-motivo"
+                            title={motivoNaoVai ?? undefined} aria-hidden={motivoNaoVai === null}>{motivoNaoVai ? 'ⓘ' : ''}</span>
+                        </span>
+                      </td>
                     </tr>
                   );
                 })}
@@ -108,8 +145,8 @@ export function CprVencidosDialog<T extends { id: string }>({ aberto, aoFechar, 
           </div>
           <div className="flex h-[26px] shrink-0 items-center gap-3 border-t-2 border-t-primary px-2 text-[12px] font-bold text-primary" data-testid="cpr-vencidos-total">
             <span className="min-w-0 flex-1 truncate font-normal text-muted-foreground"
-              title="Ainda vai acontecer? Abra a conta e ajuste o vencimento. Não vai acontecer? Abra e cancele.">
-              Ainda vai acontecer? Abra a conta e ajuste o vencimento. Não vai acontecer? Abra e cancele.
+              title="Vai acontecer: o vencimento passa para hoje. Não vai: a conta é cancelada. Nos dois casos ela sai desta lista e o aviso tem Desfazer.">
+              Vai acontecer: o vencimento passa para hoje. Não vai: a conta é cancelada. Nos dois casos ela sai desta lista e o aviso tem Desfazer.
             </span>
             <span className={cn('whitespace-nowrap tabular-nums', COR_SINAL.neg)}>a pagar −{semMoeda(totais.pagar)}</span>
             {totais.receber > 0 && <span className={cn('whitespace-nowrap tabular-nums', COR_SINAL.pos)}>a receber +{semMoeda(totais.receber)}</span>}
