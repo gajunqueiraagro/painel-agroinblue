@@ -34,6 +34,7 @@ import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { itensDoPdf, type PdfjsMinimo } from '@/lib/financeiro/nfe/lerNotaPdf';
 import { montarLinhas } from '@/lib/oc/leitura/montarLinhas';
 import { lerFolha, pareceFolha, type FolhaLida } from '@/lib/folha/lerFolha';
+import { acharChaveNFe } from '@/lib/oc/leitura/chaveNFe';
 
 /** A leitura de UM arquivo pela caixa (injetável: a bancada e os testes passam a sua). */
 export type LeituraDaCaixa =
@@ -43,13 +44,25 @@ export type LeituraDaCaixa =
   | { k: 'nada'; frase: string }
   | { k: 'senha'; errada: boolean }
   | { k: 'erro'; frase: string };
-export type LerArquivoDaCaixa = (bytes: ArrayBuffer, tipo: 'xml' | 'pdf', senha?: string) => Promise<LeituraDaCaixa>;
+export type LerArquivoDaCaixa = (bytes: ArrayBuffer, tipo: 'xml' | 'pdf', senha?: string, nomeDoArquivo?: string) => Promise<LeituraDaCaixa>;
+
+/**
+ * CAIXA-DANFE-CHAVE-01 (Gabriel 24/11, NJ, NF 48.053): a DANFE que o `lerNota` não lê ainda tem a CHAVE — impressa em grupos ("5026 1104 …") e,
+ * muitas vezes, no NOME do arquivo ("<chave>-danfe.pdf"). Vale a 1ª chave VÁLIDA (`acharChaveNFe`: DV, UF, mês, modelo 55, CNPJ) do texto do
+ * PDF; sem ela, a do nome. Com a chave, a linha é uma nota: a consulta de sempre (`fn_nota_ja_lancada` pela chave) acha o lançamento.
+ * O número sai da própria chave; emitente, valor e vencimento ficam vazios ("—"), nunca inventados.
+ */
+export function notaPelaChave(textoDoPdf: string | null, nomeDoArquivo: string | undefined): ResumoDaNota | null {
+  const chave = (textoDoPdf ? acharChaveNFe(textoDoPdf) : null) ?? (nomeDoArquivo ? acharChaveNFe(nomeDoArquivo) : null);
+  if (!chave) return null;
+  return { chave, numero: String(Number(chave.slice(25, 34))), emitente: null, valor: null, vencimento: null };
+}
 
 export const FRASE_PDF_IMAGEM = 'O PDF é uma imagem (escaneado): sem linha digitável nem chave legível.';
 
 /** O leitor de verdade: XML → a nota; PDF → os boletos (D7); sem boleto, a nota (o DANFE, pelo `lerNota` de sempre); senão, nada
  *  (o que parece folha diz que a folha ainda não é lida aqui, CAIXA-FOLHA-AVISO-01). `pdfjs`: o do teste (no app, o de sempre). */
-export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (bytes, tipo, senha) => {
+export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (bytes, tipo, senha, nomeDoArquivo) => {
   if (tipo === 'xml') {
     const n = await lerNota(bytes);
     if ('nota' in n && n.ok) return { k: 'nota', nota: resumoDaNota(n.nota) };
@@ -58,7 +71,11 @@ export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (
   const b = await lerBoletosDoArquivo(bytes.slice(0), { senha, pdfjs });
   if (b.ok === false) {
     if (b.motivo === 'senha' || b.motivo === 'senha_errada') return { k: 'senha', errada: b.motivo === 'senha_errada' };
-    if (b.motivo === 'sem_texto') return { k: 'nada', frase: FRASE_PDF_IMAGEM };
+    if (b.motivo === 'sem_texto') {
+      /* a DANFE escaneada ainda pode ter a chave no nome do arquivo */
+      const pelaChave = notaPelaChave(null, nomeDoArquivo);
+      return pelaChave ? { k: 'nota', nota: pelaChave } : { k: 'nada', frase: FRASE_PDF_IMAGEM };
+    }
     return { k: 'erro', frase: b.frase };
   }
   if (b.leitura.boletos.length) return { k: 'boletos', ...b.leitura };
@@ -69,6 +86,8 @@ export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (
   const f = paginas ? lerFolha(paginas) : null;
   if (f && f.ok === true) return { k: 'folha', folha: f.folha };
   if (f && f.ok === false && f.motivo === 'nao_fecha') return { k: 'nada', frase: `Folha que não fecha: ${f.frase} Fale com o consultor.` };
+  const pelaChave = notaPelaChave(paginas ? paginas.flat().join('\n') : null, nomeDoArquivo);
+  if (pelaChave) return { k: 'nota', nota: pelaChave };
   return { k: 'nada', frase: paginas && pareceFolha(paginas) ? FRASE_FOLHA_AINDA_NAO : FRASE_NEM_BOLETO_NEM_NOTA };
 };
 export const lerDaCaixa: LerArquivoDaCaixa = lerDaCaixaCom();
@@ -163,7 +182,7 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     if (!vivo.current) return;
     if (typeof o === 'string') { setLidos((x) => ({ ...x, [chave]: { k: 'erro', frase: o } })); return; }
     let r: LeituraDaCaixa;
-    try { r = await ler(o.bytes.slice(0), tipo, senha); } catch (e) { console.error('[caixa] leitura', e); r = { k: 'erro', frase: 'Não consegui ler este arquivo.' }; }
+    try { r = await ler(o.bytes.slice(0), tipo, senha, o.nome); } catch (e) { console.error('[caixa] leitura', e); r = { k: 'erro', frase: 'Não consegui ler este arquivo.' }; }
     if (!vivo.current) return;
     fontes.current.set(chave, {
       bytes: o.bytes, nome: o.nome, tipo, partes: r.k === 'boletos' ? { beneficiario: r.beneficiario, pagador: r.pagador } : null,
