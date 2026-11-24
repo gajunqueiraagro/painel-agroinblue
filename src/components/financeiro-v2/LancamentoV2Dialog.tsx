@@ -2672,7 +2672,7 @@ export function LancamentoV2Dialog({
         if (ja.ok === false) { toast.error(`Não consegui conferir o CNPJ no cadastro (${ja.motivo}). Nada foi gravado — tente de novo.`); return; }
         if (ja.valor) { setXmlConflito(ja.valor); return; }
       }
-      const novo = await onCriarFornecedor(xml.emitenteNome, fazendaId, documentoFormatado(xml.emitenteDocumento));
+      const novo = await onCriarFornecedor(xml.emitenteNome, fazendaId || null, documentoFormatado(xml.emitenteDocumento));
       if (novo) {
         setFavorecidoId(novo.id); setXmlFaixaFechada(true);
         /* FORN-CADASTRO-02 — o fornecedor novo nasce com a fantasia, a IE e o endereço do emitente (só campo vazio) */

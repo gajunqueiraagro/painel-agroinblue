@@ -1976,6 +1976,8 @@ const CENARIOS = [
       semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_ITENS }, antes: f ? clicarTexto(f) : undefined }]),
   /* NOTA-CONTAS-NA-CRIACAO-01 A — o NOVO pela nota: a vista Contas dos itens ("Dividir em N contas ao salvar") e, depois de dividir (o item 1
      para uma conta de Lavoura, pela barra de atividade), a Geral com as partes PENDENTES ("dividida em 2 contas ao salvar") */
+  /* FORN-CRIAR-DA-NOTA-ERRO — a faixa "Fornecedor não encontrado … criar fornecedor com estes dados" com o nome SEM o código do emissor */
+  { nome: 'lancamento-xml-codigo-emissor', url: 'tela=lancamento&m=novo&v=xmlcodigo', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'lancamento-xml-Itens-contas', url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
     antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); await clicarTexto('Contas')(p); } },

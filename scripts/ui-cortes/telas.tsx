@@ -3450,6 +3450,18 @@ if (v === 'xml18' || v === 'xml14') {
     ocorrencias: [], arquivo: arquivoXmlDaNota(bytes, 'NFe-sintetica.XML') } as any);
   props.documentosAntesDeSalvar = true;
 }
+/* FORN-CRIAR-DA-NOTA-ERRO (24/11) — `xmlcodigo`: a forma da NF 39.814 — o emitente com o código do sistema emissor ("1 - ") no nome, fora
+   do cadastro e SEM fazenda identificada (o caso que dava 22P02). A faixa mostra o nome SEM o código. Nome e CNPJ SINTÉTICOS. */
+if (v === 'xmlcodigo') {
+  const bytes = utf8(montarNFe({ nomeEmitente: '1 - PNEUS SINTETICOS LTDA', duplicatas: [['001', '2026-10-30', '8119.00'], ['002', '2026-11-29', '8119.00']] }));
+  const lido: any = lerNFe(bytes);
+  const resolucao = resolverEmitente(lido.nota.emitente, [], null);
+  const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [], emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null });
+  props.prefill = prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, resolucao,
+    ocorrencias: [], arquivo: arquivoXmlDaNota(bytes, 'NFe-sintetica.XML') } as any);
+  props.fornecedores = [];
+  props.documentosAntesDeSalvar = true;
+}
 if (v === 'xml') {
   const bytes = utf8(montarNFe({ duplicatas: [['001', '2026-10-30', '8119.00'], ['002', '2026-11-29', '8119.00']] }));
   const lido: any = lerNFe(bytes);
