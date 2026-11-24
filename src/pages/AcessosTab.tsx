@@ -46,7 +46,7 @@ interface Membro {
   email: string | null;
   fazendas: string[];
   fazendaIds: string[];
-  /** Sem login (usuário removido do Auth): não se edita nem se troca a senha — só se remove o acesso. */
+  /** Sem login neste ambiente (o vínculo existe, o usuário não está no Auth daqui): não se edita nem se troca a senha — só se remove o acesso. */
   semLogin: boolean;
 }
 
@@ -54,7 +54,7 @@ const TH = 'sticky top-0 z-10 h-[20px] whitespace-nowrap bg-primary px-1.5 py-0 
 /* 11px; texto que nao cabe QUEBRA a linha (nunca "…" nem corte calado). */
 const TD = 'min-h-[20px] break-words px-1.5 py-[3px] align-top text-[11px] leading-[14px]';
 const ROTULO = 'block text-[10px] font-medium text-foreground';
-const MOTIVO_SEM_LOGIN = 'sem login (usuário removido): só se remove o acesso';
+const MOTIVO_SEM_LOGIN = 'sem login neste ambiente: só se remove o acesso';
 const CAMPO = 'h-[24px] px-2 text-[11px]';
 /* O slot da mensagem do campo: existe sempre, com ou sem mensagem. */
 const SLOT = 'block min-h-[12px] text-[9.5px] leading-[12px] text-destructive';
