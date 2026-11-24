@@ -331,8 +331,10 @@ const LATERAL = q.get('lateral');
 const CLI = q.get('cli') ?? 'Cliente Exemplo Nome Longo Agropecuária';
 const FAZ = q.get('faz') ?? 'Fazenda Exemplo Nome Longo Retiro';
 if (LATERAL) {
-  const clientes = [{ id: 'cli', nome: CLI, perfil: 'admin_agroinblue' }, { id: 'cli2', nome: 'Cliente Exemplo Dois', perfil: 'admin_agroinblue' }];
-  g.__clienteBancada = { clienteAtual: clientes[0], clientes, isAdmin: true, perfil: 'admin_agroinblue', loading: false,
+  /* ACESSO-UM-CLIENTE-01 — `&umcli=1`: o login que só tem UM cliente (perfil financeiro): o nome aparece travado no lugar do seletor */
+  const clientes = q.get('umcli') ? [{ id: 'cli', nome: CLI, perfil: 'financeiro' }]
+    : [{ id: 'cli', nome: CLI, perfil: 'admin_agroinblue' }, { id: 'cli2', nome: 'Cliente Exemplo Dois', perfil: 'admin_agroinblue' }];
+  g.__clienteBancada = { clienteAtual: clientes[0], clientes, isAdmin: !q.get('umcli'), perfil: 'admin_agroinblue', loading: false,
     setClienteAtual: () => {}, resumoClientes: false, setResumoClientes: () => {} };
   const fazendas = [{ id: 'f1', nome: FAZ === 'Global' ? 'Faz. Exemplo' : FAZ, cliente_id: 'cli' }, { id: 'f2', nome: 'Faz. Exemplo Dois', cliente_id: 'cli' }];
   const atual = FAZ === 'Global' ? { id: '__global__', nome: 'Global', owner_id: '' } : fazendas[0];
