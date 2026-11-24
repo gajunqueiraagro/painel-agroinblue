@@ -14,7 +14,7 @@
  *   e o boleto vai para `descartado` com MOTIVO_DO_DESFEITO, nada se apaga); a linha do e-mail com o boleto descartado oferece "Guardar"
  *   de novo (reabre o MESMO boleto); em Resolvidos o guardado diz "guardado · sem lançamento" (âmbar), o ligado diz a que lançamento.
  */
-import type { EntradaDoEmail, NotaNoSistema } from './entradaEmailApi';
+import type { DetalheDoResolvido, EntradaDoEmail, NotaNoSistema } from './entradaEmailApi';
 import type { ItemDaCaixa, RespostaDeEntrar } from './caixaApi';
 import { dataBR, seloDoAchado, situacaoAVista, textoDoAchado, valorBR, type Selo } from './caixaDeBoletos';
 import type { FolhaLida } from '@/lib/folha/lerFolha';
@@ -373,9 +373,17 @@ export function grupoDosGuardados(itens: readonly ItemDaCaixa[], boletos: Record
 
 /** CAIXA-GUARDAR-01 — o "O que virou" de uma linha de Resolvidos. O boleto GUARDADO (novo / sem par) diz que está sem lançamento, em
  *  âmbar, e só ele tem o Desfazer completo (`guardadoId`); o ligado diz a que lançamento. */
-export function virouDaEntrada(e: EntradaDoEmail, itens: readonly ItemDaCaixa[] | null): { selo: Selo | null; texto: string; guardadoId: string | null } {
-  if (e.estado === 'nota') return { selo: null, texto: e.lancamentoId ? 'nota no lançamento' : 'nota lançada', guardadoId: null };
-  if (e.estado === 'folha') return { selo: null, texto: 'folha aplicada', guardadoId: null };   // FOLHA-NA-CAIXA-01
+export function virouDaEntrada(e: EntradaDoEmail, itens: readonly ItemDaCaixa[] | null, detalhe?: DetalheDoResolvido): { selo: Selo | null; texto: string; guardadoId: string | null } {
+  if (e.estado === 'nota') {
+    const d = detalhe?.nota?.descricao;
+    return { selo: null, texto: d ? `nota no lançamento ${d}` : e.lancamentoId ? 'nota no lançamento' : 'nota lançada', guardadoId: null };
+  }
+  if (e.estado === 'folha') {
+    /* FOLHA-NA-CAIXA-01b (Gabriel 14:03): o que gerou — "13º 1ª parcela · 11/2026 · 3 lançamentos" (118610, pela trilha do recibo) */
+    const f = detalhe?.folha;
+    const tipo = f?.tipo === '13_1' || f?.tipo === '13_2' || f?.tipo === 'mensal' ? ROTULO_DO_TIPO[f.tipo] : null;
+    return { selo: null, texto: f && tipo ? `${tipo} · ${competenciaBR(f.competencia ?? '')} · ${f.lancamentos} ${f.lancamentos === 1 ? 'lançamento' : 'lançamentos'}` : 'folha aplicada', guardadoId: null };
+  }
   const i = e.boletoId ? itens?.find((x) => x.boleto.id === e.boletoId) : undefined;
   if (i && (i.boleto.situacao === 'novo' || i.boleto.situacao === 'sem_par')) {
     return { selo: SELO.guardado, texto: 'guardado · sem lançamento', guardadoId: i.boleto.id };

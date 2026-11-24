@@ -78,6 +78,17 @@ describe('a resposta do banco → as linhas da prévia', () => {
     expect([l.acontece, l.descricao, l.descricaoAntes, l.vencimento, l.vencimentoAntes]).toEqual(['divide', '13º Salário 1ª Parcela 2026', 'Folha Pagamento - 13', '2026-11-30', '2026-12-05']);
     expect(l.segunda).toEqual({ descricao: '13º Salário 2ª Parcela 2026', valor: 2462, vencimento: '2026-12-18' });
   });
+  it('decisão B: o vencimento que passa do prazo legal (1ª 30/11, 2ª 20/12) avisa; no prazo, não; o mensal não tem', () => {
+    const resp = (venc: string) => respostaDaFolha({ ok: true, soma: 2530, automaticos: [{ pagina: [1], nome: 'X', lancamento_id: 'l1', antes: 1, depois: 730,
+      descricao_antes: '13º Salário 1ª Parcela 2026', descricao_depois: '13º Salário 1ª Parcela 2026', vencimento_antes: venc, vencimento_depois: venc }] });
+    const r1 = resp('2026-12-05'); const r2 = resp('2026-11-30');
+    if (!r1 || !r2) throw new Error('sem resposta');
+    expect(linhasDaPrevia(FOLHA, r1, new Set())[0].depoisDoPrazo).toBe(true);
+    expect(linhasDaPrevia(FOLHA, r2, new Set())[0].depoisDoPrazo).toBe(false);
+    expect(linhasDaPrevia({ ...FOLHA, tipo: '13_2' }, r1, new Set())[0].depoisDoPrazo).toBe(false);
+    expect(linhasDaPrevia({ ...FOLHA, tipo: '13_2' }, resp('2026-12-21') ?? r1, new Set())[0].depoisDoPrazo).toBe(true);
+    expect(linhasDaPrevia({ ...FOLHA, tipo: 'mensal' }, r1, new Set())[0].depoisDoPrazo).toBe(false);
+  });
   it('o texto da linha da Caixa', () => {
     expect(competenciaBR('2026-11')).toBe('11/2026');
     expect(fraseDaLinhaDaFolha(FOLHA)).toBe('3 pessoas · "Abrir" mostra a prévia');

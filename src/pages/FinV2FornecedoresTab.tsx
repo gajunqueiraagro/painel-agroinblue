@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Plus, Pencil, Search, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { MesclarFornecedoresDialog } from '@/components/financeiro-v2/MesclarFornecedoresDialog';
+import { FormaPeloExtratoDialog } from '@/components/financeiro-v2/FormaPeloExtratoDialog';
 import { FornecedoresSemCadastro } from '@/components/financeiro-v2/FornecedoresSemCadastro';
 import { toast } from 'sonner';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
@@ -99,6 +100,8 @@ const Num = ({ v, reserva }: { v: string; reserva: string }) => <TextoReservado 
 export function FinV2FornecedoresTab() {
   const { clienteAtual } = useCliente();
   const [mesclarAberto, setMesclarAberto] = useState(false);
+  /* FORN-FORMA-PELO-EXTRATO-01 — a forma de pagamento de cada fornecedor pelo extrato conciliado */
+  const [formaAberta, setFormaAberta] = useState(false);
   /* o par que o "Mesclar" do cadastro pediu (FORN-CADASTRO-02): a ferramenta abre já com ele */
   /* FORN-01b — a faixa do inativo abre a ferramenta só com ele (quem fica, a pessoa escolhe) */
   const [mesclarPar, setMesclarPar] = useState<{ manter?: string; absorver: string[] } | null>(null);
@@ -252,6 +255,10 @@ export function FinV2FornecedoresTab() {
           </span>
         </h2>
         <div className="ml-auto flex items-center gap-1.5">
+          <Button size="sm" variant="outline" className="h-[26px] px-2.5 text-[11px]" onClick={() => setFormaAberta(true)} disabled={!clienteAtual?.id} data-testid="abrir-forma-pelo-extrato"
+            title="Sugere a forma de pagamento (e, quando dá, a chave PIX) de cada fornecedor pelos pagamentos já conciliados">
+            Forma pelo extrato
+          </Button>
           {/* FORN-MESCLAR-01 — a ferramenta de mesclar (move TODAS as referências, numa transação, e pode ser desfeita) */}
           <Button size="sm" variant="outline" className="h-[26px] px-2.5 text-[11px]" onClick={() => setMesclarAberto(true)} disabled={!clienteAtual?.id} data-testid="abrir-mesclar-fornecedores">
             Mesclar fornecedores
@@ -259,6 +266,9 @@ export function FinV2FornecedoresTab() {
           <Button size="sm" className="h-[26px] px-2.5 text-[11px] bg-cta font-semibold text-cta-foreground hover:bg-cta-hover" onClick={openNew}><Plus className="h-3.5 w-3.5 mr-1" /> Novo</Button>
         </div>
       </div>
+      {formaAberta && clienteAtual?.id && (
+        <FormaPeloExtratoDialog aberto clienteId={clienteAtual.id} aoFechar={() => { setFormaAberta(false); void load(); }} />
+      )}
       {mesclarAberto && clienteAtual?.id && (
         <MesclarFornecedoresDialog aberto clienteId={clienteAtual.id} aoFechar={() => { setMesclarAberto(false); void load(); void loadInativosComLancamento(); }} />
       )}

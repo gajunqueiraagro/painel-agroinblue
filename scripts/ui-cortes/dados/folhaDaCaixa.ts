@@ -21,16 +21,17 @@ export const FOLHA_DA_BANCADA: FolhaLida = {
 const auto = (k: number, m: Partial<Automatico>): Automatico => ({
   paginas: FOLHA_DA_BANCADA.pessoas[k].paginas, nome: FOLHA_DA_BANCADA.pessoas[k].nome, lancamentoId: `l${k}`, antes: 3192, depois: FOLHA_DA_BANCADA.pessoas[k].valor,
   nomeConfere: 'exato', casouPor: 'funcionario', acao: 'casar', descricaoAntes: 'Folha Pagamento - 13', descricao: 'Folha Pagamento - 13',
-  vencimentoAntes: '2026-12-05', vencimento: '2026-12-05', status: 'previsto', segunda: null, ...m,
+  vencimentoAntes: '2026-12-05', vencimento: '2026-12-05', status: 'previsto', segunda: null, recibo: null, valorConfere: null, statusDepois: null, ...m,
 });
 const PREVIA: RespostaDaFolha = {
-  jaAplicado: false, soma: FOLHA_DA_BANCADA.total, documentos: [], semFuncionario: [{ paginas: [4], nome: 'PESSOA NOVA SEM LANÇAMENTO' }],
+  jaAplicado: false, completar: false, soma: FOLHA_DA_BANCADA.total, documentos: [], semFuncionario: [{ paginas: [4], nome: 'PESSOA NOVA SEM LANÇAMENTO' }],
   automaticos: [
     auto(0, { acao: 'dividir', descricao: '13º Salário 1ª Parcela 2026', vencimento: '2026-11-30',
       segunda: { descricao: '13º Salário 2ª Parcela 2026', valor: 730, vencimento: '2026-12-18' } }),   // Gabriel 24/11: a 2ª = o valor da 1ª
     /* o 'casar' só acontece com quem JÁ é '13º Salário 1ª Parcela' (regra 118570): muda só o valor */
-    auto(1, { antes: 9999999.99, descricaoAntes: '13º Salário 1ª Parcela 2026', descricao: '13º Salário 1ª Parcela 2026', vencimentoAntes: '2026-11-30',
-      vencimento: '2026-11-30', nomeConfere: 'parcial', casouPor: 'favorecido' }),
+    /* decisão B (Gabriel 24/11): o casar MANTÉM o vencimento do lançamento; depois de 30/11 = o aviso "vence depois do prazo legal" */
+    auto(1, { antes: 9999999.99, descricaoAntes: '13º Salário 1ª Parcela 2026', descricao: '13º Salário 1ª Parcela 2026', vencimentoAntes: '2026-12-05',
+      vencimento: '2026-12-05', nomeConfere: 'parcial', casouPor: 'favorecido' }),
     auto(3, { antes: 1100, acao: 'dividir', descricao: '13º Salário 1ª Parcela 2026', vencimento: '2026-11-30',
       segunda: { descricao: '13º Salário 2ª Parcela 2026', valor: 1.5, vencimento: '2026-12-18' } }),
   ],
@@ -41,15 +42,23 @@ const docDe = (p: FolhaLida['pessoas'][number], i: number) => ({ documentoId: `d
 const docsComCriado = FOLHA_DA_BANCADA.pessoas.map(docDe);
 const docs = FOLHA_DA_BANCADA.pessoas.filter((_, k) => k !== 2).map((p, i) => ({ documentoId: `d${i}`, storagePath: `cli/ficticio-p${p.paginas[0]}.pdf`, nome: p.nome, paginas: p.paginas, lancamentoId: `l${i}` }));
 
-export function apiDaFolhaDaBancada(jaAplicada: boolean): FolhaCaixaApi {
+/* 118620 (Code 6): o COMPLETAR — o documento aplicado antes SEM as páginas: todos "liga a página", um com o valor de hoje ≠ recibo */
+const COMPLETAR: RespostaDaFolha = {
+  ...PREVIA, completar: true, pendencias: [], semFuncionario: [], criar: [],
+  automaticos: FOLHA_DA_BANCADA.pessoas.map((p, k) => auto(k, { acao: 'anexar', antes: k === 1 ? 999999 : p.valor, recibo: p.valor, valorConfere: k !== 1,
+    statusDepois: 'programado', descricaoAntes: '13º Salário 1ª Parcela 2026', descricao: '13º Salário 1ª Parcela 2026', vencimentoAntes: '2026-11-30', vencimento: '2026-11-30' })),
+};
+export function apiDaFolhaDaBancada(jaAplicada: boolean, completar = false): FolhaCaixaApi {
   let aplicada = jaAplicada;
+  let completando = completar;
   return {
     aplicar: async (_c, _e, _d, itens, simular) => {
-      if (aplicada) return { ok: true, dados: { ...PREVIA, jaAplicado: true, soma: null, automaticos: [], pendencias: [], semRecibo: [], semFuncionario: [] } };
+      if (completando) { if (!simular) completando = false; return { ok: true, dados: simular ? COMPLETAR : { ...COMPLETAR, documentos: docsComCriado } }; }
+      if (aplicada) return { ok: true, dados: { ...PREVIA, jaAplicado: true, completar: false, soma: null, automaticos: [], pendencias: [], semRecibo: [], semFuncionario: [] } };
       const criar = itens.some((i) => i.criar);
       /* Gabriel 24/11 13:18: quem é CRIADO pelo recibo também guarda a página (o funcionário nasce/liga no criar — pedido ao Code 6, 118570) */
       const r: RespostaDaFolha = criar
-        ? { ...PREVIA, pendencias: [], semFuncionario: [], criar: [{ nome: 'PESSOA NOVA SEM LANÇAMENTO', valor: 2.01, descricao: '13º Salário 1ª Parcela 2026', vencimento: '2026-11-30' }] }
+        ? { ...PREVIA, pendencias: [], semFuncionario: [], criar: [{ nome: 'PESSOA NOVA SEM LANÇAMENTO', valor: 2.01, descricao: '13º Salário 1ª Parcela 2026', vencimento: '2026-11-30', funcionarioNovo: true }] }
         : PREVIA;
       if (!simular) aplicada = true;
       return { ok: true, dados: simular ? r : { ...r, documentos: criar ? docsComCriado : docs } };

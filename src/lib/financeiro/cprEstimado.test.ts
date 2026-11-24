@@ -74,11 +74,17 @@ describe('o dono reparte o total a pagar em confirmado + estimado, em centavos',
 });
 
 describe('quem julga é a regra única (`ocorrenciaEstimada`)', () => {
-  it('a confirmar, em aberto e sem a marca: estimada; com a MARCA do valor do mês vira confirmada; REALIZADA ou conciliada, confirmada', () => {
-    expect(ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: null, status: 'programado' })).toBe(true);
-    expect(ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: '2026-10-05T12:00:00Z', status: 'programado' })).toBe(false);
+  it('a confirmar, PREVISTA e sem a marca: estimada; com a MARCA do valor do mês vira confirmada; REALIZADA ou conciliada, confirmada', () => {
+    expect(ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: null, status: 'previsto' })).toBe(true);
+    expect(ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: null, status: null })).toBe(true);
+    expect(ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: '2026-10-05T12:00:00Z', status: 'previsto' })).toBe(false);
     expect(ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: null, status: 'realizado' })).toBe(false);
     expect(ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: null, status: 'conciliado' })).toBe(false);
+  });
+  it('CPR-LAYOUT-04 (o Vivo Casa): PROGRAMADO ou AGENDADO é confirmado; com NF/boleto (número do documento) é confirmado', () => {
+    expect(ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: null, status: 'programado' })).toBe(false);
+    expect(ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: null, status: 'agendado' })).toBe(false);
+    expect(ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: null, status: 'previsto', comDocumento: true })).toBe(false);
   });
   it('recorrência de valor certo nunca é estimada', () => {
     expect(ocorrenciaEstimada({ valorAConfirmar: false, valorDoMesEm: null, status: 'previsto' })).toBe(false);
@@ -89,9 +95,12 @@ describe('quem julga é a regra única (`ocorrenciaEstimada`)', () => {
       { id: 'b', recorrencia_id: 'r', valor: 10, status_transacao: 'programado', valor_do_mes_em: '2026-10-05T12:00:00Z' },
       { id: 'c', recorrencia_id: 'r', valor: 10, status_transacao: 'realizado', valor_do_mes_em: null },
       { id: 'd', recorrencia_id: 'r', valor: 10, status_transacao: 'agendado' },
+      { id: 'e', recorrencia_id: 'r', valor: 10, status_transacao: 'previsto', numero_documento: '134139094' },
+      { id: 'f', recorrencia_id: 'r', valor: 10, status_transacao: 'previsto', numero_documento: '  ' },
       { recorrencia_id: 'r', valor: 10, status_transacao: 'previsto' },
     ]);
-    expect([...ids].sort()).toEqual(['a', 'd']);
+    /* CPR-LAYOUT-04: 'd' (agendado) e 'e' (com NF) saem; documento em branco não conta */
+    expect([...ids].sort()).toEqual(['a', 'f']);
   });
   it('a estimada que ganha a marca sai do estimado e entra no confirmado — o total não muda', () => {
     const antes = recorte(ESTIMADAS);
@@ -117,14 +126,15 @@ describe('uma regra só, e a tela só desenha (lido da FONTE)', () => {
     /* a marca só é lida dentro da regra única */
     expect(dono.match(/!o\.valorDoMesEm/g)).toHaveLength(1);
     const hook = fonte('src/hooks/useRecorrencias.ts');
-    expect(hook).toContain('ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: o.valorDoMesEm, status: o.status })');
+    expect(hook).toContain('ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: o.valorDoMesEm, status: o.status, comDocumento })');
     expect(hook).toContain("if (idsDasRegras.length === 0) return { ids: new Set(), incompleto: false };");
   });
   it('a tela entrega o conjunto ao dono, lê as duas fatias dele e não julga', () => {
     const f = fonte('src/components/financeiro-v2/ContasPagarReceberTab.tsx');
     expect(f).toContain("queryKey: ['cpr-estimadas', clienteId],");
     /* P82: o recorte leva também os cartões do banco (`cartoes`), depois das estimadas */
-    expect(f.match(/recortarCpr\(linhas, \{[^}]*estimadas, cartoes \}\)/g)).toHaveLength(2);
+    /* CPR-LAYOUT-04: o da tela lê as linhas já filtradas (`linhasDoRecorte`); o de todas as contas, as linhas inteiras */
+    expect(f.match(/recortarCpr\((linhas|linhasDoRecorte), \{[^}]*estimadas, cartoes \}\)/g)).toHaveLength(2);
     expect(f).toContain('const estimada = !paga && contaEstimadaCpr(l, estimadas);');
     expect(f).toContain('const temEstimado = recorte.aPagarEstimado.valor > 0;');
     for (const proibido of ['valor_do_mes', 'tipo_valor', 'ocorrenciaEstimada']) expect(`${proibido}:${f.includes(proibido)}`).toBe(`${proibido}:false`);
@@ -135,8 +145,9 @@ describe('uma regra só, e a tela só desenha (lido da FONTE)', () => {
     expect(f).toContain('<span data-testid="cpr-selo-estimado" title={tituloDoSeloDaLinha(l.id)} className="h-[14px] shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] leading-[14px] text-amber-700"> estimado </span>');
     expect(fonte('src/lib/financeiro/estimadosDaCpr.ts')).toContain("recorrencia: 'valor estimado pela recorrência · informe o valor do mês no lançamento',");
     /* P152: a linha virou `div role="button"` (cursor próprio); a altura e a fonte são as mesmas */
-    /* CPR-LAYOUT-03: a linha a 12px (o mock) em 20px de altura — fixa, o selo de 14px cabe */
-    expect(f).toContain("'flex h-[20px] w-full shrink-0 cursor-pointer items-center gap-1 border-b px-3 text-left', FONTE_LINHA,");
+    /* CPR-LAYOUT-04: a linha a 11px em 22px de altura — fixa, o selo de 14px cabe */
+    expect(f).toContain("'flex h-[22px] w-full shrink-0 cursor-pointer items-center gap-1 border-b px-3 text-left', FONTE_LINHA,");
+    expect(f).toContain("const FONTE_LINHA = 'text-[11px]';");
   });
   it('o aviso de leitura INCOMPLETA (teto das ocorrências estimadas) é escrito no title do selo, dos dois totais e do cartão', () => {
     const f = fonte('src/components/financeiro-v2/ContasPagarReceberTab.tsx');

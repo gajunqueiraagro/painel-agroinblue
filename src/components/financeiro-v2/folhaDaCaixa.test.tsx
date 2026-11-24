@@ -26,10 +26,10 @@ const FOLHA: FolhaLida = {
 const BYTES = new TextEncoder().encode('%PDF documento inteiro').buffer;
 const PEDACO = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6, 7])];
 const dividir = vi.fn(async (_b: Uint8Array, _g: number[][]) => ({ ok: true as const, arquivos: PEDACO }));
-const VAZIA: RespostaDaFolha = { jaAplicado: false, automaticos: [], criar: [], pendencias: [], semRecibo: [], semFuncionario: [], soma: 1530, documentos: [] };
+const VAZIA: RespostaDaFolha = { jaAplicado: false, completar: false, automaticos: [], criar: [], pendencias: [], semRecibo: [], semFuncionario: [], soma: 1530, documentos: [] };
 const casa = (k: number, antes: number) => ({ paginas: FOLHA.pessoas[k].paginas, nome: FOLHA.pessoas[k].nome, lancamentoId: `l${k}`, antes, depois: FOLHA.pessoas[k].valor,
   nomeConfere: 'exato' as const, casouPor: 'funcionario' as const, acao: 'casar' as const, descricaoAntes: 'Folha Pagamento - 13', descricao: 'Folha Pagamento - 13',
-  vencimentoAntes: '2026-12-05', vencimento: '2026-12-05', status: 'previsto', segunda: null });
+  vencimentoAntes: '2026-12-05', vencimento: '2026-12-05', status: 'previsto', segunda: null, recibo: null, valorConfere: null, statusDepois: null });
 const docs = [{ documentoId: 'd0', storagePath: 'cli/x-p1.pdf', nome: 'FULANA FICTICIA', paginas: [1], lancamentoId: 'l0' },
   { documentoId: 'd1', storagePath: 'cli/x-p2.pdf', nome: 'BELTRANO FICTICIO', paginas: [2], lancamentoId: 'l1' }];
 
@@ -44,9 +44,12 @@ beforeEach(() => {
     subir: vi.fn<FolhaCaixaApi['subir']>(async () => ({ ok: true, dados: true })),
   };
 });
+let aoConcluir: Mock<(n: number) => void>;
+let aoFechar: Mock<() => void>;
 const montar = (aoAplicado = vi.fn()) => {
+  aoConcluir = vi.fn(); aoFechar = vi.fn();
   render(<FolhaDaCaixaDialog entrada={{ clienteId: 'cli', entradaId: null, bytes: BYTES, nomeDoArquivo: 'recibos.pdf', folha: FOLHA }} clienteNome="Cliente Teste"
-    aoFechar={() => {}} aoAplicado={aoAplicado} api={api} dividir={dividir} />);
+    aoFechar={aoFechar} aoAplicado={aoAplicado} aoConcluir={aoConcluir} api={api} dividir={dividir} />);
   return aoAplicado;
 };
 const celulas = (k: number) => within(screen.getByTestId(`linha-folha-${k}`)).getAllByRole('cell').map((c) => c.textContent);
@@ -63,10 +66,17 @@ describe('FOLHA-NA-CAIXA-01 — a prévia por funcionário', () => {
     await waitFor(() => expect(screen.getByTestId('linha-folha-0')).toBeTruthy());
     /* Nome Próprio só na tela (Gabriel 13:18); ao banco vai o nome como veio do PDF */
     expect(itens.map((i) => i.nome)).toEqual(['FULANA FICTICIA', 'BELTRANO FICTICIO']);
-    expect(celulas(0)).toEqual(['1', 'Fulana Ficticia', 'atualiza o valor', 'Folha Pagamento - 13', '05/12/2026', '3.192,00', '730,00', 'guarda a página']);
+    expect(celulas(0)).toEqual(['1', 'Fulana Ficticia', 'atualiza o valorvence depois do prazo legal', 'Folha Pagamento - 13', '05/12/2026', '3.192,00', '730,00', 'guarda a página']);
     expect(screen.getByTestId('soma').textContent).toBe('soma R$ 1.530,00 = documento');
-    expect(screen.getByTestId('sem-recibo').textContent).toMatch(/Outro Ficticio 500,00/);
+    /* nada cortado (Gabriel 14:03): o resumo numa linha; a lista inteira só no "ver quem" */
+    expect(screen.getByTestId('sem-recibo').textContent).toMatch(/^1 lançamento do tipo sem recibo neste documento \(ficam como estão\)/);
+    expect(screen.queryByTestId('lista-sem-recibo')).toBeNull();
+    fireEvent.click(screen.getByTestId('ver-sem-recibo'));
+    expect(screen.getByTestId('lista-sem-recibo').textContent).toBe('Outro Ficticio 500,00');
+    expect(screen.getByTestId('estado-da-folha').textContent).toBe('nada é gravado antes do Aprovar');
     expect(screen.getByTestId('aprovar-folha')).not.toBeDisabled();
+    /* venc. 05/12 > 30/11 (1ª parcela): o aviso, sem impedir o Aprovar */
+    expect(screen.getByTestId('prazo-0').textContent).toBe('vence depois do prazo legal');
   });
 
   it('Aprovar grava UMA vez e sobe cada pedaço no caminho devolvido; o que falha sobe de novo no MESMO caminho, sem reaplicar', async () => {
@@ -84,11 +94,17 @@ describe('FOLHA-NA-CAIXA-01 — a prévia por funcionário', () => {
     await waitFor(() => expect(screen.getByTestId('subida-1').textContent).toBe('guardado'));
     expect(api.subir.mock.calls[2][0]).toBe('cli/x-p2.pdf');
     expect(api.aplicar).toHaveBeenCalledTimes(2);
+    /* o sucesso é óbvio (Gabriel 14:03): o topo diz, e o primário vira "Concluir" (o aviso com o Desfazer é da Caixa) */
+    expect(screen.getByTestId('estado-da-folha').textContent).toBe('✓ Aplicado · 2 lançamentos');
+    expect(screen.queryByTestId('aprovar-folha')).toBeNull();
+    fireEvent.click(screen.getByTestId('concluir-folha'));
+    expect(aoConcluir).toHaveBeenCalledWith(2);
+    expect(aoFechar).toHaveBeenCalledTimes(1);
   });
 
   it('sem lançamento: o Aprovar apaga e diz por quê; "Criar" refaz a prévia com criar:true e libera', async () => {
     api.aplicar.mockImplementation(async (_c, _e, _d, itens) => ({ ok: true, dados: itens[1].criar
-      ? { ...VAZIA, automaticos: [casa(0, 3192)], criar: [{ nome: 'BELTRANO FICTICIO', valor: 800, descricao: 'Folha Pagamento - 13', vencimento: '2026-12-05' }] }
+      ? { ...VAZIA, automaticos: [casa(0, 3192)], criar: [{ nome: 'BELTRANO FICTICIO', valor: 800, descricao: 'Folha Pagamento - 13', vencimento: '2026-12-05', funcionarioNovo: true }] }
       : { ...VAZIA, automaticos: [casa(0, 3192)], pendencias: [{ paginas: [2], nome: 'BELTRANO FICTICIO', valor: 800, pendencia: 'sem_lancamento' }] } }));
     montar();
     await waitFor(() => expect(screen.getByTestId('acontece-1').textContent).toBe('sem lançamento'));
@@ -98,6 +114,8 @@ describe('FOLHA-NA-CAIXA-01 — a prévia por funcionário', () => {
     await waitFor(() => expect(screen.getByTestId('acontece-1').textContent).toBe('cria o lançamento'));
     expect(api.aplicar.mock.calls[1][3].map((i) => i.criar ?? false)).toEqual([false, true]);
     expect(screen.getByTestId('aprovar-folha')).not.toBeDisabled();
+    expect(screen.getByTestId('funcionario-novo-1').textContent).toBe('funcionário novo');
+    expect(screen.queryByTestId('funcionario-novo-0')).toBeNull();
   });
 
   it('o hook também se guarda: com pendência, o aprovar não grava (nem que a tela chame)', async () => {
@@ -113,9 +131,11 @@ describe('FOLHA-NA-CAIXA-01 — a prévia por funcionário', () => {
   });
 
   it('já aplicado: sem Aprovar; Desfazer pede o motivo, mostra o que volta e só então desfaz', async () => {
-    api.aplicar.mockResolvedValue({ ok: true, dados: { ...VAZIA, jaAplicado: true, soma: null } });
+    api.aplicar.mockResolvedValue({ ok: true, dados: { ...VAZIA, jaAplicado: true, completar: false, soma: null } });
     montar();
     await waitFor(() => expect(screen.getByTestId('frase-da-folha').textContent).toBe('Este documento já foi aplicado.'));
+    expect(screen.getByTestId('estado-da-folha').textContent).toBe('✓ Já aplicado');
+    expect(screen.queryByTestId('concluir-folha')).toBeNull();
     expect(screen.queryByTestId('aprovar-folha')).toBeNull();
     fireEvent.click(screen.getByTestId('desfazer-folha'));
     expect(screen.getByTestId('prever-desfazer')).toBeDisabled();
@@ -141,6 +161,25 @@ describe('FOLHA-NA-CAIXA-01 — a prévia por funcionário', () => {
       .toEqual(['', '↳ a 2ª parcela fica prevista', '2ª parcela', '13º Salário 2ª Parcela 2026', '18/12/2026', '', '2.462,00', '']);
     expect(screen.queryByTestId('segunda-1')).toBeNull();
     expect(screen.getByTestId('vencimento-1').getAttribute('title')).toBeNull();
+  });
+
+  it('a prévia que nem responde (rede): a faixa diz, nunca fica "preparando" calado', async () => {
+    api.aplicar.mockRejectedValue(new Error('Failed to fetch'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    montar();
+    await waitFor(() => expect(screen.getByTestId('frase-da-folha').textContent).toMatch(/^Sem resposta do banco/));
+  });
+
+  it('COMPLETAR (118620): o já aplicado sem páginas liga as páginas — o topo diz, cada linha "liga a página", o valor que difere avisa; o botão é "Ligar"', async () => {
+    const anexar = (k: number, confere: boolean) => ({ ...casa(k, FOLHA.pessoas[k].valor), acao: 'anexar' as const, recibo: FOLHA.pessoas[k].valor,
+      valorConfere: confere, statusDepois: 'programado' });
+    api.aplicar.mockResolvedValue({ ok: true, dados: { ...VAZIA, completar: true, automaticos: [anexar(0, true), anexar(1, false)] } });
+    montar();
+    await waitFor(() => expect(screen.getByTestId('acontece-0').textContent).toBe('liga a página'));
+    expect(screen.getByTestId('estado-da-folha').textContent).toMatch(/^completar: já aplicado sem as páginas/);
+    expect(screen.getByTestId('aprovar-folha').textContent).toBe('Ligar 2');
+    expect(screen.queryByTestId('valor-difere-0')).toBeNull();
+    expect(screen.getByTestId('valor-difere-1').textContent).toBe('valor de hoje ≠ recibo');
   });
 
   it('a recusa do banco vai à faixa como veio (nunca toast) e nada sobe', async () => {

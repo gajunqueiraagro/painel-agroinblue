@@ -154,6 +154,12 @@ const CENARIOS = [
   /* FORN-LISTA-01 — a lista nos tamanhos do contrato; os filtros pelo rótulo que começa com a situação (o número vem depois) */
   /* FORN-01b — a lista com a barra REAL do topo (32px) e 2.356 cadastros, como no app; a régua dela é a de Recorrências (abaixo) */
   { nome: 'fornecedores-lista', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* FORN-FORMA-PELO-EXTRATO-01 — o modal (1ª maiúscula no cabeçalho, sem rolagem lateral: só Fornecedor e o extrato encolhem com "…") */
+  { nome: 'forma-pelo-extrato', url: 'tela=forma-pelo-extrato', regiao: '[data-testid="forma-pelo-extrato"]',
+    tamanhos: [[1024, 600], [1126, 579], [1240, 700], [1280, 800], [1920, 1080]], antes: async (p) => { await p.locator('[data-testid="forma-tabela"]').waitFor({ timeout: 8000 }); } },
+  { nome: 'forma-pelo-extrato-gravado', url: 'tela=forma-pelo-extrato', regiao: '[data-testid="forma-pelo-extrato"]',
+    tamanhos: [[1024, 600], [1280, 800], [1920, 1080]], antes: async (p) => { await p.locator('[data-testid="forma-tabela"]').waitFor({ timeout: 8000 });
+      await clicarRotulo(/^2 · Gravado/)(p); await p.locator('[data-testid="forma-gravacoes"]').waitFor({ timeout: 8000 }); } },
   { nome: 'fornecedores-mesclados', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Mesclados /) },
   { nome: 'fornecedores-sem-documento', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="filtro-sem-documento"]') },
   /* FORN-SEM-CADASTRO-01 — a aba "Sem cadastro" (substitui a "Pendentes") nos tamanhos do mock, fechada e com uma linha aberta */
@@ -1478,6 +1484,9 @@ const CENARIOS = [
         return [
           { nome: 'caixa-folha-previa', url: URL, tamanhos: T, regiao: RF, antes: abrir },
           { nome: 'caixa-folha-criar', url: URL, tamanhos: T, regiao: RF, antes: criar },
+          { nome: 'caixa-folha-completar', url: `${URL}&caso=folha_completar`, tamanhos: T, regiao: RF, antes: abrir },
+          { nome: 'caixa-folha-sem-recibo', url: URL, tamanhos: T, regiao: RF, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="ver-sem-recibo"]').click(); await p.waitForTimeout(300); } },
           { nome: 'caixa-folha-aplicado', url: URL, tamanhos: T, regiao: RF, antes: async (p) => {
             await criar(p); await p.locator('[data-testid="aprovar-folha"]').click(); await p.waitForTimeout(900); } },
           { nome: 'caixa-folha-desfazer', url: `${URL}&caso=folha_aplicada`, tamanhos: T, regiao: RF, antes: async (p) => {
@@ -2499,6 +2508,10 @@ const CENARIOS = [
   { nome: 'financeiro-faixa-totais', url: 'tela=financeiro', regiao: '[data-testid="faixa-totais"]', tamanhos: TAMANHOS_DO_CONTRATO,
     botoesDentro: '[data-testid="faixa-totais"]',
     antes: async (p) => { for (let i = 0; i < 10; i++) await clicarRotulo([/^Macro$/, /^Subcentro$/, /^Centro$/, /^Mostrar$/, /^Ocultar$/][i % 5])(p); } },
+  /* FIN-PRONTO-PAGAR-01 — o seletor "Pagamento" em Faltando: a tabela só com os pontos laranja (o ponto antes do status, sem coluna nova) */
+  { nome: 'financeiro-pronto-faltando', url: 'tela=financeiro', regiao: '[data-testid="quadro-lancamentos"]',
+    tamanhos: [[1240, 700], [1024, 600], [1280, 800], [1920, 1080], ...TAMANHOS_DO_CONTRATO],
+    antes: async (p) => { await clicarRotulo(/^Faltando/)(p); await p.locator('[data-testid="ponto-pronto"][data-pronto="nao"]').first().waitFor({ timeout: 8000 }); } },
 ];
 /* UI-TEXTO-LONGO-01 — o que tem de ter a mesma altura com texto curto e longo (o que não existe na tela é pulado nos dois lados) */
 const ALTURAS_DO_MODAL = ['[role="dialog"]', '[role="dialog"] aside', '[data-testid="grade-de-parcelas"]'];

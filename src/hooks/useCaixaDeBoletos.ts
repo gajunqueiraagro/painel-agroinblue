@@ -23,7 +23,8 @@ import { parcelaApiDoBanco, type ParcelaApi } from '@/lib/financeiro/boleto/bole
 import { lerBoletosDoArquivo, paraEntrada, sugestoesDeSenha, type ParteDoBoleto } from '@/lib/financeiro/boleto/lerBoleto';
 import { lerNota } from '@/lib/financeiro/nfe/lerNota';
 import type { BoletoNormalizado } from '@/lib/financeiro/linhaDigitavel';
-import { entradaEmailApiDoBanco, rotuloDoMotivo, type EntradaDoEmail, type EntradaEmailApi, type MotivoDeIgnorar } from '@/lib/financeiro/boleto/entradaEmailApi';
+import { entradaEmailApiDoBanco, rotuloDoMotivo, type DetalheDoResolvido, type EntradaDoEmail, type EntradaEmailApi, type MotivoDeIgnorar } from '@/lib/financeiro/boleto/entradaEmailApi';
+import { md5 } from '@/lib/arquivo/md5';
 import {
   FRASE_FOLHA_AINDA_NAO, FRASE_NEM_BOLETO_NEM_NOTA, MOTIVO_DO_DESFEITO, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes, numeroDaNotaComPontos,
   type ConsultaDaNota, type ConsultaDoBoleto, type FonteParaMontar, type GrupoDaCaixa, type LinhaDaCaixa, type Lido, type ResumoDaNota,
@@ -119,6 +120,8 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
 
   const [lista, setLista] = useState<ListaDaCaixa | null>(null);
   const [entradas, setEntradas] = useState<EntradaDoEmail[] | null>(null);
+  /** 118610: quem, quando e o que gerou cada resolvido */
+  const [detalhes, setDetalhes] = useState<Record<string, DetalheDoResolvido>>({});
   const [erro, setErro] = useState<string | null>(null);
   const [lidos, setLidos] = useState<Record<string, Lido>>({});
   const [notas, setNotas] = useState<Record<string, ConsultaDaNota>>({});
@@ -143,6 +146,9 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     if (l.ok) setLista(l.dados);
     if (e.ok) setEntradas(e.dados);
     setErro(l.ok === false ? l.erro : e.ok === false ? e.erro : null);
+    /* 118610: o detalhe de Resolvidos (falhou = a coluna fica sem o detalhe; a lista de sempre continua) */
+    const d = entradaApi.resolvidos ? await entradaApi.resolvidos(clienteId).catch(() => null) : null;
+    if (vivo.current && d && d.ok) setDetalhes(d.dados);
   }, [api, clienteId, entradaApi]);
   useEffect(() => { void recarregar(); }, [recarregar]);
   useEffect(() => {
@@ -335,14 +341,39 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   const marcarFeito = (chave: string) => setFeitos((x) => new Set([...x, chave]));
 
   /** Resolve a entrada do e-mail quando TODOS os boletos do arquivo estão feitos (D7). */
+  /** FOLHA-NA-CAIXA-01b item 4 (118610): o ARRASTADO que foi resolvido vira registro da Caixa — registra (o mesmo arquivo = a mesma linha),
+   *  sobe o arquivo (só se é novo) e marca como o do e-mail; depois sai dos "Arrastados por você" (está em Resolvidos). Sem a API nova
+   *  (bancada antiga) nada muda: fica só na sessão, como antes. Falhou = a frase diz; o que já gravou fica. */
+  const resolverArrastado = useCallback(async (fonte: string, estado: 'boleto' | 'nota' | 'folha', boletoId: string | null, lancamentoId: string | null): Promise<string | null> => {
+    const local = locais.find((x) => x.chave === fonte);
+    if (!local || !clienteId || !entradaApi.registrarArrastado) return null;
+    const bytes = await local.arquivo.arrayBuffer();
+    const reg = await entradaApi.registrarArrastado(clienteId, { nome: local.arquivo.name, tipo: tipoDoNome(local.arquivo.name), tamanho: bytes.byteLength, md5: md5(bytes) });
+    if (reg.ok === false) return `Feito, mas o arquivo não ficou guardado na Caixa: ${reg.erro}`;
+    if (!reg.dados.jaExistia) {
+      const up = await api.subirArquivo(reg.dados.storagePath, local.arquivo);
+      if (up.ok === false) return `Feito, mas o arquivo não subiu para a Caixa: ${up.erro}`;
+    }
+    if (reg.dados.estado === 'a_ler' || reg.dados.estado === 'nao_reconhecido') {
+      const r = await entradaApi.resolver(reg.dados.id, estado, boletoId, lancamentoId);
+      if (r.ok === false) return `Feito, mas o arquivo não foi para Resolvidos: ${r.erro}`;
+    }
+    setLocais((xs) => xs.filter((x) => x.chave !== fonte));
+    return null;
+  }, [api, clienteId, entradaApi, locais]);
+
   const resolverSeCompleto = useCallback(async (fonte: string, chaveFeita: string, boletoId: string): Promise<string | null> => {
-    if (!ehDoEmail(fonte)) return null;
+    if (!ehDoEmail(fonte)) {
+      const todosLocal = (fontes.current.get(fonte)?.boletos ?? []).map((b) => `${fonte}#${b.codigo_barras}`);
+      const feitosLocal = new Set([...feitos, chaveFeita]);
+      return todosLocal.every((c) => feitosLocal.has(c)) ? resolverArrastado(fonte, 'boleto', boletoId, null) : null;
+    }
     const todos = (fontes.current.get(fonte)?.boletos ?? []).map((b) => `${fonte}#${b.codigo_barras}`);
     const feitosAgora = new Set([...feitos, chaveFeita]);
     if (!todos.every((c) => feitosAgora.has(c))) return null;
     const r = await entradaApi.resolver(fonte, 'boleto', boletoId, null);
     return r.ok ? null : `O boleto está na caixa, mas a linha do e-mail não foi marcada: ${r.erro}`;
-  }, [ehDoEmail, entradaApi, feitos]);
+  }, [ehDoEmail, entradaApi, feitos, resolverArrastado]);
 
   /** Garante o boleto na caixa (entra + sobe o PDF) e devolve o id. */
   const garantirNaCaixa = useCallback(async (l: LinhaDaCaixa): Promise<
@@ -444,6 +475,10 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
       const r = await entradaApi.resolver(f, 'nota', null, lanc);
       if (r.ok === false) return r.erro;
     }
+    for (const f of l.fontes.filter((x) => !ehDoEmail(x))) {
+      const m = await resolverArrastado(f, 'nota', null, lanc);
+      if (m) return m;
+    }
     marcarFeito(l.chave);
     /* os arquivos da nota do e-mail (o DANFE em PDF E o XML) entram nos documentos do lançamento achado pela chave; a mesma NF no
        mesmo tipo de arquivo, já na compra, o gravador recusa = "já estava" (P167) — nunca duplica */
@@ -458,7 +493,7 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     }
     await recarregar();
     return semDoc;
-  }), [fazer, ehDoEmail, entradaApi, entradas, anexarAosLancamentos, recarregar]);
+  }), [fazer, ehDoEmail, entradaApi, entradas, anexarAosLancamentos, recarregar, resolverArrastado]);
 
   /** FOLHA-NA-CAIXA-01 — o recibo do contador APLICADO pela prévia: a linha fica feita; a do e-mail vira 'folha' (resolvida). */
   const folhaFeita = useCallback((l: LinhaDaCaixa) => fazer(l.chave, async () => {
@@ -467,9 +502,13 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
       const r = await entradaApi.resolver(f, 'folha', null, null);
       if (r.ok === false) return `Aplicado, mas a linha do e-mail não foi marcada: ${r.erro}`;
     }
+    for (const f of l.fontes.filter((x) => !ehDoEmail(x))) {
+      const m = await resolverArrastado(f, 'folha', null, null);
+      if (m) return m;
+    }
     await recarregar();
     return null;
-  }), [fazer, ehDoEmail, entradaApi, recarregar]);
+  }), [fazer, ehDoEmail, entradaApi, recarregar, resolverArrastado]);
 
   /** Ignorar (D6): as entradas do e-mail com o motivo; o boleto guardado = descartado; o arrastado sai da lista. */
   const ignorar = useCallback((ls: readonly LinhaDaCaixa[], motivo: MotivoDeIgnorar, detalhe: string | null) => fazer('ignorar', async () => {
@@ -528,7 +567,7 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   }), [fazer, api, entradas, entradaApi, recarregar, esquecerEntrada]);
 
   return {
-    lista, entradas, erro, grupos, resolvidos, ignorados, descartados, sugestoes, ocupado,
+    lista, entradas, detalhes, erro, grupos, resolvidos, ignorados, descartados, sugestoes, ocupado,
     receber, arquivoDe, nomeDaFonte, tentarSenha, vincularBoleto, guardar, vincularNota, folhaFeita, ignorar, voltar, desfazerGuardado, recarregar,
   };
 }

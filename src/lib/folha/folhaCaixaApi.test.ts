@@ -22,7 +22,8 @@ describe('folhaCaixaApiDoBanco', () => {
   });
   it('frase pronta só nas recusas da regra; o resto é a genérica (o texto cru só no console)', () => {
     expect(fraseDoErroDaFolha({ code: '22023', message: 'Recibos: pedido inválido.' })).toBe('Recibos: pedido inválido.');
-    expect(fraseDoErroDaFolha({ code: '57014', message: 'canceling statement due to statement timeout' })).toBe(FRASE_SEM_BANCO);
+    /* fora das recusas da regra: a genérica COM o código (o erro do NJ 14:13 veio calado) */
+    expect(fraseDoErroDaFolha({ code: 'PGRST202', message: 'Could not find the function' })).toMatch(/código PGRST202/);
     expect(fraseDoErroDaFolha(null)).toBe(FRASE_SEM_BANCO);
   });
   it('o ja_aplicado do banco (contrato 118570) também vira jaAplicado; resposta estranha = erro, nunca prévia vazia', async () => {

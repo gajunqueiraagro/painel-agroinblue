@@ -18,6 +18,7 @@ import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { MesclarFornecedoresDialog } from '@/components/financeiro-v2/MesclarFornecedoresDialog';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
+import { FormaPeloExtratoDialog } from '@/components/financeiro-v2/FormaPeloExtratoDialog';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import { ListaDeFinanciamentos } from '@/components/financiamentos/ListaDeFinanciamentos';
 import { LinhaCreditoDialog } from '@/components/financiamentos/LinhaCreditoDialog';
@@ -276,9 +277,25 @@ function paginaDaBancada(base0: any[], a: any) {
   const base = new URLSearchParams(location.search).get('div') !== '1' ? base0 : base0.map((l, k) => (k === 0
     ? { ...l, valor: -9583, sinal: -1, tipo_operacao: '2-Saídas', valor_parte: 1055, partes_total: 2, partes_casadas: 1 }
     : k === 1 ? { ...l, valor_parte: Math.abs(Number(l.valor)), partes_total: 2, partes_casadas: 2 } : l));
-  const caixa = base.filter((l) => l.sem_movimentacao_caixa !== true).slice(0, corte === null ? undefined : Number(corte));
+  /* FIN-PRONTO-PAGAR-01 — o código da regra (o banco o calcula; aqui SINTÉTICO, um por linha) nas saídas ainda a pagar; a contagem é do
+     recorte sem o filtro de pagamento e o filtro `pronto_pagar` corta a página (a regra do banco: "falta%" = faltando) */
+  const CODIGOS = [['falta_forma', null], ['pronto_boleto', 'Boleto'], ['falta_chave', 'PIX'], ['nada_a_fazer', 'Débito Automático'],
+    ['pronto_chave_cadastro', 'PIX'], ['falta_dados_bancarios', 'Transferência']];
+  const comCodigo = base.map((l, k) => {
+    const aPagar = l.tipo_operacao === '2-Saídas' && l.status_transacao !== 'realizado' && l.sem_movimentacao_caixa !== true;
+    const [codigo, forma] = aPagar ? CODIGOS[k % CODIGOS.length] : [null, null];
+    return { ...l, pronto_pagar: codigo, forma_efetiva: forma };
+  });
+  const todosCaixa = comCodigo.filter((l) => l.sem_movimentacao_caixa !== true).slice(0, corte === null ? undefined : Number(corte));
+  const pp = a?.p_filtros?.pronto_pagar;
+  const caixa = !pp || pp === 'todos' ? todosCaixa : todosCaixa.filter((l) => l.pronto_pagar && (String(l.pronto_pagar).startsWith('falta') === (pp === 'faltando')));
+  const comPonto = todosCaixa.filter((l) => l.pronto_pagar);
+  const falta = comPonto.filter((l) => String(l.pronto_pagar).startsWith('falta'));
+  const soma = (xs: any[]) => Math.round(xs.reduce((t, l) => t + Math.abs(Number(l.valor)), 0) * 100) / 100;
   const por = Number(a?.p_por_pagina) || 200, pag = Number(a?.p_pagina) || 0;
   return {
+    pronto_pagar: { prontos: comPonto.length - falta.length, prontos_valor: soma(comPonto.filter((l) => !String(l.pronto_pagar).startsWith('falta'))),
+      faltando: falta.length, faltando_valor: soma(falta) },
     versao: 'bancada', pagina: pag, por_pagina: por, total_linhas: caixa.length,
     linhas: caixa.slice(pag * por, (pag + 1) * por).map((l) => ({ ...l, conciliado: false })),
     totais: (({ entradas, saidas, transferencias, entradasSemCaixa, saidasSemCaixa }) => ({ entradas, saidas, transferencias,
@@ -430,6 +447,23 @@ function buscarNaBancada(a: any) {
 if (tela === 'mesclar') {
   g.__bancoBancada = bancoDeFornecedores;
   montar(<MesclarFornecedoresDialog aberto aoFechar={() => {}} clienteId="cli" inicial={q.get('vazio') ? undefined : { manter: 'b', absorver: ['c', 'm'] }} />);
+} else if (tela === 'forma-pelo-extrato') {
+  /* FORN-FORMA-PELO-EXTRATO-01 — o modal com o banco injetado (SINTÉTICO; nomes longos = o pior caso do "…"); `&passo=gravado` abre no 2 */
+  const NOMES = ['Agropecuária Exemplo Comércio de Insumos Agrícolas e Veterinários Ltda', 'Distribuidora Modelo', 'Posto Rodovia Exemplo',
+    'Veterinária Sintética', 'Casa do Produtor Modelo de Campo Grande', 'Energia Exemplo S.A.', 'Transportadora Exemplo de Gado Ltda'];
+  const FORMAS: [string, string, string][] = [['PIX', 'PIX', 'PAGAMENTO PIX'], ['Boleto', 'Boleto', 'LIQUIDACAO BOLETO'], ['Débito', 'Débito', 'COMPRA DEBITO'],
+    ['PIX', 'PIX', 'PIX ENVIADO'], ['PIX', 'PIX', 'PIX ENVIADO'], ['Débito Automático', 'Débito Automático', 'PAGTO ENERGIA'], ['Transferência', 'Transferência Bancária', 'TED ENVIADA']];
+  const previa = Array.from({ length: 28 }, (_, i) => ({ fornecedor_id: `ff${i}`, nome: `${NOMES[i % NOMES.length]}${i >= NOMES.length ? ` ${i}` : ''}`,
+    pagamentos: [14, 11, 22, 6, 8, 12, 3][i % 7] + i, iguais_pct: [100, 100, 95.5, 83.3, 87.5, 100, 100][i % 7], forma: FORMAS[i % 7][0],
+    forma_cadastro: FORMAS[i % 7][1], exemplo: FORMAS[i % 7][2], chave_sugerida: i % 7 === 0 ? '12.345.678/0001-90' : null, tipo_chave: i % 7 === 0 ? 'CNPJ' : null,
+    abertos_sem_forma: (i * 7) % 41, hoje_forma: i % 7 === 4 ? 'Boleto' : i % 7 === 5 ? 'Débito Automático' : null, hoje_chave: null }));
+  const gravacoes = Array.from({ length: 6 }, (_, i) => ({ id: `op${i}`, fornecedor_id: `ff${i}`, forma: FORMAS[i][0], chave: i === 0 ? '12.345.678/0001-90' : null,
+    lancamentos: Array.from({ length: 3 + i * 4 }, (_, k) => `l${k}`), recusados: i === 2 ? 1 : 0, feita_em: '2026-11-24T09:42:00Z',
+    fornecedor: { nome: previa[i].nome } }));
+  const fontes = { ler: async () => previa, gravacoes: async () => gravacoes,
+    gravar: async (_c: string, ids: readonly string[], simular: boolean) => ({ ok: true, simulado: simular, fornecedores: ids.map((id) => ({ id })), lancamentos: 123 }),
+    desfazer: async () => ({ ok: true, lancamentos_voltaram: 3, mantidos: [] }) };
+  montar(<FormaPeloExtratoDialog aberto clienteId="cli" aoFechar={() => {}} fontes={fontes} />);
 } else if (tela === 'fornecedores') {
   g.__bancoBancada = bancoDeFornecedores;
   /* FORN-01b — com `&barra=32` a tela entra como no app: sem o `p-3` da bancada, na secao de altura do V2 (`SECOES_APP_SHELL`) */
@@ -2270,7 +2304,7 @@ if (tela === 'mesclar') {
     const { API_CAIXA_BANCADA, PARCELA_BANCADA, LER_CAIXA_BANCADA, API_ENTRADA_BANCADA, API_ENTRADA_BANCADA_SEM_ENDERECO, HOJE_DA_BANCADA } = await import('./dados/caixaBoletos');
     /* FOLHA-NA-CAIXA-01: o banco da folha em memória; `caso=folha_aplicada` = o documento já aplicado (o Desfazer) */
     const { apiDaFolhaDaBancada, DIVIDIR_DA_BANCADA } = await import('./dados/folhaDaCaixa');
-    const folha = { api: apiDaFolhaDaBancada(q.get('caso') === 'folha_aplicada'), dividir: DIVIDIR_DA_BANCADA };
+    const folha = { api: apiDaFolhaDaBancada(q.get('caso') === 'folha_aplicada', q.get('caso') === 'folha_completar'), dividir: DIVIDIR_DA_BANCADA };
     /* BOLETO D3c: `caso=sem_endereco` = o cliente sem endereço (o "Gerar"). D3d: o "hoje" fixo (o antigo não muda com o dia) e o
        "Lançar nota" presente (a tela de Lançamentos); `caso=sem_lancar` = a caixa aberta do Editar lançamento (sem o "Lançar nota") */
     const entrada = q.get('caso') === 'sem_endereco' ? API_ENTRADA_BANCADA_SEM_ENDERECO : API_ENTRADA_BANCADA;
