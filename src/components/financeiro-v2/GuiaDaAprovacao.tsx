@@ -17,6 +17,8 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { supabase } from '@/integrations/supabase/client';
+import { buscarNomesDosAutores } from '@/hooks/useNomesDosAutores';
+import { mapaDosNomes } from '@/lib/acessos/nomesDosAutores';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import {
   DIAS_DA_SEMANA, PASSOS_DO_GUIA, alternarDia, candidatosAAprovador, fraseDaPreviaDoLigar, textoDosDias,
@@ -273,9 +275,11 @@ export function GuiaDaAprovacao({ aberto, onFechar, passoInicial = 0, ehAdmin, c
         sb.from('financeiro_bpo_config').select('desde, dias_semana').eq('cliente_id', clienteId).limit(1),
       ]);
       const ids = Array.isArray(membros.data) ? membros.data.map((m: { user_id?: unknown }) => m.user_id).filter((x: unknown): x is string => typeof x === 'string') : [];
-      const perfis = ids.length ? await sb.from('profiles').select('id, nome, email').in('id', ids) : { data: [] };
+      /* BPO-NOMES-LARGURA-01: o nome vem da fonte única (`fn_nomes_dos_autores`, por user_id e guardada pelo cliente). Ler `profiles`
+         direto casava o id do usuário com o id da LINHA (nunca achava) e, para quem não é admin, a RLS só deixa ler o próprio perfil. */
+      const nomes = ids.length ? await buscarNomesDosAutores(clienteId, ids).catch(() => []) : [];
       if (!vivo) return;
-      const lista = candidatosAAprovador(membros.data, perfis.data, aprov.data);
+      const lista = candidatosAAprovador(membros.data, mapaDosNomes(nomes), aprov.data);
       setCandidatos(lista);
       const c = Array.isArray(cfg.data) ? cfg.data[0] : null;
       const diasGravados = Array.isArray(c?.dias_semana) ? c.dias_semana.filter((n: unknown): n is number => typeof n === 'number') : [];

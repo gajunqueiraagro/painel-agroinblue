@@ -1725,8 +1725,12 @@ if (tela === 'mesclar') {
       : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'itau', saldo: 12410.6, saldo_em: '2031-10-20T11:00:00Z', lido_em: '2031-10-20T11:00:00Z' }]
       /* BPO-GUIA-01 — o passo 6 do guia (só admin): os gestores do cliente, um com nome comprido */
       : t === 'cliente_membros' ? [{ user_id: 'g1', perfil: 'gestor_cliente', ativo: true }, { user_id: 'g2', perfil: 'financeiro', ativo: true }]
-      : t === 'profiles' ? [{ id: 'g1', nome: 'Gestor Sintético com Nome Comprido da Silva' }, { id: 'g2', nome: 'Financeiro Exemplo' }] : [],
-    rpc: (fn: string, a: any) => fn === 'fn_aprovacao_lista' ? (v === 'vera' ? LINHAS_VERA : LINHAS)
+      /* BPO-NOMES-LARGURA-01 — `profiles` na forma REAL (id da linha ≠ user_id; o guia não lê mais daqui). O nome vem da fonte única; o
+         financeiro sem nome no cadastro chega com o e-mail (a regra da fn_nomes_dos_autores) */
+      : t === 'profiles' ? [{ id: 'linha-1', user_id: 'g1', nome: 'Nome Errado de Profiles' }] : [],
+    rpc: (fn: string, a: any) => fn === 'fn_nomes_dos_autores' ? [{ user_id: 'g1', nome: 'Gestor Sintético com Nome Comprido da Silva', email: 'gestor@exemplo.com', situacao: 'membro ativo' },
+        { user_id: 'g2', nome: 'financeiro@exemplo.com', email: 'financeiro@exemplo.com', situacao: 'membro ativo' }]
+      : fn === 'fn_aprovacao_lista' ? (v === 'vera' ? LINHAS_VERA : LINHAS)
       : fn === 'fn_aprovacao_alertas' ? [{ alerta: 'pago_sem_aprovacao', lancamento_id: 'x1', data: '2031-10-13', valor: -2140, valor_aprovado: null, fornecedor: NOMES[0] },
           { alerta: 'aprovado_nao_pago', lancamento_id: 'x2', data: '2031-10-14', valor: -5990, valor_aprovado: -5990, fornecedor: NOMES[1] },
           { alerta: 'pago_diferente', lancamento_id: 'x3', data: '2031-10-12', valor: -99999999.99, valor_aprovado: -99999999.98, fornecedor: NOMES[2] }]
@@ -1929,6 +1933,10 @@ if (tela === 'mesclar') {
     if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
     /* NOTA-PAGTO-PARCELADO-01 P3 — `&natureza=conserto`: a mesma nota como REMESSA PARA CONSERTO (CFOP 6915): o aviso "não é compra" */
     if (q.get('natureza') === 'conserto') { lido.nota.naturezaOperacao = 'REMESSA DE MERCADORIA OU BEM PARA CONSERTO OU REPARO'; lido.nota.cfops = ['6915']; }
+    /* DA-NOTA-ETAPAS-01 — a nota NÃO FINANCEIRA (o molde da NF 7.891, SINTÉTICO): `&natureza=demonstracao` (5912: "Registrar bem de terceiro") e
+       `&natureza=devolucao` (1202: sem bem de terceiro) */
+    if (q.get('natureza') === 'demonstracao') { lido.nota.naturezaOperacao = 'REMESSA PARA DEMONSTRACAO'; lido.nota.cfops = ['5912']; }
+    if (q.get('natureza') === 'devolucao') { lido.nota.naturezaOperacao = 'DEVOLUCAO DE VENDA DE MERCADORIA'; lido.nota.cfops = ['1202']; }
     /* NOTA-PAGTO-PARCELADO-01 P1 — `&outros=1`: os lançamentos SOLTOS do mesmo fornecedor no período: a 4ª parcela desta nota paga por um PIX à
        parte (491,64: marcada, a soma confere com a nota) e duas de outras compras. SINTÉTICOS. */
     const OUTROS = q.get('outros') === '1' ? ([
@@ -1986,7 +1994,9 @@ if (tela === 'mesclar') {
       },
       /* NOTA-JA-LANCADA-01 — `v=jalancada`: 3 das 4 parcelas ja' lancadas (2 pagas, 1 programada, conciliada uma) num cadastro SEM CNPJ
          de nome comprido; a serie-irma de 1 centavo a mais; a 4a falta. Dados SINTETICOS. */
-      rpc: (fn: string, a?: any) => fn === 'fn_nota_ja_lancada' && (v === 'jalancada' || v === 'cancelados') ? [
+      rpc: (fn: string, a?: any) => fn === 'fn_bem_terceiro_registrar' ? { motivo: 'demonstracao', fornecedor: 'Agro Sintetica Insumos Agropecuarios Ltda', nf: '000.000.937',
+          data: '2026-09-20', total: 1966.56, itens: lido.nota.itens.map((i, k) => ({ n: k + 1, descricao: i.descricao, quantidade: 1, valor: i.valorCent / 100 })) }
+        : fn === 'fn_nota_ja_lancada' && (v === 'jalancada' || v === 'cancelados') ? [
         /* NOTA-CONTAS-NA-CRIACAO-01 D — `v=cancelados`: os mesmos, e mais 2 CANCELADOS desta nota no fim (selo cinza) */
         ...(v === 'cancelados' ? CANCELADOS_DA_NOTA : []),
         ...[['2026-10-20', 'realizado'], ['2026-11-20', 'realizado'], ['2026-12-20', 'programado']].map(([venc, st], i) => ({

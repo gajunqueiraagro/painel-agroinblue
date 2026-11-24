@@ -1770,12 +1770,23 @@ const CENARIOS = [
   })),
   /* NOTA-PAGTO-PARCELADO-01 (Gabriel 11/11) — P3 o aviso "não é compra" (a nota de conserto); P1 o "Outros lançamentos do fornecedor" com 2
      marcados (o rodapé soma × nota × diferença); P2 o "Como foi pago? › Parcelado" no caminho Criar (a forma, as parcelas, a grade) */
+  /* DA-NOTA-ETAPAS-01 — a nota NÃO FINANCEIRA: a nota nova de demonstração (o painel dos 3 caminhos, o rodapé "Guardar a nota") e a de devolução
+     (o bem de terceiro apagado no lugar), o "Registrar bem de terceiro" por cima, e a já no sistema na etapa 4 (o "Guardar" no lugar do Aplicar) */
+  ...[['nao-gera', 'tela=nota-pdf&v=&natureza=demonstracao'], ['nao-gera-devolucao', 'tela=nota-pdf&v=&natureza=devolucao']].map(([n, url]) => ({
+    nome: `nota-pdf-${n}`, url, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-nao-gera-itens"]' },
+    antes: async (p) => { await p.locator('[data-testid="nota-nao-gera"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(500); } })),
+  { nome: 'nota-pdf-nao-gera-bem', url: 'tela=nota-pdf&v=&natureza=demonstracao', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], regiao: '[data-testid="receita-bem"]',
+    antes: async (p) => { await p.locator('[data-testid="nota-registrar-bem"]').click(); await p.locator('[data-testid="receita-bem-item"]').first().waitFor({ timeout: 8000 }); await p.waitForTimeout(500); } },
+  { nome: 'nota-pdf-nao-gera-ja', url: 'tela=nota-pdf&v=gulart&natureza=demonstracao', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await p.locator('[data-testid="nota-etapa-lancamento"]').click(); await p.waitForTimeout(600); } },
   { nome: 'nota-pdf-semcompra', url: 'tela=nota-pdf&v=jalancada&natureza=conserto', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' } },
   { nome: 'nota-pdf-outros', url: 'tela=nota-pdf&v=jalancada&outros=1', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="outros-lancamentos"]',
     antes: async (p) => {
       await p.locator('[role="dialog"]').first().waitFor({ timeout: 15000 }); await p.waitForTimeout(800);
-      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400);
       await p.locator('[data-testid="nota-outros-abrir"]').click(); await p.waitForTimeout(800);
       const c = p.locator('[data-testid="outros-marcar"]:not([disabled])'); await c.nth(0).click(); await p.waitForTimeout(300);
     } },
@@ -1835,22 +1846,25 @@ const CENARIOS = [
   /* P163-2 (NOTA-ABAS-PREVIA-01) — a nota JÁ LANÇADA em abas, cada aba nos sete tamanhos (a "No sistema hoje" é a que abre: `nota-pdf-<v>` acima);
      abaixo de 1000px também a aba "Arquivo" (ver a nota). Só rolam por dentro as tabelas (a do sistema, a da prévia, a dos itens). */
   /* mock da nota já lançada (29/10): Nota e Fornecedor fixos em cima; as abas Parcelas × sistema (a que abre) · Como vai ficar · Itens · Lançamento */
-  ...NOTA_JA_LANCADA.flatMap((v) => [['hoje', 'No sistema hoje', TAMANHOS_DO_CONSORCIO], ['parcelas', 'Parcelas × sistema', TAMANHOS_DO_CONSORCIO], ['ficar', 'Como vai ficar', TAMANHOS_DO_CONSORCIO],
-    ['itens', 'Itens (', TAMANHOS_DO_CONSORCIO], ['lancamento', 'Lançamento', TAMANHOS_DO_CONSORCIO], ['arquivo', 'Arquivo', TAMANHOS_ESTREITOS_DA_NOTA]].map(([a, rotulo, tamanhos]) => ({
-    nome: `nota-pdf-ja-${a}-${v}`, url: `tela=nota-pdf&v=${v}`, tamanhos: a === 'arquivo' ? tamanhos : [...tamanhos, [1366, 768]], titulosDeBloco: true,
-    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+  /* DA-NOTA-ETAPAS-01 (mock v2 aprovado 19/11 07:51) — as 4 ETAPAS (O que já existe · Como vai ficar · Itens da nota · Confirmar) e as 3 sub-abas
+     da etapa 3 (Valores · Fiscal · Contas): REGRA do gate (Chat 19/11 07:58) — corte em TODAS a 1280/1366/1920, além dos sete de sempre */
+  ...NOTA_JA_LANCADA.flatMap((v) => [['existe', 'O que já existe'], ['ficar', 'Como vai ficar'], ['itens', 'Itens da nota'], ['itens-fiscal', 'Itens da nota', 'Fiscal'],
+    ['itens-contas', 'Itens da nota', 'Contas'], ['confirmar', 'Confirmar']].map(([a, rotulo, sub]) => ({
+    nome: `nota-pdf-ja-${a}-${v}`, url: `tela=nota-pdf&v=${v}`, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"], [data-testid="contas-rolagem"]' },
     antes: async (p) => {
       await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
       await p.locator('[data-testid="nota-abas-ja"] button', { hasText: rotulo }).first().click(); await p.waitForTimeout(500);
+      if (sub) { await p.locator('[data-testid="nota-aba-itens"] button', { hasText: new RegExp(`^${sub}$`) }).first().click(); await p.waitForTimeout(500); }
     } }))),
   /* NOTA-ATUALIZA-PREVISTO-01 — o caso da Vera (SINTÉTICO): "É esta" no PREVISTO de R$ 1.000 + "paga 70 %": a aba Parcelas (o Resultado
      "1 atualiza · 0 cria · R$ … · paga 70 % · outro paga R$ …", o resumo em colunas) e a Como vai ficar (o valor de hoje riscado → o novo) */
-  ...[['parcelas', 'Parcelas × sistema'], ['ficar', 'Como vai ficar']].map(([a, rotulo]) => ({
+  ...[['parcelas', 'O que já existe'], ['ficar', 'Como vai ficar']].map(([a, rotulo]) => ({
     nome: `nota-pdf-ja-previsto-${a}`, url: 'tela=nota-pdf&v=previsto', tamanhos: TAMANHOS_DO_CONSORCIO, titulosDeBloco: true,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
     antes: async (p) => {
       await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
-      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400);
       await p.locator('[data-testid="nota-acao"][data-acao="deixar"]').first().click(); await p.locator('[data-testid="nota-acao-vincular"]').click();
       await p.locator('[data-testid="nota-participacao-pct"]').fill('70'); await p.waitForTimeout(300);
       if (a === 'ficar') await p.locator('[data-testid="nota-abas-ja"] button', { hasText: rotulo }).first().click();
@@ -1932,12 +1946,12 @@ const CENARIOS = [
   /* a frase mora na aba "Parcelas × sistema" (desde 29/10 a nota já lançada abre em "No sistema hoje"): o cenário abre a aba antes */
   { nome: 'nota-pdf-nf-digitada', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO.filter(([l]) => l >= 1000),
     semRolarNoLugar: '[data-testid="nota-nf-digitada"]',
-    antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(500); } },
+    antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(500); } },
   { nome: 'nota-pdf-nota-lida-confirmar', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
     antes: async (p) => {
       /* P163-2 — a nota já lançada abre em abas (`nota-abas-ja`, em todo tamanho): o "Usar a nota lida" mora em "No sistema hoje" */
       const ja = p.locator('[data-testid="nota-abas-ja"]');
-      if (await ja.count()) { await ja.locator('button', { hasText: 'Parcelas × sistema' }).first().click(); await p.waitForTimeout(400); }
+      if (await ja.count()) { await ja.locator('button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400); }
       else if (p.viewportSize().width < 1000) { await p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' }).first().click(); await p.waitForTimeout(400); }
       await p.locator('[data-testid="nota-usar-nota-lida"]').first().click(); await p.waitForTimeout(600);
     } },

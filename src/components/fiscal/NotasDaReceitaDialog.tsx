@@ -32,7 +32,7 @@ import { Ajuda } from '@/components/ui/ajuda';
 import type { PreviaDoBem } from '@/hooks/useNotasDaReceita';
 
 /* NOTAS-RECEITA-SEM-LANCAMENTO-01 — o que FAZER com cada classe (o "como fazer" do ⓘ) e a ação ligada da linha */
-type RespostaDoBem = PreviaDoBem | { ok: false; frase: string };
+export type RespostaDoBem = PreviaDoBem | { ok: false; frase: string };
 function oQueFazer(n: NotaNaLista): string {
   if (n.sit === 'venda_titular') return 'Confira no abate/venda (OC) do comprador. Não lance como compra.';
   if (n.sit === 'cancelada') return n.substituta ? `Use a NF ${n.substituta}, que a substituiu.` : 'Nada a lançar.';
@@ -515,8 +515,9 @@ function PodeEstarLancada({ n, ocupada, aviso, aoFechar, aoVincular, aoLancarNov
 
 /** NOTAS-RECEITA-SEM-LANCAMENTO-01 — "Registrar bem de terceiro": a PRÉVIA pela nota (motivo, de quem, quando, os itens) e só grava no
  *  "Registrar" (a mesma RPC com p_simular). A recusa do banco fica escrita no modal. */
-function RegistrarBemDeTerceiro({ n, registrar, aoFechar }: {
-  n: NotaNaLista; registrar: (chave: string, previsao: string | null, observacao: string | null, simular: boolean) => Promise<RespostaDoBem>;
+export function RegistrarBemDeTerceiro({ n, registrar, aoFechar }: {
+  /* DA-NOTA-ETAPAS-01 — também do "+ Da nota" (a nota não financeira): só o que o modal lê da nota */
+  n: Pick<NotaNaLista, 'chave' | 'numero' | 'emitenteNaTabela'>; registrar: (chave: string, previsao: string | null, observacao: string | null, simular: boolean) => Promise<RespostaDoBem>;
   aoFechar: (frase: string | null) => void;
 }) {
   const [previa, setPrevia] = useState<RespostaDoBem | null>(null);

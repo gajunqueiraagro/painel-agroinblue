@@ -127,7 +127,7 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
             <th className={cn(TH, 'text-right')}>Líquido</th><th className={cn(TH, 'text-left')}>Conta</th>
           </tr></thead>
         </table>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto" data-testid="contas-rolagem">
           <table className="w-full table-fixed border-collapse">
             <colgroup><col style={{ width: 22 }} /><col /><col style={{ width: 70 }} /><col style={{ width: 250 }} /></colgroup>
             <tbody>
