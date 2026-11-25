@@ -2182,6 +2182,12 @@ if (tela === 'mesclar') {
            pelo numero escrito de outro jeito ("NF_000.000.937"). Dados SINTETICOS. */
         /* D — `v=socancelados`: so' cancelados (a nota NAO esta' lancada; o rodape diz quantos) */
         : fn === 'fn_nota_ja_lancada' && v === 'socancelados' ? CANCELADOS_DA_NOTA
+        /* NOTA-ENTREGA-FUTURA-01 (3) — `v=outranota`: o achado do mesmo fornecedor e valor JÁ COM OUTRA NF (o molde Pastoforma: a NF desta nota entra;
+           o lançamento está com a remessa, NF 30.436). Nomes compridos para o pior caso. SINTÉTICOS. */
+        : fn === 'fn_nota_ja_lancada' && v === 'outranota' ? [{ id: 'jl-outra', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
+          descricao: 'Medicamentos Bovinos Sinteticos com descricao bem comprida para o pior caso da remessa', valor_cent: 49164, status: 'programado',
+          conciliado: false, financiamento_id: null, numero_documento: '000.030.436', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',
+          fornecedor_por: 'cnpj', parcelas: [{ n: 1, dif_cent: 0, dif_dias: 0 }], por: ['valor'] }]
         /* P95 — `v=irmas`: 4 parcelas soltas no cartao (a nota sem duplicata, R$ 9.583,00), o numero so' em duas; somam R$ 0,02 a menos
            que a nota. SINTETICAS. */
         : fn === 'fn_nota_ja_lancada' && v === 'irmas' ? [239576, 239573, 239575, 239574].map((valor_cent, i) => ({ id: `jl-irma-${i}`, vencimento: `2026-${String(10 + i).padStart(2, '0')}-10`.replace('2026-13', '2027-01'),
@@ -3458,7 +3464,23 @@ if (tela === 'mesclar') {
     uploaded_por: 'u1', observacao: null, cancelado: false, cancelado_em: null, cancelado_motivo: null, versao: 1, ligado_a_qtd: 1, emitente_id: 'agro',
     emitente_nome: 'COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA', emitente_documento: '11222333000181' };
   /* P121b — `&nota=11`: a parcela 2/5 SEM número próprio e a NF da compra ligada, com 11 dígitos (o pior caso do Resumo: o número inteiro + o selo) */
-  const DOCS_NOTA = q.get('nota') === '11' ? [{ ...docBase, documento_id: 'd-n11', nome: 'NF.pdf', tipo: 'application/pdf', url: 'c/l/n.pdf', especie: 'nf',
+  /* NOTA-ENTREGA-FUTURA-01 (B) — `docs=entregas`: a compra com entrega futura (o molde Pastoforma/milho, SINTÉTICO): a NF da compra (só XML),
+     duas entregas (PDF + XML cada), um boleto; o banco diz os papéis e o saldo (`fn_lancamento_entregas`), emitente de nome longo */
+  const ENT = q.get('docs') === 'entregas';
+  const CH_C = '50261111222333000181550010000301501123456780'; const CH_E1 = '50261111222333000181550010000304361123456781'; const CH_E2 = '50261111222333000181550010000305121123456782';
+  const DOCS_ENT = [
+    { ...docBase, documento_id: 'de-c', nome: 'NF 30150 (XML da Receita)', tipo: 'application/xml', url: null, especie: 'nf', numero: '000.030.150', serie: '1', chave_acesso: CH_C, data_emissao: '2026-11-10', valor_documento: 600000 },
+    { ...docBase, documento_id: 'de-e1p', nome: 'nf 000.030.436 (DANFE)', tipo: 'application/pdf', url: 'c/l/e1.pdf', especie: 'nf', numero: '000.030.436', serie: '1', chave_acesso: CH_E1, data_emissao: '2026-11-18', valor_documento: 18800 },
+    { ...docBase, documento_id: 'de-e1x', nome: 'nf 000.030.436', tipo: 'application/xml', url: 'c/l/e1.xml', especie: 'nf', numero: '000.030.436', serie: '1', chave_acesso: CH_E1, data_emissao: '2026-11-18', valor_documento: 18800 },
+    { ...docBase, documento_id: 'de-e2x', nome: 'nf 000.030.512', tipo: 'application/xml', url: 'c/l/e2.xml', especie: 'nf', numero: '000.030.512', serie: '1', chave_acesso: CH_E2, data_emissao: '2026-11-22', valor_documento: 19200 },
+    { ...docBase, documento_id: 'de-b', nome: 'boleto.pdf', tipo: 'application/pdf', url: 'c/l/b.pdf', especie: 'boleto', numero: null, serie: null, chave_acesso: null, data_emissao: '2026-12-10', valor_documento: 600000 },
+  ];
+  const ENTREGAS_BANCADA = { compra: { chave: CH_C, nf: '30150' }, entregas: 2,
+    papeis: [{ documento_id: 'de-c', papel: 'compra' }, { documento_id: 'de-e1p', papel: 'entrega', n: 1 }, { documento_id: 'de-e1x', papel: 'entrega', n: 1 },
+      { documento_id: 'de-e2x', papel: 'entrega', n: 2 }, { documento_id: 'de-b', papel: 'boleto' }],
+    itens: [{ produto: 'MILHO DEBULHADO A GRANEL SAFRINHA 2026 PADRAO EXPORTACAO UMIDADE 14%', unidade: 'sc', comprado: 10000, entregue: 3588, falta: 6412 },
+      { produto: 'Semente sintética BRS', unidade: 'kg', comprado: 1000, entregue: 1000, falta: 0 }], motivo: null };
+  const DOCS_NOTA = ENT ? DOCS_ENT : q.get('nota') === '11' ? [{ ...docBase, documento_id: 'd-n11', nome: 'NF.pdf', tipo: 'application/pdf', url: 'c/l/n.pdf', especie: 'nf',
     numero: '12.345.678.901', serie: null, chave_acesso: null, data_emissao: '2026-05-08', valor_documento: 1000 }]
     : q.get('docs') !== 'nota' && q.get('div') !== '1' ? [] : [
     { ...docBase, documento_id: 'd-pdf', nome: 'NF 15786.pdf', tipo: 'application/pdf', url: 'c/l/a.pdf', especie: 'nf', numero: '15786', serie: null, chave_acesso: CH, data_emissao: '2026-05-08', valor_documento: 102000 },
@@ -3523,7 +3545,8 @@ if (tela === 'mesclar') {
       : DIV && t === 'nota_fiscal' ? [NOTA_DIV] : DIV && t === 'nota_fiscal_itens' ? ITENS_DIV : [], rpc: (fn: string, a: any) =>
     /* P138 — a safra da competência é do banco: aqui, pelas datas das safras SINTÉTICAS da bancada (a mesma regra) */
     /* NOTA-PAGA-POR-TERCEIRO-01 — a prévia SINTÉTICA (com o aviso do boleto) */
-    fn === 'fn_lancamento_pago_por_terceiro' ? { ok: true, simulado: true, parceiro: 'Construtora Exemplo de Nome Comprido Ltda', data_pagamento: '2026-11-20',
+    ENT && fn === 'fn_lancamento_entregas' ? ENTREGAS_BANCADA
+    : fn === 'fn_lancamento_pago_por_terceiro' ? { ok: true, simulado: true, parceiro: 'Construtora Exemplo de Nome Comprido Ltda', data_pagamento: '2026-11-20',
       antes: { status: 'programado', data_pagamento: null, sem_caixa: false }, depois: { status: 'realizado', data_pagamento: '2026-11-20', sem_caixa: true },
       avisos: ['Tem boleto ligado: confirme que o terceiro pagou esse boleto.'],
       efeitos: ['sai de "a pagar", da aprovação, dos vencidos e da procura no extrato', 'a despesa continua no DRE com a mesma conta', 'Livro Caixa: fora (sem movimento de caixa) até o contador definir'] }

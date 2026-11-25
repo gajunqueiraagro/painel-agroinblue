@@ -267,6 +267,10 @@ const CENARIOS = [
   ...['Geral', 'Pagamento', 'Documentos'].flatMap((aba) => ['novo', 'editar'].map((m) => ({ nome: `lancamento-${m}-${aba}`, url: `tela=lancamento&m=${m}`, antes: clicarTexto(aba) }))),
   /* DOC-NOTA-XML-PDF-01 — a aba Documentos com a nota em PDF + XML numa linha (selos), a nota so' em XML e um boleto */
   { nome: 'lancamento-editar-Documentos-nota', url: 'tela=lancamento&m=editar&docs=nota', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Documentos') },
+  /* NOTA-ENTREGA-FUTURA-01 (B) — a compra com entrega futura: Papel · Documento…, "gera a conta"/"sem financeiro", o Saldo a entregar (nome longo, 2 itens)
+     e o Resumo com Compra · Entregas · LCDPR */
+  { nome: 'lancamento-editar-Documentos-entregas', url: 'tela=lancamento&m=editar&docs=entregas', tamanhos: TAMANHOS_DO_CONTRATO,
+    antes: async (p) => { await clicarTexto('Documentos')(p); await p.locator('[data-testid="saldo-tabela"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
   /* FIN-CLASSIF-DIVIDIDA-01b/01c — a classificação dividida: a Geral com as partes, a aba Itens na vista "Contas" (18 itens), a lista com
      a parte "de R$ total" e os selos */
   { nome: 'lancamento-dividido-Geral', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO },
@@ -2090,6 +2094,16 @@ const CENARIOS = [
     antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcelas-no-pagamento"]').waitFor(); await p.waitForTimeout(500); } },
   { nome: 'lancamento-parcelar-confirmar', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
     antes: async (p) => { await parcelarEm4(p); await p.locator('[data-testid="parcelar-este-confirmar"]').click(); await p.waitForTimeout(500); } },
+  /* NOTA-ENTREGA-FUTURA-01 (3) — o achado com OUTRA NF: a etapa 1 (seção própria, "O que fazer") e o Confirmar nas duas escolhas */
+  ...[['etapa1', null, false], ['confirmar-trocar', 'trocar', true], ['confirmar-criar', 'criar', true]].map(([nome, escolha, confirmar]) => ({
+    nome: `nota-outra-nf-${nome}`, url: 'tela=nota-pdf&v=outranota', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-itens-rolagem"], [data-testid="nota-outra-nf"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-outra-nf"]').waitFor({ timeout: 8000 });
+      if (escolha) await p.locator(`[data-testid="nota-outra-nf-${escolha}"]`).click();
+      if (confirmar) await p.locator('[data-testid="nota-etapa-lancamento"]').click();
+      await p.waitForTimeout(400);
+    } })),
   /* P128a — os TRÊS CAMINHOS com o "Criar um lançamento novo" escolhido (o aviso vermelho "duplica", o botão "Criar novo (duplica)") */
   { nome: 'nota-pdf-caminho-criar', url: 'tela=nota-pdf&v=diferenca', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },

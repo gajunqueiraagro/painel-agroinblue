@@ -47,6 +47,9 @@ export interface ResumoDoLancamentoProps {
   /** BOLETO D1d D3 (+ Gabriel 18/11 14:40): o boleto VIVO ligado ("venc dd/mm/aaaa") e o 👁 que abre o PDF dele (null = sem PDF
    *  guardado: o 👁 apagado). Sem boleto: null ("—"). */
   boleto?: { selo: string; onVer: (() => void) | null } | null;
+  /** NOTA-ENTREGA-FUTURA-01 (B, mock aprovado 25/11 07:44) — a compra com entrega futura: a linha "Nota" vira "Compra", e entram "Entregas"
+   *  (quantas · o que falta) e "LCDPR" (a NF da compra). Sem entrega: null (o bloco de sempre). */
+  entregas?: { compra: string | null; entregas: string } | null;
 }
 
 /** Título de bloco: pequeno, maiúsculo, navy, com a linha embaixo. */
@@ -170,10 +173,26 @@ export function ResumoDoLancamento(p: ResumoDoLancamentoProps) {
           </Tabela>
         </Bloco>
 
-        <Bloco titulo="Documento" altura="h-[50px]" testid="resumo-documento">
+        <Bloco titulo="Documento" altura={p.entregas ? 'h-[82px]' : 'h-[50px]'} testid="resumo-documento">
           {/* P121b: o número NUNCA corta (sem `truncate`, sem encolher). Gabriel 18/11 14:40 ("da co…"): a ORIGEM ("da compra" = a nota está
               na compra parcelada, vale para as parcelas · "ligado" = documento ligado) sai da linha e vai para o title do número — nada cortado */}
           <Tabela>
+            {p.entregas ? (<>
+              <tr className="h-[16px] text-[11px] leading-[14px]">
+                <td className={ROTULO} title="Compra: a NF que gera a conta">Compra</td>
+                <td className="align-middle"><span className={cn('whitespace-nowrap tabular-nums', !p.entregas.compra && 'text-muted-foreground')} data-testid="resumo-compra">
+                  {p.entregas.compra ? `NF ${p.entregas.compra}` : '—'}</span></td>
+              </tr>
+              <tr className="h-[16px] text-[11px] leading-[14px]">
+                <td className={ROTULO} title="Entregas (remessas) ligadas">Entregas</td>
+                <td className="align-middle"><span className="whitespace-nowrap tabular-nums" data-testid="resumo-entregas">{p.entregas.entregas}</span></td>
+              </tr>
+              <tr className="h-[16px] text-[11px] leading-[14px]">
+                <td className={ROTULO} title="A NF que vai no LCDPR">LCDPR</td>
+                <td className="align-middle"><span className={cn('whitespace-nowrap tabular-nums', !p.entregas.compra && 'text-muted-foreground')} data-testid="resumo-lcdpr">
+                  {p.entregas.compra ? `NF ${p.entregas.compra}` : '—'}</span></td>
+              </tr>
+            </>) : (
             <tr className="h-[16px] text-[11px] leading-[14px]">
               <td className={ROTULO} title="Nota">Nota</td>
               <td className="align-middle" title={tituloDaNota(p.documento)}>
@@ -182,6 +201,7 @@ export function ResumoDoLancamento(p: ResumoDoLancamentoProps) {
                 </span>
               </td>
             </tr>
+            )}
             {/* BOLETO D1d D3 (+ 14:40): "venc dd/mm/aaaa" (a data nunca corta) e o 👁 do PDF num lugar fixo; sem boleto ligado, "—" */}
             <tr className="h-[16px] text-[11px] leading-[14px]">
               <td className={ROTULO} title="Boleto">Boleto</td>

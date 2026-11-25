@@ -37,6 +37,10 @@ import { ajudaDaRegra } from '@/lib/arquivo/aceitarArquivo';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { faixaDoConfronto } from '@/lib/financeiro/faixaDoConfronto';
 import { DICA_DO_MOTIVO, ROTULO_DO_MOTIVO, type MotivoNaoFinanceira } from '@/lib/fiscal/classeDaNota';
+import { FRASE_SEM_SALDO, fraseDaFalta, oQueOPapelFaz, quantidadeFalada, rotuloDoPapel } from '@/lib/financeiro/entregasDoLancamento';
+import type { EntregasApi } from '@/hooks/useEntregasDoLancamento';
+import { LigarEntregaDaCaixaDialog } from './LigarEntregaDaCaixaDialog';
+import { ligarXmlDaReceitaAoDocumento } from '@/lib/fiscal/danfeDasNotasGuardadas';
 
 /** o selo da NF que não gera pagamento na coluna Situação (62 px): curto; o motivo inteiro vai no title */
 const SELO_NO_DOCUMENTO: Record<MotivoNaoFinanceira, string> = {
@@ -100,8 +104,12 @@ export interface CompletarPelaNota { lancamentoId: string; onCompletado: (fica: 
 /** NOTA-LIGAR-LANCAMENTO-01 P1 — a criação de cadastro do hospedeiro ("Cadastrar esta filial"); devolve o criado ou a frase do que impediu */
 export type CriarFornecedorDoDocumento = (nome: string, cpfCnpj: string) => Promise<{ id: string; nome: string } | string>;
 
-export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnexarBoletosDasParcelas, sugestao, semBoleto, onVerOQueANotaMuda, completarPelaNota, onCriarFornecedor }: {
+export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnexarBoletosDasParcelas, sugestao, semBoleto, onVerOQueANotaMuda, completarPelaNota, onCriarFornecedor, lancamentoId = null, entregasApi = null }: {
   api: LancamentoDocumentosApi;
+  /** NOTA-ENTREGA-FUTURA-01 (B) — o lançamento SALVO e a leitura do papel de cada documento e do saldo a entregar (`useEntregasDoLancamento`,
+   *  a mesma do Resumo); sem eles, nada disso */
+  lancamentoId?: string | null;
+  entregasApi?: EntregasApi | null;
   /** NOTA-LIGAR-LANCAMENTO-01 P1 — "Cadastrar esta filial" (ausente = sem o gesto) */
   onCriarFornecedor?: CriarFornecedorDoDocumento;
   completarPelaNota?: CompletarPelaNota;
@@ -140,6 +148,25 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
      com os selos dos arquivos que ela tem. O cancelado nunca se junta. */
   const linhasAtivas = linhasDosDocumentos(ativos);
   const linhas = mostrarCancelados ? [...linhasAtivas, ...linhasDosDocumentos(cancelados)] : linhasAtivas;
+  /* NOTA-ENTREGA-FUTURA-01 (B, mock aprovado 25/11 07:44) — o PAPEL de cada documento e o SALDO A ENTREGAR, do banco; relê quando os documentos
+     mudam (a assinatura = os ids vivos). Falhou = a coluna diz "—" e o bloco diz que não conseguiu (nunca um papel inventado) */
+  const entregas = lancamentoId ? entregasApi?.entregas ?? null : null;
+  const [ligandoXml, setLigandoXml] = useState<string | null>(null);
+  const ligarXml = async (d: LancDocumento, temPdf: boolean) => {
+    if (!clienteId) return;
+    setLigandoXml(d.id);
+    try {
+      const r = await ligarXmlDaReceitaAoDocumento(clienteId, d.id, d.chaveAcesso ?? '', temPdf,
+        (arquivo) => api.anexar(d.id, d.versao, arquivo, { origem: 'lancamento', operacaoId: null }));
+      if (r.ok) toast.success(r.frase); else toast.error(r.frase);
+      await api.recarregar();
+    } finally { setLigandoXml(null); }
+  };
+  const [ligandoEntrega, setLigandoEntrega] = useState(false);
+  const papelDe = (id: string) => (entregas?.ok ? entregas.valor.papeis.get(id) ?? null : null);
+  /* a compra (o documento e o emitente): o "+ Ligar entrega da Caixa" procura as remessas do MESMO emitente */
+  const docDaCompra = ativos.find((d) => papelDe(d.id)?.papel === 'compra') ?? null;
+  const emitenteDasEntregas = docDaCompra ?? ativos.find((d) => d.especie === 'nf' && (d.emitenteDocumento ?? '').replace(/\D/g, '').length >= 11) ?? null;
 
   /**
    * Abre a OC na aba Documentos — DOC-UMA-FONTE-01.
@@ -237,6 +264,13 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
               Anexar boletos das parcelas
             </Button>
           )}
+          {/* NOTA-ENTREGA-FUTURA-01 (B) — as remessas do mesmo emitente que esperam na Caixa (o lugar só existe com o lançamento salvo e uma NF) */}
+          {lancamentoId && clienteId && emitenteDasEntregas && (
+            <Button type="button" size="sm" variant="outline" className="h-[22px] gap-1 px-2 text-[10px]" data-testid="ligar-entrega-abrir"
+              disabled={somenteLeitura} onClick={() => setLigandoEntrega(true)}>
+              <Plus className="h-3 w-3" /> Ligar entrega da Caixa
+            </Button>
+          )}
           <Button type="button" size="sm" className="h-[22px] gap-1 px-2 text-[10px]"
             disabled={somenteLeitura} onClick={() => { setEditando(null); setFormAberto(true); }}>
             <Plus className="h-3 w-3" /> Adicionar documento
@@ -255,12 +289,14 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
               maior documento da lista (identidade + selos) e nunca corta; o emitente corta com "…" e o texto inteiro no `title` */}
           <table className="w-full table-fixed border-collapse">
             <colgroup>
+              {lancamentoId && <col style={{ width: 74 }} />}
               <col style={{ width: larguraDaColunaDocumento(linhas) }} /><col />
-              <col style={{ width: 66 }} /><col style={{ width: 88 }} /><col style={{ width: 62 }} /><col style={{ width: 66 }} />
+              <col style={{ width: 66 }} /><col style={{ width: 88 }} /><col style={{ width: lancamentoId ? 84 : 62 }} /><col style={{ width: 66 }} />
             </colgroup>
             <thead className="bg-primary">
               <tr data-testid="cabecalho-documentos">
-                <th className={cn(TH_REGUA, 'pl-[10px] text-left')}>Documento</th>
+                {lancamentoId && <th className={cn(TH_REGUA, 'pl-[10px] text-left')} data-testid="cabecalho-papel">Papel</th>}
+                <th className={cn(TH_REGUA, lancamentoId ? 'text-left' : 'pl-[10px] text-left')}>Documento</th>
                 <th className={cn(TH_REGUA, 'text-left')}>Emitente</th>
                 <th className={cn(TH_REGUA, 'text-left')}>Emissão</th>
                 <th className={cn(TH_REGUA, 'text-right')}>Valor</th>
@@ -276,10 +312,16 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
             const emitente = d.cancelado && d.canceladoMotivo ? `motivo: ${d.canceladoMotivo}` : (d.emitenteNome || '');
             const semArquivo = !l.membros.some((m) => m.url) && !d.cancelado;
             const abrir = oQueAbrir(l);
+            const papel = papelDe(d.id);
             return (
             <tr key={d.id} data-testid="linha-documento" data-cancelado={d.cancelado ? 'sim' : undefined}
               className={`h-[19px] border-t text-[10px] leading-none ${d.cancelado ? 'bg-muted/40 text-muted-foreground/70' : ''}`}>
-              <td className={cn(TD_REGUA, 'pl-[10px]')}>
+              {lancamentoId && (
+                <td className={cn(TD_REGUA, 'pl-[10px] whitespace-nowrap font-semibold')} data-testid="doc-papel"
+                  title={papel ? oQueOPapelFaz(papel.papel) || undefined : entregas && !entregas.ok ? `Não consegui ler o papel (${entregas.motivo})` : undefined}>
+                  {d.cancelado ? '—' : papel ? rotuloDoPapel(papel) : entregas === null ? '…' : '—'}</td>
+              )}
+              <td className={cn(TD_REGUA, lancamentoId ? '' : 'pl-[10px]')}>
               <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <span className={d.cancelado ? 'line-through' : 'font-semibold text-foreground'} data-testid="doc-nome">{nome}</span>
                 {/* DOC-NOTA-XML-PDF-01 — os arquivos que a nota tem */}
@@ -317,6 +359,13 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
                     um caminho legítimo, e a linha diz o que falta em vez de esconder.
                     Fica ANTES do emitente e não encolhe; quem corta é o emitente. */}
                 {semArquivo && <span className="shrink-0 whitespace-nowrap text-amber-700">sem arquivo</span>}
+                {/* NOTA-ENTREGA-FUTURA-01 (Gabriel 25/11 09:26) — a NF que nasceu da Receita só com o registro: o XML da caixa entra no documento e o
+                    DANFE sai dele (a chave confere; a mesma porta do anexar) */}
+                {semArquivo && d.especie === 'nf' && (d.chaveAcesso ?? '').replace(/\D/g, '').length === 44 && clienteId && d.origem === 'lancamento' && (
+                  <button type="button" className="shrink-0 whitespace-nowrap text-primary underline-offset-2 hover:underline disabled:opacity-40" data-testid="doc-ligar-xml-receita"
+                    disabled={somenteLeitura || ligandoXml !== null} title="Traz o XML desta nota da caixa da Receita para o documento e gera o DANFE dele"
+                    onClick={() => { void ligarXml(d, l.pdf !== null); }}>{ligandoXml === d.id ? 'ligando…' : 'ligar o XML da Receita'}</button>
+                )}
                 <span className={`min-w-0 truncate ${d.cancelado ? 'text-muted-foreground/70' : ''}`} title={emitente || undefined} data-testid="doc-emitente-texto">{emitente || (semArquivo ? '' : '—')}</span>
               </div>
               </td>
@@ -328,6 +377,13 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
                 {d.cancelado ? (
                   <span className="rounded-full bg-muted px-1.5 text-[9.5px] leading-[13px] text-muted-foreground"
                     title={d.canceladoMotivo ?? undefined}>Cancelado</span>
+                ) : papel?.papel === 'compra' ? (
+                  /* NOTA-ENTREGA-FUTURA-01 (B) — só a Compra gera a conta e vai no LCDPR */
+                  <span className="whitespace-nowrap rounded-full bg-emerald-100 px-1.5 text-[9.5px] leading-[13px] text-emerald-700" data-testid="doc-gera-conta"
+                    title="Compra: gera a conta a pagar e vai no LCDPR">gera a conta</span>
+                ) : papel?.papel === 'entrega' ? (
+                  <span className="whitespace-nowrap rounded-full bg-amber-100 px-1.5 text-[9.5px] leading-[13px] text-amber-800" data-testid="doc-sem-financeiro"
+                    title="Entrega (remessa da compra): sem financeiro, não soma no Documentado">sem financeiro</span>
                 ) : api.confronto?.naoFinanceiras?.get(d.id) ? (
                   /* ENTREGA-FUTURA-LIGAR-01 (lote 30) — a NF que não gera pagamento (a classe pelo CFOP): informativa, não soma no Documentado */
                   <span className="whitespace-nowrap rounded-full bg-amber-100 px-1.5 text-[9.5px] leading-[13px] text-amber-800" data-testid="doc-nao-financeira"
@@ -383,6 +439,55 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
             </div>
           )}
         </div>
+      )}
+
+      {/* NOTA-ENTREGA-FUTURA-01 (B, mock aprovado 25/11 07:44) — o SALDO A ENTREGAR por item (compra × entregas), do banco; só com entrega
+          ligada. Régua nova de tela nova: tabela 11px, rótulos 10px, título 13px */}
+      {/* a falha da leitura só aparece quando o confronto já vê uma remessa entre os documentos (sem remessa, não há saldo a dizer) */}
+      {lancamentoId && entregas && ((entregas.ok === false && [...(api.confronto?.naoFinanceiras?.values() ?? [])].includes('entrega_futura'))
+        || (entregas.ok && entregas.valor.entregas > 0)) && (
+        <section className="rounded-md border bg-card" data-testid="saldo-a-entregar">
+          <h4 className="flex h-[28px] items-center gap-2 border-b px-2.5 text-[13px] font-semibold">Saldo a entregar
+            <span className="text-[10px] font-normal text-muted-foreground">compra × entregas</span></h4>
+          {entregas.ok === false ? (
+            <div className="flex h-[34px] items-center gap-2 px-2.5 text-[11px] text-destructive" data-testid="saldo-falhou">
+              Não consegui ler as entregas agora.
+              <Button type="button" size="sm" variant="outline" className="h-[26px] px-2.5 text-[11px]" onClick={() => entregasApi?.recarregar()}>Tentar de novo</Button>
+            </div>
+          ) : entregas.valor.itens === null ? (
+            <p className="px-2.5 py-2 text-[11px] text-muted-foreground" data-testid="saldo-sem-itens">{FRASE_SEM_SALDO[entregas.valor.motivo ?? 'sem_compra']}</p>
+          ) : (
+            <table className="w-full table-fixed border-collapse" data-testid="saldo-tabela">
+              <colgroup><col /><col style={{ width: 110 }} /><col style={{ width: 110 }} /><col style={{ width: 110 }} /><col style={{ width: 120 }} /></colgroup>
+              <thead><tr className="text-[10px] text-muted-foreground">
+                <th className="h-[22px] px-2.5 text-left font-medium">Produto</th><th className="h-[22px] px-1.5 text-right font-medium">Comprado</th>
+                <th className="h-[22px] px-1.5 text-right font-medium">Entregue</th><th className="h-[22px] px-1.5 text-right font-medium">Falta</th><th className="h-[22px]" />
+              </tr></thead>
+              <tbody>
+                {entregas.valor.itens.map((i, k) => (
+                  <tr key={k} className="border-t border-border/50" data-testid="saldo-linha">
+                    <td className="h-[24px] truncate px-2.5 text-[11px]" title={i.produto} data-reticencias-com-title="">{i.produto}</td>
+                    <td className="h-[24px] whitespace-nowrap px-1.5 text-right text-[11px] tabular-nums">{quantidadeFalada(i.comprado, i.unidade)}</td>
+                    <td className="h-[24px] whitespace-nowrap px-1.5 text-right text-[11px] tabular-nums">{quantidadeFalada(i.entregue, i.unidade)}</td>
+                    <td className={cn('h-[24px] whitespace-nowrap px-1.5 text-right text-[11px] font-semibold tabular-nums', i.falta > 0 ? 'text-amber-700' : 'text-emerald-700')}
+                      data-testid="saldo-falta">{fraseDaFalta(i)}</td>
+                    <td className="h-[24px] px-2.5">
+                      <div className="h-[6px] overflow-hidden rounded-full bg-muted" aria-hidden>
+                        <div className="h-full rounded-full bg-emerald-600" style={{ width: `${i.comprado > 0 ? Math.min(100, (i.entregue / i.comprado) * 100) : 0}%` }} />
+                      </div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
+
+      {ligandoEntrega && lancamentoId && clienteId && emitenteDasEntregas && (
+        <LigarEntregaDaCaixaDialog clienteId={clienteId} lancamentoId={lancamentoId}
+          compra={docDaCompra && entregas?.ok && entregas.valor.compra ? { documentoId: docDaCompra.id, chave: entregas.valor.compra.chave, nf: entregas.valor.compra.nf } : null}
+          emitenteDocumento={(emitenteDasEntregas.emitenteDocumento ?? '').replace(/\D/g, '')} emitenteNome={emitenteDasEntregas.emitenteNome ?? ''}
+          aoFechar={() => setLigandoEntrega(false)} aoLigar={() => { void api.recarregar(); entregasApi?.recarregar(); }} />
       )}
 
       {itensDe && (
