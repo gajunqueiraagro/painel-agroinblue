@@ -21,8 +21,9 @@ export type ClasseDaNota =
 export interface AtributosFiscais { cfops: readonly string[]; tpNF: string | null; natOp: string | null }
 
 const tem = (cfops: readonly string[], lista: readonly string[]) => cfops.some((c) => lista.includes(c));
-/** os CFOPs de remessa/retorno sem pagamento (o grupo 59xx/69xx menos os que FATURAM ou documentam venda) */
-const FATURA_OU_DOCUMENTA = ['5922', '6922', '5929', '6929'];
+/** os CFOPs de remessa/retorno sem pagamento (o grupo 59xx/69xx menos os que FATURAM ou documentam venda e os SERVIÇOS que cobram:
+ *  5932/6932 transporte iniciado em outra UF, 5933/6933 serviço com ISS — NOTA-ENTREGA-FUTURA-01, Gabriel 25/11; o banco igual, lote 113550) */
+const FATURA_OU_DOCUMENTA = ['5922', '6922', '5929', '6929', '5932', '5933', '6932', '6933'];
 
 export function classeDaNota(a: AtributosFiscais, cancelada: boolean): ClasseDaNota {
   if (cancelada) return { classe: 'cancelada' };
