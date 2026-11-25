@@ -152,6 +152,8 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
      mudam (a assinatura = os ids vivos). Falhou = a coluna diz "—" e o bloco diz que não conseguiu (nunca um papel inventado) */
   const entregas = lancamentoId ? entregasApi?.entregas ?? null : null;
   const [ligandoXml, setLigandoXml] = useState<string | null>(null);
+  /* a NF da Receita sem arquivo, com chave de 44: o lugar do "sem arquivo" vira o gesto "ligar o XML" (curto: o porquê no title) */
+  const podeLigarXml = (d: LancDocumento) => d.especie === 'nf' && (d.chaveAcesso ?? '').replace(/\D/g, '').length === 44 && !!clienteId && d.origem === 'lancamento';
   const ligarXml = async (d: LancDocumento, temPdf: boolean) => {
     if (!clienteId) return;
     setLigandoXml(d.id);
@@ -358,13 +360,13 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
                 {/* ⚠ SEM ARQUIVO É AVISO, NÃO ERRO: registrar primeiro e anexar depois é
                     um caminho legítimo, e a linha diz o que falta em vez de esconder.
                     Fica ANTES do emitente e não encolhe; quem corta é o emitente. */}
-                {semArquivo && <span className="shrink-0 whitespace-nowrap text-amber-700">sem arquivo</span>}
+                {semArquivo && !podeLigarXml(d) && <span className="shrink-0 whitespace-nowrap text-amber-700">sem arquivo</span>}
                 {/* NOTA-ENTREGA-FUTURA-01 (Gabriel 25/11 09:26) — a NF que nasceu da Receita só com o registro: o XML da caixa entra no documento e o
                     DANFE sai dele (a chave confere; a mesma porta do anexar) */}
-                {semArquivo && d.especie === 'nf' && (d.chaveAcesso ?? '').replace(/\D/g, '').length === 44 && clienteId && d.origem === 'lancamento' && (
+                {semArquivo && podeLigarXml(d) && (
                   <button type="button" className="shrink-0 whitespace-nowrap text-primary underline-offset-2 hover:underline disabled:opacity-40" data-testid="doc-ligar-xml-receita"
-                    disabled={somenteLeitura || ligandoXml !== null} title="Traz o XML desta nota da caixa da Receita para o documento e gera o DANFE dele"
-                    onClick={() => { void ligarXml(d, l.pdf !== null); }}>{ligandoXml === d.id ? 'ligando…' : 'ligar o XML da Receita'}</button>
+                    disabled={somenteLeitura || ligandoXml !== null} title="Sem arquivo: traz o XML desta nota da caixa da Receita para o documento e gera o DANFE dele"
+                    onClick={() => { void ligarXml(d, l.pdf !== null); }}>{ligandoXml === d.id ? 'ligando…' : 'ligar o XML'}</button>
                 )}
                 <span className={`min-w-0 truncate ${d.cancelado ? 'text-muted-foreground/70' : ''}`} title={emitente || undefined} data-testid="doc-emitente-texto">{emitente || (semArquivo ? '' : '—')}</span>
               </div>

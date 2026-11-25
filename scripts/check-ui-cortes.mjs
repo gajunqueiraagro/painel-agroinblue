@@ -2106,7 +2106,7 @@ const CENARIOS = [
   /* NOTA-ENTREGA-FUTURA-01 (3) — o achado com OUTRA NF: a etapa 1 (seção própria, "O que fazer") e o Confirmar nas duas escolhas */
   ...[['etapa1', null, false], ['confirmar-trocar', 'trocar', true], ['confirmar-criar', 'criar', true]].map(([nome, escolha, confirmar]) => ({
     nome: `nota-outra-nf-${nome}`, url: 'tela=nota-pdf&v=outranota', tamanhos: TAMANHOS_DO_CONSORCIO,
-    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-itens-rolagem"], [data-testid="nota-outra-nf"]' },
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-itens-rolagem"], [data-testid="nota-outra-nf"], [data-testid="nota-outra-nf-rolagem"], [data-testid="nota-confirmar"]' },
     antes: async (p) => {
       await p.locator('[data-testid="nota-outra-nf"]').waitFor({ timeout: 8000 });
       if (escolha) await p.locator(`[data-testid="nota-outra-nf-${escolha}"]`).click();

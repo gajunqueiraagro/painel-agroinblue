@@ -1832,7 +1832,8 @@ export function NotaFiscalDialog({
             )) : etapaAtual === 'ficar' ? null : etapaAtual === 'lancamento' ? (
               /* DA-NOTA-ETAPAS-01 FASE 0 (3) — a etapa 4 CONFIRMAR: o resumo do que o Aplicar grava (nada antes dele) e as checagens; as parcelas
                  que faltam (o antigo "Lançamento") ficam embaixo quando há o que criar */
-              <section className={cn(BLOCO, nACriar > 0 ? 'shrink-0' : 'min-h-0 flex-1')} data-testid="nota-confirmar">
+              /* NOTA-ENTREGA-FUTURA-01 — a lista do que acontece é mais alta que os 4 cartões: na janela baixa (750×520) ela rola por dentro, nunca por cima do rodapé */
+              <section className={cn(BLOCO, nACriar > 0 ? 'max-h-[45%] shrink-0 overflow-y-auto' : 'min-h-0 flex-1 overflow-y-auto')} data-testid="nota-confirmar">
                 <TituloDoBloco nome="Confirmar" dica="o que será gravado ao clicar em Aplicar — nada antes disso" />
                 <ResumoDoConfirmar cartoes={cartoesDoConfirmar} checagens={checagensDoConfirmar} compacto={nACriar > 0} />
                 {nACriar === 0 && <p className="sr-only" data-testid="nota-nada-a-criar">Nada a criar: {faltamDaNota.length ? 'as parcelas que faltam ficam sem criar (a ação na linha).' : 'todas as parcelas da nota já estão no sistema.'}</p>}

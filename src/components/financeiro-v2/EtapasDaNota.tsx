@@ -65,14 +65,16 @@ export function ResumoDoConfirmar({ cartoes, checagens, compacto = false }: {
 }) {
   return (
     <div className="flex shrink-0 flex-col" data-testid="nota-confirmar-resumo">
-      <p className={cn('text-[11px] text-muted-foreground', compacto ? 'px-2 pt-1.5' : 'px-3 pt-2.5')}>Ao clicar em <b className="text-foreground">Aplicar</b>, o sistema faz isto. Nada é gravado antes.</p>
-      <ul className={cn(compacto ? 'grid grid-cols-2 gap-1.5 p-2' : 'flex max-w-[760px] flex-col gap-1.5 p-3')}>
+      {/* compacto (com o formulário das parcelas embaixo): uma linha só, como os cartões de antes — a frase sai (o rodapé já diz "nada é gravado antes") */}
+      {!compacto && <p className="px-3 pt-2 text-[11px] text-muted-foreground">Ao clicar em <b className="text-foreground">Aplicar</b>, o sistema faz isto. Nada é gravado antes.</p>}
+      <ul className={cn(compacto ? 'grid grid-cols-4 gap-1.5 p-2' : 'flex max-w-[900px] flex-col gap-1 px-3 py-2')}>
         {cartoes.map((c) => (
-          <li key={c.chave} className={cn('flex min-w-0 items-center gap-2.5 rounded-md border px-2.5', compacto ? 'h-[30px]' : 'h-[40px]')} data-testid={`nota-confirmar-${c.chave}`}>
+          <li key={c.chave} className="flex h-[28px] min-w-0 items-center gap-2.5 rounded-md border px-2.5" data-testid={`nota-confirmar-${c.chave}`}>
             <span aria-hidden className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px]', ICONE[c.icone].classe)}>{ICONE[c.icone].sinal}</span>
-            <span className="flex min-w-0 flex-col">
-              <b className="text-[11.5px] font-semibold" data-testid={`nota-confirmar-${c.chave}-valor`}>{c.titulo}</b>
-              {c.sub && <span className="truncate text-[10.5px] text-muted-foreground" title={c.sub} data-reticencias-com-title="" data-testid={`nota-confirmar-${c.chave}-sub`}>{c.sub}</span>}
+            {/* uma linha: o que acontece em negrito e o detalhe ao lado (corta com "…", o inteiro no title) */}
+            <span className="flex min-w-0 items-baseline gap-2">
+              <b className="shrink-0 whitespace-nowrap text-[11px] font-semibold" data-testid={`nota-confirmar-${c.chave}-valor`}>{c.titulo}</b>
+              {c.sub && <span className="min-w-0 truncate text-[10px] text-muted-foreground" title={c.sub} data-reticencias-com-title="" data-testid={`nota-confirmar-${c.chave}-sub`}>{c.sub}</span>}
             </span>
           </li>
         ))}
