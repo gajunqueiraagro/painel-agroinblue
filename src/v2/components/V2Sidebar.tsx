@@ -18,7 +18,7 @@ import {
   Briefcase, ShieldCheck, Folder,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import logo from '@/assets/logo.png';
+import { LogoAgroinblue } from '@/components/marca/LogoAgroinblue';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useBpoAtivo } from '@/hooks/useBpoAtivo';
 import { SECTION_TO_GROUP } from '@/v2/lib/navGrupos';
@@ -105,13 +105,10 @@ export function V2Sidebar({
       className,
     )} style={{ width: LARGURA_DA_LATERAL }} data-testid="barra-lateral">
 
-      {/* Logo */}
-      <div className="flex items-center gap-1.5 px-2 py-2.5 border-b border-primary-foreground/10 shrink-0">
-        <img src={logo} alt="AgroInBlue" className="h-5 w-auto shrink-0" />
-        <div className="min-w-0">
-          <p className="text-[13px] font-bold leading-tight truncate">Agroinblue</p>
-          <p className="text-[8.5px] text-primary-foreground/50 leading-tight">Gestão Rural</p>
-        </div>
+      {/* Logo — MARCA-PADRAO-01: o compacto de fundo escuro (o nome em curvas, sem texto ao lado). A linha guarda a altura de antes
+          (27px de conteúdo + 10 + 10), para o menu não subir. 144 − 8 − 8 = 128px de largura; o compacto a 20px de altura mede 120px. */}
+      <div className="flex items-center px-2 py-2.5 border-b border-primary-foreground/10 shrink-0" style={{ minHeight: 47 }}>
+        <LogoAgroinblue variante="compacto" fundo="escuro" alturaPx={20} className="shrink-0 max-w-full" />
       </div>
 
       {/* Seletores */}

@@ -318,6 +318,25 @@ const CENARIOS = [
   { nome: 'cpr-bpo-pagar', url: 'tela=cpr&bpo=1', tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => { await p.locator('[data-testid="cpr-etapa-pagar"]').click();
       await p.locator('[data-celula-aprovacao], [data-testid="bpo-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(400); } },
+  /* APROVAR-PAGAMENTOS-V3 — a tela própria do aprovador (mock aprovado 24/11): a lista por dia (Venc. em dd/mm: a tabela é `data-dia-mes`, o
+     mock), os cartões do celular, o painel (a NF em PDF + XML = uma aba) e a aba Pagamento (boleto: a linha digitável inteira) */
+  { nome: 'aprovar-v3', url: 'tela=aprovar-v3', tamanhos: [[1126, 579], [1280, 800], [1440, 800], [1920, 1080]],
+    antes: async (p) => { await p.locator('[data-testid="v3-linha"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(300); } },
+  { nome: 'aprovar-v3-celular', url: 'tela=aprovar-v3&semlateral=1&barra=0', tamanhos: [[390, 844], [750, 600]],
+    antes: async (p) => { await p.locator('[data-testid="v3-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(300); } },
+  { nome: 'aprovar-v3-vazio', url: 'tela=aprovar-v3&v=vazio', tamanhos: [[1126, 579]],
+    antes: async (p) => { await p.locator('[data-testid="v3-vazio"]').first().waitFor({ timeout: 20000 }); } },
+  /* no celular a barra lateral não existe (como as outras cenas de celular): a 390 com os 152 px dela o rodapé não cabe */
+  { nome: 'aprovar-v3-vazio-celular', url: 'tela=aprovar-v3&v=vazio&semlateral=1&barra=0', tamanhos: [[390, 844]],
+    antes: async (p) => { await p.locator('[data-testid="v3-vazio"]').first().waitFor({ timeout: 20000 }); } },
+  { nome: 'aprovar-v3-painel', url: 'tela=aprovar-v3', tamanhos: [[1126, 579], [1280, 800], [1920, 1080]], regiao: '[data-testid="v3-painel"]',
+    antes: async (p) => { await p.locator('[data-testid="v3-linha"]').nth(1).click(); await p.locator('[data-testid="v3-ultimos"] table').waitFor({ timeout: 20000 });
+      await p.waitForTimeout(400); } },
+  { nome: 'aprovar-v3-pagamento', url: 'tela=aprovar-v3', tamanhos: [[1126, 579], [1280, 800]], regiao: '[data-testid="v3-painel"]',
+    antes: async (p) => { await p.locator('[data-testid="v3-linha"]').nth(1).click(); await p.locator('[data-testid="v3-aba-pagamento-botao"]').click();
+      await p.locator('[data-testid="v3-aba-pagamento"]').waitFor(); await p.waitForTimeout(300); } },
+  { nome: 'aprovar-v3-painel-celular', url: 'tela=aprovar-v3&semlateral=1&barra=0', tamanhos: [[390, 844]], regiao: '[data-testid="v3-painel"]',
+    antes: async (p) => { await p.locator('[data-testid="v3-cartao"] button').nth(1).click(); await p.locator('[data-testid="v3-painel"]').waitFor(); await p.waitForTimeout(400); } },
   /* REC-COLUNAS-01 — Financeiro › Recorrências, a lista do mês com o pior texto de cada coluna curta, nos sete tamanhos. Descrição,
      Favorecido e a Conta acima da régua cortam com "…" e o inteiro no `title` (regra do Gabriel de 21/10, 07h25): a regra
      `reticencias` fica fora; corte calado, vazamento, número partido, quebra, sobreposição e cabeçalho valem.
@@ -1495,6 +1514,27 @@ const CENARIOS = [
             await p.locator('[data-testid="prever-desfazer"]').click(); await p.waitForTimeout(500); } },
         ];
       })(),
+      /* FOLHA-RESUMO-CONTADOR-01 — a prévia do resumo do contador ("Extrato Mensal", dado SINTÉTICO, `dados/resumoDoContador.ts`), arrastado:
+         o pior caso (nome no teto, FGTS no teto, a soma que não fecha, uma empresa sem fazenda = Prever apagado); sem pendência e gravado;
+         o já aplicado com o Desfazer aberto e o que volta */
+      ...(() => {
+        const RR = '[data-testid="resumo-do-contador"]';
+        const abrir = async (p) => {
+          await pronto(p);
+          await p.locator('[data-testid="input-da-caixa"]').setInputFiles([{ name: 'extrato.pdf', mimeType: 'application/pdf',
+            buffer: Buffer.from('%PDF Extrato Mensal 13 ficticio com nome de arquivo comprido de exemplo.pdf') }]);
+          await p.waitForTimeout(900); await p.locator('[data-testid="acao-abrir_resumo"]').first().click(); await p.waitForTimeout(800);
+        };
+        return [
+          { nome: 'caixa-resumo-previa', url: URL, tamanhos: T, regiao: RR, antes: abrir },
+          { nome: 'caixa-resumo-gravado', url: `${URL}&caso=resumo_ok`, tamanhos: T, regiao: RR, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="prever-fgts"]').click(); await p.waitForTimeout(700); } },
+          { nome: 'caixa-resumo-desfazer', url: `${URL}&caso=resumo_aplicado`, tamanhos: T, regiao: RR, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="desfazer-resumo"]').click();
+            await p.locator('[data-testid="motivo-desfazer-resumo"]').fill('o contador mandou o resumo de novo com o valor certo');
+            await p.locator('[data-testid="prever-desfazer-resumo"]').click(); await p.waitForTimeout(500); } },
+        ];
+      })(),
     ];
   })(),
   /* BOLETO D3c — o endereço de boletos (dado SINTÉTICO: o slug no teto de 40): ver; trocar sem motivo (vermelho) e com a prévia; revogar;
@@ -1532,6 +1572,58 @@ const CENARIOS = [
       ...[['ligar', 'sem_bem'], ['ligar', 'recusa'], ['ligar', 'previsto'], ['ligar', 'contrato'], ['ligar', 'repetida'], ['criar', 'sem_bem'], ['criar', 'sem_categoria'], ['criar', 'contrato']]
         .map(([a, c]) => ({ nome: `patrimonio-lancamento-${a}-${c}`, url: U(c, a), tamanhos: T, regiao: DIALOGO,
           antes: async (p) => { await espera(p); if (a === 'ligar') { await p.locator('[data-testid="bem-para-ligar"]').first().click(); await espera(p); } } })),
+    ];
+  })(),
+  /* FOLHA-01 · PR B (telas) — Financeiro › Folha de pagamento (dado SINTÉTICO nas formas do proto, `dados/folha.ts`: v=nj 89 funcionários e
+     157 pendências, v=vera 12 e 28; o pior caso: nome de 41+ caracteres, registro de 59, chips demais, valor no teto, documento vencido).
+     As quatro abas, a ficha aberta (cadastro e documentos), o filtro para 1/0 linhas (o quadro tem a mesma altura), o modal do cadastro nas
+     três abas, o Histórico por tipo, as Pendências e o modal de resolver, sem a folha, e o rodapé do Editar lançamento */
+  ...(() => {
+    const T = [[1126, 579], [1280, 800], [1440, 800], [1920, 1080]];
+    const U = (v, extra = '') => `tela=folha&v=${v}&barra=32${extra}`;
+    const linha = (nome) => async (p) => {
+      await p.locator('[data-testid="folha-filtros"] button', { hasText: /^Todos/ }).click(); await p.waitForTimeout(300);
+      await p.locator('[data-testid="folha-busca"]').fill(nome); await p.waitForTimeout(400);
+      await p.locator('[data-testid="folha-linha"]', { hasText: nome }).first().click(); await p.waitForTimeout(600);
+    };
+    const buscar = (txt) => async (p) => { await p.locator('[data-testid="folha-busca"]').fill(txt); await p.waitForTimeout(500); };
+    const filtro = (re) => async (p) => { await p.locator('[data-testid="folha-filtros"] button', { hasText: re }).click(); await p.waitForTimeout(500); };
+    const dialogo = (nome, aba) => async (p) => {
+      if (nome) { await linha(nome)(p); await p.locator('[data-testid="folha-ficha-editar"]').click(); } else await p.locator('[data-testid="folha-novo"]').click();
+      await p.locator('[data-testid="funcionario-dialog"]').waitFor(); await p.waitForTimeout(600);
+      if (aba) { await p.locator('[data-testid="funcionario-dialog"] button', { hasText: new RegExp(`^${aba}`) }).first().click(); await p.waitForTimeout(500); }
+    };
+    const pend = async (p) => { await p.getByRole('tab', { name: /^Pendências/ }).click(); await p.waitForTimeout(600); };
+    const resolver = (acao) => async (p) => { await pend(p); await p.locator(`[data-testid="folha-pendencia-${acao}"]`).first().click();
+      await p.locator('[data-testid="resolver-pendencia"]').waitFor(); await p.waitForTimeout(500); };
+    const LANC = '[data-testid="rodape-da-bancada"]';
+    return [
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}`, url: U(v), tamanhos: T })),
+      { nome: 'folha-nj-desligados', url: U('nj'), tamanhos: T, antes: filtro(/^Desligados/) },
+      { nome: 'folha-nj-busca-1', url: U('nj'), tamanhos: T, antes: buscar('Maria Aparecida') },
+      { nome: 'folha-nj-busca-0', url: U('nj'), tamanhos: T, antes: buscar('zzzz nada') },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-ficha`, url: U(v), tamanhos: T, antes: linha('Antônio Exemplo Prado') })),
+      { nome: 'folha-nj-ficha-longa', url: U('nj'), tamanhos: T, antes: linha('Maria Aparecida Demonstração dos Santos Lima') },
+      { nome: 'folha-nj-ficha-documentos', url: U('nj'), tamanhos: T, antes: async (p) => { await linha('Antônio Exemplo Prado')(p);
+        await p.locator('[data-testid="folha-ficha"] button', { hasText: /^Documentos/ }).click(); await p.waitForTimeout(500); } },
+      ...[['cadastro', null], ['salario', 'Salário e atuação'], ['situacao', 'Situação']].map(([n, a]) => ({
+        nome: `folha-funcionario-${n}`, url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: dialogo('Antônio Exemplo Prado', a) })),
+      { nome: 'folha-funcionario-novo', url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: dialogo(null, null) },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-historico`, url: U(v, '&aba=historico&func=f00'), tamanhos: T })),
+      { nome: 'folha-nj-historico-voltar', url: U('nj', '&aba=historico&func=f00&voltar=1'), tamanhos: T },
+      { nome: 'folha-nj-historico-rescisao', url: U('nj', '&aba=historico&func=f00'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-historico-faixa"] button', { hasText: /^Rescisão/ }).click(); await p.waitForTimeout(500); } },
+      { nome: 'folha-nj-historico-sem-pessoa', url: U('nj', '&aba=historico'), tamanhos: T },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-pendencias`, url: U(v, '&aba=pendencias'), tamanhos: T })),
+      { nome: 'folha-nj-pendencias-recibo', url: U('nj', '&aba=pendencias'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-pendencias-filtros"] button', { hasText: /^Sem recibo/ }).click(); await p.waitForTimeout(500); } },
+      ...['ligar_sugestao', 'cadastrar_desligado', 'descartar'].map((a) => ({ nome: `folha-resolver-${a}`, url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: resolver(a) })),
+      { nome: 'folha-nj-mes', url: U('nj', '&aba=mes'), tamanhos: T },
+      { nome: 'folha-sem-acesso', url: U('nj', '&ok=0'), tamanhos: T },
+      ...['ligado', 'sem'].map((c) => ({ nome: `folha-lancamento-${c}`, url: `tela=folha-lancamento&caso=${c}`, tamanhos: T, regiao: LANC,
+        antes: async (p) => { await p.waitForTimeout(600); } })),
+      { nome: 'folha-lancamento-dialogo', url: 'tela=folha-lancamento&caso=ligado', tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+        await p.locator('[data-testid="lanc-funcionario-trocar"]').click(); await p.locator('[data-testid="lanc-funcionario-dialog"]').waitFor(); await p.waitForTimeout(400); } },
     ];
   })(),
   /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):
@@ -1921,6 +2013,44 @@ const CENARIOS = [
     antes: async (p) => {
       await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
       await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+    } })),
+  /* DA-NOTA-JUROS-01 (Gabriel 24/11 17:03) — pago ≠ nota com tudo pago NUNCA trava: o pago (+4,59) vinculado, a parcela da nota fica de fora, e o
+     "Como vai ficar" com a linha "pago · nota · diferença" + Juros/multa sugerido (âmbar) e o rodapé sem frase cortada. SINTÉTICO. */
+  { nome: 'nota-pdf-ja-juros', url: 'tela=nota-pdf&v=juros', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-acao"][data-acao="deixar"]').first().click(); await p.locator('[data-testid="nota-acao-vincular"]').click(); await p.waitForTimeout(300);
+      const cria = p.locator('[data-testid="nota-acao"][data-acao="criar"]');
+      if (await cria.count()) { await cria.first().click(); await p.locator('[data-testid="nota-acao-deixar"], [data-testid="nota-acao-jaPaga"]').first().click(); await p.waitForTimeout(300); }
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="previa-diferenca"]').waitFor({ timeout: 5000 });
+    } },
+  /* DA-NOTA ETAPA 2 (Gabriel 24/11 19:30, o 2º print: NF 26.185 já com os juros) — a sugestão pelos itens TROCA o subcentro: o "usar" e a linha
+     "Subcentro muda de Sanidade Animal — … · Pecuária para Nutrição Engorda · Pecuária"; subcentro, safra e descrição inteiros; nada rola de lado. SINTÉTICO. */
+  { nome: 'nota-pdf-ja-juros-troca', url: 'tela=nota-pdf&v=juros&sugestao=uma', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-acao"][data-acao="deixar"]').first().click(); await p.locator('[data-testid="nota-acao-vincular"]').click(); await p.waitForTimeout(300);
+      const cria = p.locator('[data-testid="nota-acao"][data-acao="criar"]');
+      if (await cria.count()) { await cria.first().click(); await p.locator('[data-testid="nota-acao-deixar"], [data-testid="nota-acao-jaPaga"]').first().click(); await p.waitForTimeout(300); }
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="previa-sugestao-usar"]').click(); await p.locator('[data-testid="previa-troca-conta-para"]').waitFor({ timeout: 5000 }); await p.waitForTimeout(400);
+    } },
+  /* NOTA-JUNTAR-CLASSIF-01 (Gabriel 24/11 19:05) — juntar com classificações diferentes (as parcelas em Manutenção Máquinas Agricultura e Pecuária, o molde
+     da NF 176.663 do NJ, SINTÉTICO): a linha "Classificações diferentes · Usar a da 1/4 em todas · … · Dividir por item · em breve" e o rodapé curto; e
+     depois do clique (a conta e a safra da 1/4 no Aplicar a todas, o subcentro "Manut. Máquinas · Agricultura" inteiro). DA-NOTA ETAPA 2: nada cortado. */
+  ...[['', false], ['-escolhido', true]].map(([suf, clica]) => ({ nome: `nota-pdf-ja-juntar-classif${suf}`, url: 'tela=nota-pdf&v=lr&classif=2',
+    tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="previa-juntar-classif"]').waitFor({ timeout: 5000 });
+      if (clica) { await p.locator('[data-testid="previa-juntar-classif"] button', { hasText: 'Usar a da 1/4' }).first().click(); await p.waitForTimeout(900); }
     } })),
   /* NOTA-ATUALIZA-PREVISTO-01 — o caso da Vera (SINTÉTICO): "É esta" no PREVISTO de R$ 1.000 + "paga 70 %": a aba Parcelas (o Resultado
      "1 atualiza · 0 cria · R$ … · paga 70 % · outro paga R$ …", o resumo em colunas) e a Como vai ficar (o valor de hoje riscado → o novo) */

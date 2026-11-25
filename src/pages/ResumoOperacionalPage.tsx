@@ -22,6 +22,8 @@ import { ResOpNutricao } from './resumo-op/ResOpNutricao';
 import { ResOpPatrimonio } from './resumo-op/ResOpPatrimonio';
 import { ResOpDesvios } from './resumo-op/ResOpDesvios';
 import { ResOpAuditoria } from './resumo-op/ResOpAuditoria';
+import { LogoAgroinblue } from '@/components/marca/LogoAgroinblue';
+import { ASSINATURA_DA_MARCA } from '@/lib/marca/marca';
 
 export type ResOpPage =
   'dash' | 'zoo' | 'mov' | 'prod' | 'op' | 'cc' | 'nut' | 'pat' | 'dev' | 'aud';
@@ -110,9 +112,9 @@ const ResumoOperacionalPage = () => {
           </button>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-sm font-semibold">Agroinblue</span>
+            <LogoAgroinblue variante="compacto" fundo="claro" alturaPx={16} />
           </div>
-          <p className="text-[9px] text-muted-foreground pl-4">Gestão Rural · Proto</p>
+          <p className="text-[9px] text-muted-foreground pl-4">{ASSINATURA_DA_MARCA} · Proto</p>
           <div className="mt-2 bg-muted/50 rounded px-2 py-1.5">
             <p className="text-[10.5px] font-medium truncate">{clienteAtual?.nome || ''}</p>
             <p className="text-[9px] text-muted-foreground">{filtros.ano} · {mesLabel}</p>

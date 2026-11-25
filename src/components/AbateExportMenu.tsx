@@ -10,7 +10,7 @@ import { formatMoeda, fmtValor, formatKg, formatArroba, formatPercent, formatCab
 
 import { getStatus } from '@/lib/statusOperacional';
 import { useState } from 'react';
-import logoUrl from '@/assets/logo.png';
+import { carregarLogoParaPdf, medidaDoLogoPdf } from '@/lib/marca/marca';
 
 const COMERCIALIZACAO_LABELS: Record<string, string> = {
   escala: 'Escala',
@@ -25,18 +25,8 @@ function fmtDate(d?: string) {
 }
 
 function loadLogoBase64(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width; canvas.height = img.height;
-      canvas.getContext('2d')?.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = reject;
-    img.src = logoUrl;
-  });
+  /* MARCA-PADRAO-01: o PNG do kit pelo carregador da marca (o logo antigo saiu do repositório). */
+  return carregarLogoParaPdf('horizontal');
 }
 
 function shareWhatsApp(text: string) {
@@ -165,7 +155,7 @@ async function pdfConfirmado(l: Lancamento, fazendaNome?: string) {
   let y = 5;
   try {
     const logo = await loadLogoBase64();
-    const lH = 12, lW = lH * 2;
+    const { w: lW, h: lH } = medidaDoLogoPdf(40); // MARCA-PADRAO-01: pela proporção do arquivo
     doc.addImage(logo, 'PNG', 105 - lW / 2, y, lW, lH);
     y += lH + 3;
   } catch {}
@@ -243,7 +233,7 @@ async function pdfRealizado(l: Lancamento, fazendaNome?: string) {
   let y = 5;
   try {
     const logo = await loadLogoBase64();
-    const lH = 12, lW = lH * 2;
+    const { w: lW, h: lH } = medidaDoLogoPdf(40); // MARCA-PADRAO-01: pela proporção do arquivo
     doc.addImage(logo, 'PNG', 105 - lW / 2, y, lW, lH);
     y += lH + 3;
   } catch {}

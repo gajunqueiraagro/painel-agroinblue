@@ -41,8 +41,9 @@ export const ESPECIES_LANC_DOC: { value: EspecieLancDoc; label: string }[] = [
   { value: 'outro', label: 'Outro' },
 ];
 
-/** De onde o documento vem — e, com ele, qual writer o governa. */
-export type OrigemLancDoc = 'lancamento' | 'operacao';
+/** De onde o documento vem — e, com ele, qual writer o governa. FOLHA-DOC-VIEW-01: `'folha'` = a página do recibo/holerite do contador
+ *  (`folha_documentos`, bucket `folha-documentos`); na aba do lançamento ela SÓ se lê e abre — quem a registra e cancela é a Folha. */
+export type OrigemLancDoc = 'lancamento' | 'operacao' | 'folha';
 
 export interface LancDocumento {
   id: string;
@@ -223,6 +224,8 @@ export function caminhoDocumentoLancamento(
   return `${clienteId}/${lancamentoId}/${documentoId}-${Date.now()}.${ext}`;
 }
 const BUCKET_OC = 'oc-documentos';
+/** FOLHA-DOC-VIEW-01 — a página da folha mora no bucket da Folha (a policy de leitura é a da Folha: `folha_ok`). */
+const BUCKET_FOLHA = 'folha-documentos';
 
 /**
  * Espécie do lançamento → espécie da OC.
@@ -320,6 +323,7 @@ const ROTULO_ESPECIE_OC: Record<string, string> = {
 };
 /** O rótulo curto da espécie de um documento, das DUAS origens (a da OC distingue a complementar). */
 export function rotuloEspecieDoc(d: Pick<LancDocumento, 'origem' | 'especie' | 'especieOC'>): string {
+  if (d.origem === 'folha') return 'Holerite';
   if (d.origem === 'operacao' && d.especieOC) return ROTULO_ESPECIE_OC[d.especieOC] ?? 'Outro';
   if (d.especie === 'nf') return 'NF';
   return ESPECIES_LANC_DOC.find(x => x.value === d.especie)?.label ?? 'Outro';
@@ -327,7 +331,7 @@ export function rotuloEspecieDoc(d: Pick<LancDocumento, 'origem' | 'especie' | '
 
 /** Texto do banco → origem do vocabulário, sem cast. Desconhecido vira `'lancamento'`,
  *  que é o caminho conservador: o writer do próprio lançamento recusa o que não é dele. */
-const origemValida = (o: unknown): OrigemLancDoc => (o === 'operacao' ? 'operacao' : 'lancamento');
+const origemValida = (o: unknown): OrigemLancDoc => (o === 'operacao' ? 'operacao' : o === 'folha' ? 'folha' : 'lancamento');
 
 /** A linha da `vw_lancamento_documentos` → o documento que as telas leem (a aba Documentos e o clipe da lista, DOC-ANEXO-E-IMPORT-01 F2). */
 export function daLinha(r: DocRow): LancDocumento {
@@ -413,7 +417,7 @@ export function daConfronto(c: Json | null | undefined): Confronto | null {
 /* ⚠ O ARQUIVO MORA NO BUCKET DA ORIGEM (ver `urlAssinada` abaixo). Fora do hook para o clipe da lista abrir o arquivo SEM o modal
    (DOC-ANEXO-E-IMPORT-01 F2): o mesmo bucket, a mesma validade de 60 s. */
 export async function assinarDocumento(caminho: string, origem: OrigemLancDoc = 'lancamento'): Promise<string | null> {
-  const bucket = origem === 'operacao' ? BUCKET_OC : BUCKET;
+  const bucket = origem === 'operacao' ? BUCKET_OC : origem === 'folha' ? BUCKET_FOLHA : BUCKET;
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(caminho, 60);
   if (error) return null;
   return data?.signedUrl ?? null;
@@ -531,7 +535,8 @@ export function useLancamentoDocumentos(
     [documentos]);
 
   const editar = useCallback(async (documentoId: string, versaoEsperada: number, p: LancDocPayload) => {
-    if (!clienteId) return false;
+    /* FOLHA-DOC-VIEW-01: a página da folha não se edita aqui (quem a governa é a Folha) */
+    if (!clienteId || origemDoDocumento(documentoId) === 'folha') return false;
     setSaving(true);
     try {
       const daOC = origemDoDocumento(documentoId) === 'operacao';
@@ -560,7 +565,7 @@ export function useLancamentoDocumentos(
   }, [clienteId, recarregar, origemDoDocumento]);
 
   const cancelar = useCallback(async (documentoId: string, motivo: string) => {
-    if (!clienteId) return false;
+    if (!clienteId || origemDoDocumento(documentoId) === 'folha') return false;
     setSaving(true);
     try {
       const { data, error } = origemDoDocumento(documentoId) === 'operacao'
@@ -593,7 +598,7 @@ export function useLancamentoDocumentos(
    * nenhuma linha apontando para ele — lixo invisível, que ninguém acha para limpar.
    */
   const anexar = useCallback(async (documentoId: string, versaoEsperada: number, file: File, destino: DestinoDocumento) => {
-    if (!habilitado || !clienteId) return false;
+    if (!habilitado || !clienteId || destino.origem === 'folha') return false;
     /* O aceite é do dono (UI-ARRASTAR-ARQUIVO-01a); o arquivo que segue é o que ele devolve, com o tipo preenchido. */
     const aceite = aceitarArquivo([file], REGRA_ARQUIVO_DO_DOCUMENTO);
     if (aceite.ok === false) throw new Error(aceite.motivo);

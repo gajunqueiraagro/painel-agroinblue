@@ -78,6 +78,7 @@ import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
 import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
 import { CadastroLocaisEstoqueTab } from '@/pages/CadastroLocaisEstoqueTab';
 import { PatrimonioTela } from '@/components/patrimonio/PatrimonioTela';
+import { FolhaTela, type EntradaDaFolha } from '@/components/folha/FolhaTela';
 import { ProdutoresTela } from '@/components/fiscal/ProdutoresTela';
 import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
 import type { AbaDaReceita } from '@/lib/fiscal/notasDaReceita';
@@ -94,6 +95,7 @@ import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { PainelPeriodoTab } from '@/components/financeiro-v2/PainelPeriodoTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
+import { AprovarPagamentosV3 } from '@/components/financeiro-v2/aprovar/AprovarPagamentosV3';
 import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidadaTab';
 // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — import de V2MesaOperacional removido: a tela saiu
 // do menu e da rota. O arquivo continua no repo (quarentena), fora do bundle.
@@ -111,6 +113,7 @@ import { buscarOperacaoDoLancamento } from '@/hooks/useOperacaoDoLancamento';
    camera ja diz que a entrada e' por foto, e o brilho ao lado do rotulo era enfase
    sobre enfase. */
 import { Camera, Loader2 } from 'lucide-react';
+import { LogoAgroinblue } from '@/components/marca/LogoAgroinblue';
 import { mesCurto } from '@/lib/pecuaria/fechamentoGlobal';
 import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
 
@@ -900,6 +903,25 @@ export default function V2Index() {
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+  /* FOLHA-01 · PR B (D3) — o ↗ "Funcionário" do Editar lançamento chega por `?folhaFunc=<funcionário>&folhaLanc=<lançamento>`: abre a Folha ›
+     Histórico da pessoa com "‹ Voltar ao lançamento", que reabre o lançamento em Lançamentos Financeiros (o `flancIdAlvo` de sempre). */
+  const [folhaEntrada, setFolhaEntrada] = useState<EntradaDaFolha | null>(null);
+  useEffect(() => {
+    const func = searchParams.get('folhaFunc');
+    if (!func) return;
+    const lanc = searchParams.get('folhaLanc');
+    setFolhaEntrada({
+      aba: 'historico', funcionarioId: func,
+      voltarAoLancamento: lanc ? () => { setFolhaEntrada(null); setFlancIdAlvo(lanc); setSection('financeiro-lanc'); } : null,
+    });
+    setSection('folha-pagamento');
+    const next = new URLSearchParams(searchParams);
+    next.delete('folhaFunc');
+    next.delete('folhaLanc');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+  /* sair da Folha por outro caminho esquece o "voltar ao lançamento" */
+  useEffect(() => { if (section !== 'folha-pagamento') setFolhaEntrada(null); }, [section]);
 
   const { lancamento: lancamentoFromUrl } = useLancamento(editFromUrlId);
   useEffect(() => {
@@ -1197,22 +1219,10 @@ export default function V2Index() {
       <FinV2ContasTab />
     );
     /* BPO-APROVACAO-01 — a fila do aprovador (o BPO nasce desligado: sem a configuração ligada, a tela diz isso) */
-    /* BPO-FUNCIONAR-01 — "Aprovar pagamentos" é a CPR aberta em "Para aprovar" (a aprovação mora DENTRO da CPR; a tela própria saiu) */
+    /* BPO-FUNCIONAR-01 — "Aprovar pagamentos" era a CPR aberta em "Para aprovar"; APROVAR-PAGAMENTOS-V3 (mock aprovado 24/11) — volta a ser a
+       tela PRÓPRIA e enxuta do aprovador (a CPR continua sendo a lista completa, com as etapas da aprovação) */
     if (section === 'aprovar-pagamentos') return (
-      <ContasPagarReceberTab
-        key="cpr-aprovar"
-        etapaInicial="aprovar"
-        onIntensiveToggle={setIntensivo}
-        onAbrirFinanciamento={podeAbrirTela('financiamentos') ? (id) => {
-          setOrigemDoFinanciamento('aprovar-pagamentos');
-          setFinanciamentoIdAlvo(id);
-          setSection('financiamentos');
-        } : undefined}
-        onAbrirRecorrencia={podeAbrirTela('recorrencias') ? (id) => {
-          setRecorrenciaIdAlvo(id);
-          setSection('recorrencias');
-        } : undefined}
-      />
+      <AprovarPagamentosV3 />
     );
     if (section === 'contratos') return (
       <ContratosTab />
@@ -1225,6 +1235,8 @@ export default function V2Index() {
       />
     );
     if (section === 'painel-periodo') return <PainelPeriodoTab />;
+    /* FOLHA-01 · PR B — Financeiro › Folha de pagamento (a própria tela confere o `folha_ok`, D5) */
+    if (section === 'folha-pagamento') return <FolhaTela entrada={folhaEntrada} />;
     if (section === 'contas-a-pagar-receber') return (
       <ContasPagarReceberTab
         onIntensiveToggle={setIntensivo}
@@ -1832,6 +1844,8 @@ export default function V2Index() {
     /* FORN-01b — a lista de Fornecedores vai até o fim da tela: a altura vem do pai, não de `calc(100dvh-120px)` */
     /* PATR-01 — a lista de bens vai até o fim da tela (a altura vem do pai) */
     'patrimonio',
+    /* FOLHA-01 · PR B — a lista e a ficha da Folha vão até o fim da tela (a altura vem do pai) */
+    'folha-pagamento',
     /* FISCAL onda 1 — a lista e a ficha dos produtores vão até o fim da tela (a altura vem do pai) */
     'produtores',
     /* BPO-NOMES-LARGURA-01 — Aprovar pagamentos usa a área inteira, como Lançamentos: a altura vem do pai e a lista vai até o fim */
@@ -1859,9 +1873,9 @@ export default function V2Index() {
       {/* MAIN COLUMN — chrome superior + conteúdo único + drawer overlay */}
       <div className="flex-1 min-w-0 flex flex-col relative">
 
-        {/* HEADER MOBILE — Agroinblue + seletores (oculto em desktop) */}
+        {/* HEADER MOBILE — o logo AGROinBLUE (MARCA-PADRAO-01) + seletores (oculto em desktop) */}
         <div className="md:hidden flex items-center justify-between px-3 py-2 bg-primary text-primary-foreground shrink-0 shadow-sm no-print">
-          <span className="text-sm font-bold">Agroinblue</span>
+          <LogoAgroinblue variante="compacto" fundo="escuro" alturaPx={18} className="shrink-0" />
           <div className="flex items-center gap-1">
             {clientes.length > 0 && (
               <div className="[&_button]:text-xs [&_button]:h-7 [&_button]:bg-primary-foreground/10 [&_button]:text-primary-foreground [&_button]:border-0">

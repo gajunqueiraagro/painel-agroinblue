@@ -18,6 +18,7 @@ import type { LiberacaoDireta } from '@/lib/financeiro/nfe/notaXLancamento';
 import type { CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import { lerResultadoCompletar, type ResultadoCompletar } from '@/lib/financeiro/nfe/notaCompletar';
 import { lerItensSugeridos, type ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
+import type { MotivoDaDiferenca } from '@/lib/financeiro/nfe/diferencaDaNota';
 
 /** Onde uma nota ja' esta' registrada — uma linha de `fn_documento_chave_ja_registrada`. */
 export interface OcorrenciaDaNota {
@@ -411,13 +412,17 @@ const recusaOuMotivo = (erro: unknown): { ok: false; motivo: string } => {
 /** A prévia (`simular`) ou a gravação única: os campos + a junção + o antes, numa transação. */
 export async function completarComANota(clienteId: string, pedido: readonly Record<string, unknown>[], opcoes: { juntar: boolean; chave: string | null; simular: boolean;
   /** P167-B2 — o valor da nota: o banco recusa quando o que FICA nos lançamentos do pedido passa dele (ausente = sem a conferência, o lote) */
-  valorNotaCent?: number | null }):
+  valorNotaCent?: number | null;
+  /** DA-NOTA-JUROS-01 — o motivo da diferença pago × nota (tudo pago): juros divide o MESMO pagamento (nota + Despesas Financeiras), desconto
+   *  não muda nada; ausente = a guarda da soma de sempre */
+  diferenca?: MotivoDaDiferenca | null }):
   Promise<Consulta<ResultadoCompletar>> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
     const { data, error } = await (supabase as any).rpc('fn_nota_completar', {
       p_cliente: clienteId, p_lancamentos: pedido, p_juntar: opcoes.juntar, p_chave: opcoes.chave, p_simular: opcoes.simular,
       ...(opcoes.valorNotaCent != null ? { p_valor_nota: opcoes.valorNotaCent / 100 } : {}),
+      ...(opcoes.diferenca ? { p_diferenca: { motivo: opcoes.diferenca } } : {}),
     });
     if (error) return recusaOuMotivo(error);
     return deu(lerResultadoCompletar(data));

@@ -10,6 +10,7 @@ import { FRASE_PDF_IMAGEM, type LerArquivoDaCaixa, type LeituraDaCaixa } from '@
 import { entradaDaLinha, respostaDoEndereco, type EntradaEmailApi } from '@/lib/financeiro/boleto/entradaEmailApi';
 import type { ResumoDaNota } from '@/lib/financeiro/boleto/caixaPorEmail';
 import { FOLHA_DA_BANCADA, NOME_DA_FOLHA_DA_BANCADA } from './folhaDaCaixa';
+import { NOME_DO_RESUMO_DA_BANCADA, RESUMO_DA_BANCADA } from './resumoDoContador';
 
 /** O "hoje" da bancada (o antigo depende dele): a foto não muda com o dia. */
 export const HOJE_DA_BANCADA = '2026-11-18';
@@ -60,6 +61,7 @@ export const LER_CAIXA_BANCADA: LerArquivoDaCaixa = async (bytes, _tipo, senha) 
   if (nome === 'Boleto_Unimed.pdf') return senha === senhaCerta ? leituraDe(BOLETOS['boleto-0031283.pdf']) : { k: 'senha', errada: !!senha };
   if (nome === 'boleto-escaneado.pdf') return { k: 'nada', frase: FRASE_PDF_IMAGEM };
   if (nome === NOME_DA_FOLHA_DA_BANCADA) return { k: 'folha', folha: FOLHA_DA_BANCADA };   // FOLHA-NA-CAIXA-01
+  if (nome === NOME_DO_RESUMO_DA_BANCADA) return { k: 'resumo', resumo: RESUMO_DA_BANCADA };   // FOLHA-RESUMO-CONTADOR-01 (arrastado pela cena)
   if (NOTAS[nome]) return { k: 'nota', nota: NOTAS[nome] };
   if (BOLETOS[nome]) return leituraDe(BOLETOS[nome]);
   return { k: 'nada', frase: 'Sem linha digitável nem chave de nota.' };

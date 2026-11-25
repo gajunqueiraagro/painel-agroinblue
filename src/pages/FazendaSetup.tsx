@@ -3,6 +3,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LogoAgroinblue } from '@/components/marca/LogoAgroinblue';
 
 export default function FazendaSetup() {
   const { criarFazenda } = useFazenda();
@@ -22,7 +23,7 @@ export default function FazendaSetup() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <span className="text-5xl">🏡</span>
+          <LogoAgroinblue variante="compacto" fundo="claro" alturaPx={36} className="mx-auto" />
           <h1 className="text-2xl font-extrabold text-foreground mt-2">Cadastre sua Fazenda</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Informe o nome e o código da fazenda para começar

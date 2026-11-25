@@ -4,7 +4,7 @@
  * padding/radius/posição vêm do token e são idênticos entre tones).
  */
 import { BOLETIM_TOKENS as T, type BadgeTone } from './tokens';
-import logo from '@/assets/logo.png';
+import { arquivoDoLogo } from '@/lib/marca/marca';
 import type { ReactNode } from 'react';
 
 const TONE_CORES: Record<BadgeTone, string> = {
@@ -21,7 +21,7 @@ export function BoletimHeader({
   titulo: string; subtitulo?: string; badge?: ReactNode; tone?: BadgeTone;
   logoUrl?: string; hideLogo?: boolean;
 }) {
-  const src = logoUrl ?? logo;
+  const src = logoUrl ?? arquivoDoLogo('horizontal', 'claro'); // MARCA-PADRAO-01
   return (
     <header className={T.headerWrap}>
       <div className="min-w-0 flex-1">

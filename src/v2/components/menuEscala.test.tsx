@@ -9,7 +9,7 @@ vi.mock('@/contexts/ClienteContext', () => ({
   useCliente: () => ({ isAdmin: true, clienteAtual: { id: 'c1', nome: 'Cliente', perfil: 'admin_agroinblue' } }),
 }));
 vi.mock('@/components/AlterarSenhaDialog', () => ({ AlterarSenhaDialog: () => null }));
-vi.mock('@/assets/logo.png', () => ({ default: 'logo.png' }));
+/* MARCA-PADRAO-01: o logo antigo saiu; o menu usa `LogoAgroinblue` (SVG do kit, resolvido pelo próprio Vite). */
 
 const classes = (el: Element | null | undefined) => (el?.getAttribute('class') ?? '').split(/\s+/);
 

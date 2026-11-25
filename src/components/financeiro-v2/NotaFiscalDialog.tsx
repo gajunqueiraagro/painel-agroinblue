@@ -69,6 +69,7 @@ import { VisualizadorDeDocumento } from './VisualizadorDeDocumento';
 import { BarraDeEtapas, ResumoDoConfirmar, type CartaoDoConfirmar, type ChecagemDoConfirmar, type EtapaDaNota } from './EtapasDaNota';
 import { abrirAbaDoDanfe, mostrarDanfe } from '@/lib/fiscal/abrirDanfe';
 import { useItensDaNotaDaTela } from '@/hooks/useItensDaNota';
+import { diferencaDaNota, motivoQueVale, somaPassaDaNotaTrava, type EscolhaDaDiferenca } from '@/lib/financeiro/nfe/diferencaDaNota';
 import { dividir, dividirPelosItens, percentuaisDosItens, porContaDosItens } from '@/lib/financeiro/divisaoDaClassificacao';
 import { participacaoDoHistorico, previstosQueAtualizam, valorPelaParticipacao, type PrevistoQueAtualiza } from '@/lib/financeiro/nfe/atualizaPrevisto';
 import type { EstadoDaPrevia } from './PreviaCompletar';
@@ -249,7 +250,13 @@ export function NotaFiscalDialog({
   const efetiva = useMemo(() => (pelaChave ? comDadosDigitados(nota, digitado) : nota), [pelaChave, nota, digitado]);
   const { lido, doXml: doXmlLido, bytes, arquivo } = efetiva;
   /* P101 — abaixo de 1000px: as abas (Arquivo | Nota e fornecedor | Parcelas e lançamento) no lugar das duas colunas */
-  const estreito = useLarguraDaJanela() < 1000;
+  const larguraDaJanela = useLarguraDaJanela();
+  const estreito = larguraDaJanela < 1000;
+  /* DA-NOTA ETAPA 2 — de 1100px para cima a razão social cabe INTEIRA em 2 linhas; abaixo, uma linha com "…" e o nome inteiro no title */
+  const razaoEmDuasLinhas = larguraDaJanela >= 1100;
+  /* DA-NOTA ETAPA 2 (6) — o aviso do rodapé SEM corte: de 1100px para cima quebra em até 3 linhas; abaixo, a linha que rola no lugar de sempre
+     (a 750 o espaço entre os botões é estreito: quebrar empurrava o modal) */
+  const avisoDoRodape = razaoEmDuasLinhas ? 'min-w-0 whitespace-normal leading-[11px]' : 'min-w-0 uma-linha-que-rola';
   const [aba, setAba] = useState<AbaDaNota>('nota');
   /* P163-2 — a aba da nota já lançada (abre em "No sistema hoje": é o que a pessoa confere primeiro) e as que já foram vistas (ganham ✓) */
   /* Gabriel 29/10 10:38 — abre em "No sistema hoje": o que foi achado, COMO ESTÁ (nada escondido) */
@@ -478,6 +485,8 @@ export function NotaFiscalDialog({
   const faltamEscolhidas = faltamDaNota.filter((x) => acaoDaFalta(x.n) === 'criar');
   /* "No sistema hoje" — a fazenda, o subcentro e o fornecedor de cada achado como estão no banco (só leitura; falhou = a aba diz) */
   const [comoHoje, setComoHoje] = useState<Consulta<ComoEstaHoje[]> | null>(null);
+  /* DA-NOTA-JUROS-01 — o motivo do pago ≠ nota escolhido pelo operador (nulo = o sugerido) */
+  const [escolhaDaDiferenca, setEscolhaDaDiferenca] = useState<EscolhaDaDiferenca | null>(null);
   const idsDosAchados = (jaLancada?.alvos ?? []).map((l) => l.id).join(',');
   useEffect(() => {
     if (!idsDosAchados) { setComoHoje(null); return; }
@@ -853,12 +862,21 @@ export function NotaFiscalDialog({
      "falta R$ X" não é estado final de um registro. O quadro continua à vista; a frase fica no rodapé e o "Revisar e completar" apaga. */
   const somaDosLigadosCent = jaLancada ? alvosEscolhidos.reduce((t, l) => t + (parDoPrevisto.get(l.id)?.valorNovoCent ?? l.valorCent), 0)
     + faltamQueNascem.reduce((t, f) => t + f.valorCent, 0) : 0;
+  /* DA-NOTA-JUROS-01 — PAGO ≠ NOTA NUNCA TRAVA (regra de 18/11): com tudo pago, a diferença ganha motivo (juros a mais, desconto a menos) e só
+     "Não é juros" devolve a guarda da soma (compra errada). O motivo vai ao banco (`p_diferenca`): juros divide o MESMO pagamento. */
+  const diferencaNaNota = jaLancada && caminho !== 'criar' ? diferencaDaNota({
+    alvos: alvosEscolhidos.map((l) => ({ pago: l.conciliado || l.status === 'realizado' || l.status === 'conciliado' || !!l.pagamento, vencimento: l.vencimento, pagamento: l.pagamento })),
+    somaCent: somaDosLigadosCent, notaCent: notaQueContaCent, nascem: faltamQueNascem.length,
+    vencimentoDaNota: p.duplicatas.length ? p.duplicatas[p.duplicatas.length - 1].vencimento : null,
+  }) : null;
+  const motivoDaDiferenca = motivoQueVale(diferencaNaNota, escolhaDaDiferenca);
+  const somaTrava = somaPassaDaNotaTrava(somaDosLigadosCent, notaQueContaCent, motivoDaDiferenca);
   const recusaDaCompra = !jaLancada || bloqueio || caminho === 'criar' ? null
     : jaLancada.compraAmbigua ? 'Duas compras deste fornecedor parecem esta nota: abra a nota pela parcela da compra certa. Nada será gravado.'
-    : somaDosLigadosCent > notaQueContaCent + 1 ? 'Soma passa da nota. Nada gravado.'
+    : somaTrava ? 'Soma passa da nota. Nada gravado.'
       : null;
   /* o porquê da recusa (o title; a frase da tela é curta) */
-  const porQueDaRecusa = recusaDaCompra && somaDosLigadosCent > notaQueContaCent + 1
+  const porQueDaRecusa = recusaDaCompra && somaTrava
     ? `As parcelas que receberiam a nota somam R$ ${reais(somaDosLigadosCent)}, mais que ${pares.length && participacaoPct < 100 ? `${participacaoPct}% da nota` : 'a nota'} (R$ ${reais(notaQueContaCent)}). Confira se todas são desta compra.`
     : recusaDaCompra;
   /* P163-2 — o MODO DA NOTA JÁ LANÇADA: as abas no lugar dos blocos; "Criar um lançamento novo (duplica)" sai dele (pelo ⋯ do rodapé) */
@@ -1028,7 +1046,7 @@ export function NotaFiscalDialog({
         criados.push({ id, numero: f.n });
       }
       /* 2 */
-      const r = await completarComANota(clienteId, [...pedido, ...criados.map((x) => ({ id: x.id }))], { juntar: juntarAgora, chave: n.chave || null, simular: false, valorNotaCent: notaQueContaCent });
+      const r = await completarComANota(clienteId, [...pedido, ...criados.map((x) => ({ id: x.id }))], { juntar: juntarAgora, chave: n.chave || null, simular: false, valorNotaCent: notaQueContaCent, diferenca: motivoDaDiferenca });
       const recusa = r.ok === false ? r.motivo : !r.valor.ok ? (r.valor.recusas[0] ?? 'O banco recusou.') : null;
       if (recusa || r.ok === false) {
         const nao = await cancelarCriados(criados.map((x) => x.id), recusa ?? 'recusa');
@@ -1330,7 +1348,7 @@ export function NotaFiscalDialog({
             {/* Ajuste 29/10 14:02 (item 2) — Nota (40%) e Fornecedor (60%) LADO A LADO, numa faixa de altura FIXA, cada um com 2 linhas no máximo e o
                 rótulo colado ao valor; a razão social inteira ou "…" + title (nunca empurra as abas) */}
             {telaJa && (<>
-            <div className="grid h-[66px] shrink-0 gap-1.5" style={{ gridTemplateColumns: estreito ? 'minmax(0, 7fr) minmax(0, 13fr)' : 'minmax(0, 2fr) minmax(0, 3fr) 196px' }} data-testid="nota-faixa-nota-fornecedor">
+            <div className={cn('grid shrink-0 gap-1.5', razaoEmDuasLinhas ? 'h-[78px]' : 'h-[66px]')} style={{ gridTemplateColumns: estreito ? 'minmax(0, 7fr) minmax(0, 13fr)' : 'minmax(0, 2fr) minmax(0, 3fr) 196px' }} data-testid="nota-faixa-nota-fornecedor">
             {/* a conferência de regressão (29/10): o que a Nota da tela antiga mostrava e não cabe nas 2 linhas — natureza, desconto, destinatário e
                 dados adicionais — fica no title do bloco; o aviso da REMESSA (NOTA-AVULSA-890) é um selo âmbar; pela chave, emissão e valor são CAMPOS */}
             <section className={cn(BLOCO, 'min-h-0 overflow-hidden')} data-testid="nota-bloco-nota"
@@ -1364,12 +1382,12 @@ export function NotaFiscalDialog({
                   title da Cidade) */}
               <div className="flex min-w-0 items-start gap-2.5">
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <div className={cn('flex h-4 min-w-0 items-baseline gap-3 whitespace-nowrap', corDoXml)}>
-                    {/* ajuste 2 — a razão social inteira ou "…" + title (a exceção declarada `data-reticencias-com-title`, como a do P71) */}
+                  {/* DA-NOTA ETAPA 2 (Gabriel 24/11 19:07) — a razão social INTEIRA: 2 linhas reservadas (quebra, nunca "…"; a altura não muda com o nome) */}
+                  <div className={cn('flex min-w-0 items-start gap-3', razaoEmDuasLinhas ? 'h-[24px]' : 'h-4 whitespace-nowrap', corDoXml)}>
                     <div className="flex min-w-0 flex-1 items-baseline gap-1.5" data-testid="nota-razao-social" data-reticencias-com-title=""
                       title={fornecedor ? fornecedor.nome : `${caixaDeTitulo(razaoSocial)}${receita ? ' (Receita)' : ''} — no DANFE: ${n.emitente.nome}`}>
-                      <span className="shrink-0 text-[10px] text-muted-foreground">Razão social</span>
-                      <span className="min-w-0 truncate text-[11px] font-medium">{fornecedor ? fornecedor.nome : caixaDeTitulo(razaoSocial)}</span>
+                      <span className="shrink-0 text-[10px] leading-[12px] text-muted-foreground">Razão social</span>
+                      <span className={cn('min-w-0 text-[11px] font-medium leading-[12px]', razaoEmDuasLinhas ? 'whitespace-normal break-words' : 'truncate')}>{fornecedor ? fornecedor.nome : caixaDeTitulo(razaoSocial)}</span>
                     </div>
                     {conflito ? (
                       <Kv k="Já é de" v={`${conflito.nome}${conflito.ativo ? '' : ' (inativo)'}`} erro testid="nota-conflito" className="max-w-[45%] shrink-0"
@@ -1382,13 +1400,12 @@ export function NotaFiscalDialog({
                         titulo={receita ? 'Razão social inteira da consulta pública do CNPJ.' : (receitaFrase ?? 'Consultando a Receita…')} />
                     )}
                   </div>
-                  <div className={cn('flex h-4 min-w-0 items-baseline gap-3 whitespace-nowrap', corDoXml)} data-testid="nota-fornecedor-linha-2">
+                  <div className={cn('flex h-4 min-w-0 items-baseline gap-2.5 whitespace-nowrap', corDoXml)} data-testid="nota-fornecedor-linha-2">
                     <Kv num k={soDigitos(n.emitente.documento).length === 11 ? 'CPF' : 'CNPJ'} v={documentoFormatado(n.emitente.documento)} erro={erroEm('cnpj')} testid="nota-documento-emitente" className="shrink-0" />
                     <Kv num k="IE" v={n.emitente.ie ?? '—'} className="shrink-0" />
-                    <div className="flex min-w-0 items-baseline gap-1.5" title={enderecoTexto ? `${enderecoTexto} · ${cidade}` : cidade} data-testid="nota-cidade" data-reticencias-com-title="">
-                      <span className="shrink-0 text-[10px] text-muted-foreground">Cidade/UF</span>
-                      <span className="min-w-0 truncate text-[11px] font-medium">{cidade}</span>
-                    </div>
+                    {/* DA-NOTA ETAPA 2 — a cidade INTEIRA (sem o rótulo, que não cabia a 1126; "Cidade/UF" e o endereço no title) */}
+                    <span className={cn('text-[11px] font-medium', razaoEmDuasLinhas ? 'shrink-0' : 'min-w-0 truncate')} data-reticencias-com-title=""
+                      title={`Cidade/UF: ${enderecoTexto ? `${enderecoTexto} · ${cidade}` : cidade}`} data-testid="nota-cidade">{cidade}</span>
                   </div>
                 </div>
                 <div className="campos-uma-linha flex w-[124px] shrink-0 flex-col items-stretch gap-1">
@@ -2028,7 +2045,8 @@ export function NotaFiscalDialog({
                   todasIniciais={{ descricaoBase: baseDaDescricao(p.descricao), favorecidoId: favorecidoId ?? null, fazendaId: fazendaId || null, contaId: contaEscolhida,
                     planoContaId: planoId || null, numeroDocumento: formatNFNumber(p.numeroDocumento || n.numero),
                     competencia: n.emissao || null, safraId: lavoura && safraId ? safraId : null }}
-                  onConfirmar={completarComNota} opcoes={opcoesDaPrevia} semRodape aoMudarEstado={setEstadoDaPrevia} />
+                  onConfirmar={completarComNota} opcoes={opcoesDaPrevia} semRodape aoMudarEstado={setEstadoDaPrevia}
+                  diferenca={diferencaNaNota ? { d: diferencaNaNota, motivo: motivoDaDiferenca, escolha: escolhaDaDiferenca, onEscolher: setEscolhaDaDiferenca } : null} />
               </div>
             )}
 
@@ -2053,7 +2071,7 @@ export function NotaFiscalDialog({
                   {alvosEscolhidos.length > pares.length && <><span className="shrink-0 text-muted-foreground">·</span>
                     <span className="shrink-0">{alvosEscolhidos.length - pares.length} vincula</span></>}
                   <span className="shrink-0 text-muted-foreground">·</span>
-                  <span data-testid="nota-resultado-soma" className={cn('shrink-0 tabular-nums', somaDosLigadosCent > notaQueContaCent + 1 && 'text-destructive')}
+                  <span data-testid="nota-resultado-soma" className={cn('shrink-0 tabular-nums', somaTrava && 'text-destructive')}
                     title={participacaoPct < 100 ? `${participacaoPct}% da nota de R$ ${reais(n.totais.notaCent)}` : `a nota é R$ ${reais(n.totais.notaCent)}`}>R$ {reais(somaDosLigadosCent)}</span>
                   <span className="shrink-0 text-muted-foreground">·</span>
                   <label className="flex shrink-0 items-center gap-1" data-testid="nota-participacao"
@@ -2070,7 +2088,7 @@ export function NotaFiscalDialog({
                     <span className="shrink-0 text-muted-foreground" data-testid="nota-parte-de-outro"
                       title="Só informativa: não vira lançamento deste cliente, não entra no DRE, no caixa nem no Livro Caixa.">outro paga R$ {reais(parteDeOutroCent)}</span></>}
                 </>) : (<>
-                <span data-testid="nota-resultado-soma" className={cn('shrink-0', somaDosLigadosCent > n.totais.notaCent + 1 && 'text-destructive')}
+                <span data-testid="nota-resultado-soma" className={cn('shrink-0', somaTrava && 'text-destructive')}
                   title={Math.abs(somaDosLigadosCent - n.totais.notaCent) <= 1 ? undefined : `a nota é R$ ${reais(n.totais.notaCent)}`}>
                   {alvosEscolhidos.length + nACriar} parcela{alvosEscolhidos.length + nACriar === 1 ? '' : 's'} · R$ {reais(somaDosLigadosCent)} {Math.abs(somaDosLigadosCent - n.totais.notaCent) <= 1 ? '= nota' : somaDosLigadosCent < n.totais.notaCent ? '< nota' : '> nota'}</span>
                 <span className="shrink-0 text-muted-foreground">·</span>
@@ -2094,7 +2112,7 @@ export function NotaFiscalDialog({
                 ) : <span className="shrink-0 text-muted-foreground" data-testid="nota-nao-junta">não junta ({alvosEscolhidos.length + nACriar === 1 ? '1 parcela' : 'já é uma compra'})</span>}
                 <span className="shrink-0 text-muted-foreground">·</span>
                 <span className="min-w-0 shrink text-muted-foreground" title={estadoDaPrevia?.fraseDre ?? undefined} data-testid="nota-resultado-dre">
-                  {!estadoDaPrevia?.fraseDre ? 'DRE: conferindo…' : estadoDaPrevia.fraseDre === 'DRE: não muda' ? 'DRE não muda' : 'DRE muda (veja o title)'}</span>
+                  {!estadoDaPrevia?.fraseDre ? 'DRE: conferindo…' : estadoDaPrevia.fraseDre === 'DRE: não muda' ? 'DRE não muda' : estadoDaPrevia.trocaConta ? 'DRE muda (subcentro)' : 'DRE muda (mês)'}</span>
               </div>
             )}
           </div>
@@ -2105,7 +2123,7 @@ export function NotaFiscalDialog({
         <div className="flex h-[38px] shrink-0 items-center gap-2.5 border-t bg-card px-3 text-[10.5px]" data-testid="nota-rodape">
           {bloqueio ? (
             <span className="flex min-w-0 items-center gap-2 text-destructive" data-testid="nota-bloqueio">
-              <span className="min-w-0 uma-linha-que-rola" title={bloqueio}>⚠ {bloqueio}</span>
+              <span className={cn(avisoDoRodape, '')} title={bloqueio}>⚠ {bloqueio}</span>
               {registrada && <button type="button" className="shrink-0 underline underline-offset-2" onClick={() => onAbrirRegistrada(registrada)} data-testid="nota-abrir-registrada">abrir</button>}
               {/* P146 — a verificacao que falhou se refaz daqui (o Criar so' volta quando ela responder) */}
               {!registrada && !divergencias.length && naoVerificado && (
@@ -2114,28 +2132,29 @@ export function NotaFiscalDialog({
               )}
             </span>
           ) : erro ? (
-            <span className="min-w-0 uma-linha-que-rola text-destructive" title={erro} data-testid="nota-erro">⚠ {erro}</span>
+            <span className={cn(avisoDoRodape, 'text-destructive')} title={erro} data-testid="nota-erro">⚠ {erro}</span>
           ) : naoAchouOAberto && !jaLancada ? (
-            <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-porta2-nao-achado"
+            <span className={cn(avisoDoRodape, 'text-destructive')} data-testid="nota-porta2-nao-achado"
               title="Aberta pelo Editar lançamento: a busca (nº, chave, soma) não achou este lançamento; criar daqui duplicaria a compra.">
               ⚠ O lançamento aberto não foi achado por esta nota. Nada será criado daqui.</span>
           ) : recusaDaCompra ? (
-            <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-recusa-compra" title={porQueDaRecusa ?? undefined}>⚠ {recusaDaCompra}</span>
+            <span className={cn(avisoDoRodape, 'text-destructive')} data-testid="nota-recusa-compra" title={porQueDaRecusa ?? undefined}>⚠ {recusaDaCompra}</span>
           ) : faltasQueContam.length && !mostraEsqueleto ? (
-            <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-falta">⚠ Falta: {faltasQueContam.join(', ')}</span>
+            <span className={cn(avisoDoRodape, 'text-destructive')} data-testid="nota-falta">⚠ Falta: {faltasQueContam.join(', ')}</span>
           ) : null}
           {!bloqueio && !erro && modoJa && posicaoPendente ? (
-            <span className="min-w-0 uma-linha-que-rola text-amber-900" data-testid="nota-cartao-falta-posicao">⚠ Diga a posição das parcelas{noCartao?.cartao ? ' no cartão' : ''} (aba Parcelas × sistema).</span>
-          ) : !bloqueio && !erro && jaLancada && modoJa && estadoDaPrevia?.impedimento ? (
-            <span className="min-w-0 uma-linha-que-rola text-destructive" title={estadoDaPrevia.impedimento} data-testid="nota-previa-impede">⚠ {estadoDaPrevia.impedimento}</span>
+            <span className={cn(avisoDoRodape, 'text-amber-900')} data-testid="nota-cartao-falta-posicao">⚠ Diga a posição das parcelas{noCartao?.cartao ? ' no cartão' : ''} (aba Parcelas × sistema).</span>
+          ) : !bloqueio && !erro && jaLancada && modoJa && estadoDaPrevia?.impedimento && !recusaDaCompra ? (
+            /* DA-NOTA-JUROS-01 (3) — a recusa da tela e a do banco são a MESMA (a soma): uma frase só no rodapé, nunca as duas espremidas */
+            <span className={cn(avisoDoRodape, 'text-destructive')} title={estadoDaPrevia.impedimento} data-testid="nota-previa-impede">⚠ {estadoDaPrevia.impedimento}</span>
           ) : !bloqueio && !erro && semCompra && remessa ? (
             /* NOTA-PAGTO-PARCELADO-01 P3 — a nota que não é compra: o aviso em DESTAQUE no rodapé (o selo do bloco Nota diz o mesmo); nunca bloqueia */
-            <span className="min-w-0 uma-linha-que-rola font-semibold text-red-700" title={remessa} data-testid="nota-sem-compra-rodape">⚠ {remessa}</span>
+            <span className={cn(avisoDoRodape, 'font-semibold text-red-700')} title={remessa} data-testid="nota-sem-compra-rodape">⚠ {remessa}</span>
           ) : !bloqueio && !erro && jaLancada && !recusaDaCompra && !faltasQueContam.length ? (
             <span className="min-w-0 uma-linha-que-rola font-medium text-amber-900" data-testid="nota-ja-lancada-frase">Nada é gravado antes de você clicar.</span>
           ) : !bloqueio && !erro && !telaJa ? (
             /* só na nota NOVA: na já lançada o Resultado diz o que acontece com a nota */
-            <span className="min-w-0 uma-linha-que-rola text-muted-foreground">
+            <span className={cn(avisoDoRodape, 'text-muted-foreground')}>
               {como === 'cartao' && cabeAqui && nomeDoCartao ? fraseDoRodapeDoCartao(lido.origem === 'pdf' ? 'PDF' : 'XML', nParcelas, numeroFalado(n.numero), nomeDoCartao)
                 : `O ${lido.origem === 'pdf' ? 'PDF' : 'XML'} fica anexado ${cabeAqui ? `às ${nParcelas} parcelas` : 'ao lançamento'} como a NF ${numeroFalado(n.numero)}.`}
               {/* D — so' cancelados desta nota: ela NAO esta' lancada; diz, sem contar */}

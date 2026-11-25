@@ -17,7 +17,8 @@ vi.mock('jspdf', () => ({
   },
 }));
 vi.mock('jspdf-autotable', () => ({ default: (_d: unknown, o: { head?: string[][]; body?: string[][] }) => { pdf.chamadas.push(o); } }));
-vi.mock('@/assets/logo.png', () => ({ default: '' }));
+/* MARCA-PADRAO-01: o logo antigo (`assets/logo.png`) saiu do repositório; os PNG da marca vêm de `src/assets/marca/`. */
+vi.mock('@/assets/marca/logo-horizontal-fundo-claro.png', () => ({ default: '' }));
 /* o logo não carrega no jsdom: a imagem falha e o PDF segue sem ele (o caminho que o código já tem) */
 vi.stubGlobal('Image', class { onerror: (() => void) | null = null; onload: (() => void) | null = null; crossOrigin = '';
   set src(_v: string) { setTimeout(() => this.onerror?.(), 0); } });

@@ -74,7 +74,7 @@ function SlideResumoExecutivo() {
       title="Resumo Executivo"
       subtitle="Jan a Mar/2026 · NJ Pecuária · Global"
       badge={<Badge variant="outline">Slide 1 / 4</Badge>}
-      footer="Gerado em 19/05/2026 · Agroinblue"
+      footer="Gerado em 19/05/2026 · AGROinBLUE"
     >
       <div className="grid grid-cols-3 gap-4 h-full">
         <div className="col-span-2 space-y-3">
