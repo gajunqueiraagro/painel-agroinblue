@@ -22,6 +22,11 @@
  *       (o centro do donut no furo).
  *   (8) FOLGA ENTRE CELULAS (P100 item 5) — o cenario com `folgaCelulas` (seletor de tabelas): em cada linha, o texto visivel de uma
  *       celula e o da vizinha ficam a 6 px ou mais um do outro ("R$ 11.252.742,85+257,9%" colado = achado), cabecalho inclusive.
+ *   (9) RÉGUA DE FONTE (UI-FONTES-REGUA-01, Gabriel 25/11 07:41) — SÓ nas telas novas ou alteradas no diff (`telasDaReguaDeFonte`; as já
+ *       aprovadas não reprovam): texto de linha de tabela ≤ 11px; texto de campo/botão/aba ≤ 11px; rótulo/cabeçalho/data ≤ 10px; título de
+ *       modal ≤ 13px; altura de campo/botão ≤ 28px; exceção só o valor em destaque (resumo/KPI: número fora de tabela e de campo), até 16px.
+ *       As telas antigas vão para um RELATÓRIO (`--relatorio-fontes ARQ.jsonl`, uma linha por elemento; `--so-fonte` mede só a régua), que
+ *       `scripts/ui-fontes-relatorio.mjs` junta por tela — sem consertar nada.
  * Baseline = a lista de EXCECOES abaixo (vazia). Antes de varrer, o detector se prova num fixture com os defeitos: se nao os achar,
  * sai com codigo 2 ("zero achados" so' vale quando a busca provou que sabe achar). `--fotos DIR` grava um print por tela e tamanho.
  */
@@ -30,7 +35,7 @@ import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { filtroRapido, telaDoCenario } from './ui-gate-rapido.mjs';
+import { filtroRapido, telaDoCenario, telasDaReguaDeFonte } from './ui-gate-rapido.mjs';
 import { lerOpcoesDaRodada, planoDaRodada, comTeto, deveParar, textoDoTeto, linhaDaMedicao, fraseDoParcial, codigoDaRodada, criarRegistro,
   paginasDaMedicao } from './ui-cortes/teto.mjs';
 
@@ -44,6 +49,10 @@ const SO = arg('--so');
 /* UI-MESES-PADRAO-01 (decisão do Gabriel 18/11: publicar com o gate das telas ALCANÇADAS, o completo à noite) — `--telas a,b,c`: só os
    cenários dessas telas da bancada (o `tela=` da url, a MESMA regra do modo rápido). Não substitui o completo: é o gate parcial declarado. */
 const TELAS = arg('--telas') ? new Set(arg('--telas').split(',')) : null;
+/* UI-FONTES-REGUA-01 — onde a régua reprova (as telas do diff), o relatório das antigas e o modo que mede só ela */
+const REGUA = telasDaReguaDeFonte(process.env.UI_GATE_BASE || 'origin/proto');
+const RELATORIO_FONTES = arg('--relatorio-fontes');
+const SO_FONTE = process.argv.includes('--so-fonte');
 /* PIQUETE-VIGENCIA-01 (gate a 918): quando a barra do polígono não cabe inteira, os gestos vão para o "⋯" (`editar-mais`) com os MESMOS
    testids — o clique no gesto abre o menu antes, se preciso; `temGesto` confere o gesto à vista OU no menu (e fecha o menu) */
 async function cliqueNoGesto(p, t) {
@@ -3414,6 +3423,59 @@ function medirSemRolarVertical(sel) {
     .map((e) => ({ regra: 'rolagem', texto: `${e.getAttribute('data-testid') || sel} rola: pede ${e.scrollHeight}px, tem ${e.clientHeight}` }));
 }
 /* roda NA PAGINA: devolve os achados [{regra, texto}] */
+/* UI-FONTES-REGUA-01 — a régua de fonte (na página; uma entrada por elemento fora dela). Quem é o quê, nesta ordem: título do modal (o
+   `aria-labelledby` do `role=dialog`) · campo/botão/aba (input, select, textarea, button, tab, combobox) · data (dd/mm[/aaaa], em qualquer
+   lugar) · rótulo/cabeçalho (`th`, `label`, columnheader) · linha de tabela (`td`, cell) · valor em destaque (número fora de tabela e de
+   campo: até 16). O resto do texto (parágrafo, título de página) não entra. */
+function medirFonteRegua(regiao) {
+  const raiz = (regiao && document.querySelector(regiao)) || document.body;
+  const LIM = { titulo: 13, campo: 11, data: 10, rotulo: 10, linha: 11, destaque: 16, altura: 28 };
+  const CAMPO = 'input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not([type="file"]), textarea, select, button, [role="tab"], [role="combobox"]';
+  const DATA = /^\d{2}\/\d{2}(\/\d{2}(\d{2})?)?$/;
+  const NUMERO = /^[-+−]?\s*(R\$\s*)?[-−]?\d[\d.,]*\s*(%|@|cab|kg|ha|t)?$/i;
+  const visivel = (el) => { const r = el.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false;
+    const st = getComputedStyle(el); return st.visibility !== 'hidden' && st.display !== 'none' && Number(st.opacity) > 0; };
+  const curto = (t) => String(t ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  const nome = (el, texto) => { const id = el.closest('[data-testid]')?.getAttribute('data-testid'); return `${el.tagName.toLowerCase()}${id ? `[${id}]` : ''}${texto ? ` "${curto(texto)}"` : ''}`; };
+  const um = (v) => Math.round(v * 10) / 10;
+  const achados = []; const vistos = new Set();
+  const acusar = (el, tipo, medida, valor, lim, texto) => {
+    const elemento = nome(el, texto); const k = `${tipo}|${elemento}|${um(valor)}`; if (vistos.has(k)) return; vistos.add(k);
+    achados.push({ regra: 'fonte', tipo, medida, elemento, tamanho: um(valor), limite: lim,
+      texto: `${tipo}: ${elemento} ${medida === 'altura' ? 'com altura' : 'a'} ${um(valor)}px (régua: até ${lim})` });
+  };
+  const titulos = new Set([...document.querySelectorAll('[role="dialog"][aria-labelledby]')].map((d) => document.getElementById(d.getAttribute('aria-labelledby'))).filter(Boolean));
+  const classe = (el, texto) => {
+    if ([...titulos].some((t) => t.contains(el))) return ['título de modal', LIM.titulo];
+    const campo = el.closest(CAMPO);
+    if (campo) return [campo.matches('[role="tab"]') ? 'aba' : campo.matches('button') ? 'botão' : 'campo', LIM.campo];
+    if (DATA.test(texto)) return ['data', LIM.data];
+    if (el.closest('th, label, [role="columnheader"]')) return ['rótulo/cabeçalho', LIM.rotulo];
+    if (el.closest('td, [role="cell"], [role="gridcell"]')) return ['linha de tabela', LIM.linha];
+    if (NUMERO.test(texto)) return ['valor em destaque', LIM.destaque];
+    return null;
+  };
+  /* o texto: cada nó de texto visível pelo elemento que o desenha (o tamanho é o dele) */
+  const andar = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT);
+  for (let n = andar.nextNode(); n; n = andar.nextNode()) {
+    const texto = curto(n.textContent); const el = n.parentElement;
+    if (!texto || !el || el.closest('svg, script, style, [aria-hidden="true"]') || !visivel(el)) continue;
+    const c = classe(el, texto); if (!c) continue;
+    const fs = parseFloat(getComputedStyle(el).fontSize);
+    if (fs > c[1] + 0.05) acusar(el, c[0], 'fonte', fs, c[1], texto);
+  }
+  /* os campos (o texto deles não é nó: valor e placeholder) e a ALTURA de campo/botão (textarea cresce por desenho: só a fonte) */
+  for (const el of raiz.querySelectorAll(CAMPO)) {
+    if (!visivel(el)) continue;
+    const tipo = el.matches('[role="tab"]') ? 'aba' : el.matches('button') ? 'botão' : 'campo';
+    const rotulo = el.getAttribute('aria-label') || el.value || el.getAttribute('placeholder') || el.textContent;
+    if (el.matches('input, textarea, select')) { const fs = parseFloat(getComputedStyle(el).fontSize); if (fs > LIM.campo + 0.05) acusar(el, tipo, 'fonte', fs, LIM.campo, rotulo); }
+    const h = el.getBoundingClientRect().height;
+    if (!el.matches('textarea') && h > LIM.altura + 0.5) acusar(el, tipo, 'altura', h, LIM.altura, rotulo);
+  }
+  return achados;
+}
+
 function medir(regiao) {
   const achados = [];
   /* FORN-01b — o que nunca corta: numero, valor, data, hora, CPF/CNPJ, nota, contador (so' digitos e pontuacao de numero) */
@@ -3797,6 +3859,26 @@ try {
   if (!['reticencias', 'corte', 'quebra', 'data', 'cabecalho', 'altura', 'rolagem', 'valor', 'tabela', 'sobreposicao', 'italico', 'numero'].every((r) => prova.includes(r))
     || prova.filter((r) => r === 'cabecalho').length < 3 || daSobre0.filter((a) => a.regra === 'sobreposicao').length < 2) { console.error(`check-ui-cortes: AUTO-TESTE FALHOU (achou ${prova.join(',') || 'nada'})`); process.exit(2); }
 
+  /* UI-FONTES-REGUA-01 — AUTO-TESTE DA RÉGUA DE FONTE: cada limite estourado por 1px é achado; no limite (e o KPI a 16), nada */
+  { const pf = await navegador.newPage({ viewport: { width: 900, height: 500 } });
+    await pf.setContent(`<div id="mau"><table><thead><tr><th style="font-size:11px">Cab mau</th></tr></thead><tbody><tr><td style="font-size:12px">Linha ma</td>
+      <td style="font-size:10px">01/02/2026</td><td style="font-size:11px"><span style="font-size:11px">02/03/2026</span></td></tr></tbody></table>
+      <button style="font-size:12px;height:20px">Botao mau</button><button style="font-size:10px;height:30px">Alto</button><input style="font-size:12px;height:20px" value="campo mau">
+      <div role="tab" style="font-size:12px">Aba ma</div><label style="font-size:11px">Rotulo mau</label><div style="font-size:17px">R$ 1.234,56</div>
+      <div role="dialog" aria-labelledby="tt"><h2 id="tt" style="font-size:14px">Titulo mau</h2></div></div>
+      <div id="bom"><table><thead><tr><th style="font-size:10px">Cab</th></tr></thead><tbody><tr><td style="font-size:11px">Linha</td><td style="font-size:10px">03/04/2026</td></tr></tbody></table>
+      <button style="font-size:11px;height:28px">Botao</button><input style="font-size:11px;height:28px" value="campo"><label style="font-size:10px">Rotulo</label>
+      <div style="font-size:16px">R$ 9.876,54</div><p style="font-size:20px">Texto de pagina fora da regua</p>
+      <div role="dialog" aria-labelledby="tb"><h2 id="tb" style="font-size:13px">Titulo</h2></div></div>`);
+    const mau = await pf.evaluate(medirFonteRegua, '#mau'); const bom = await pf.evaluate(medirFonteRegua, '#bom'); await pf.close();
+    const tiposMau = new Set(mau.map((a) => `${a.tipo}/${a.medida}`));
+    const esperados = ['rótulo/cabeçalho/fonte', 'linha de tabela/fonte', 'data/fonte', 'botão/fonte', 'botão/altura', 'campo/fonte', 'aba/fonte', 'valor em destaque/fonte', 'título de modal/fonte'];
+    if (!esperados.every((t) => tiposMau.has(t)) || bom.length) {
+      console.error(`check-ui-cortes: AUTO-TESTE DA RÉGUA DE FONTE FALHOU (faltou: ${esperados.filter((t) => !tiposMau.has(t)).join(', ') || 'nada'}; acusou no que cabe: ${bom.map((a) => a.texto).join(' | ') || 'nada'})`); process.exit(2);
+    }
+  }
+  registrar(`check-ui-cortes: régua de fonte (UI-FONTES-REGUA-01) reprova em ${REGUA.telas.size} tela(s) do diff${REGUA.telas.size ? `: ${[...REGUA.telas].join(', ')}` : ''}${REGUA.aviso ? ` (${REGUA.aviso})` : ''}`);
+
   /* GATE-TELA-TETO-01 — AUTO-TESTE DO TETO: uma página em laço infinito tem de virar estouro (o contexto fecha) em ~2 s, não prender */
   const tt0 = Date.now(); const pgTeto = paginasDaMedicao(navegador); const pt = await pgTeto.nova({ viewport: { width: 400, height: 300 } });
   const rTeto = await comTeto(2000, async () => { await pt.setContent('<p>laço</p>'); await pt.evaluate(() => { for (;;) { /* preso */ } }); }, () => pgTeto.fecharTodas());
@@ -3832,6 +3914,13 @@ try {
       });
     }
     rastro.passo = 'medir';
+    /* UI-FONTES-REGUA-01 — a régua: reprova só na tela do diff; a das antigas vai ao relatório. Com `--so-fonte`, só ela. */
+    const daFonte = await p.evaluate(medirFonteRegua, cen.regiao ?? null);
+    const sobARegua = REGUA.telas.has(telaDoCenario(cen));
+    if (RELATORIO_FONTES && daFonte.length) fs.appendFileSync(RELATORIO_FONTES, daFonte.map((a) => JSON.stringify({ cena: cen.nome,
+      tela: telaDoCenario(cen), tamanho: `${w}x${h}`, sobARegua, tipo: a.tipo, medida: a.medida, elemento: a.elemento, px: a.tamanho, limite: a.limite })).join('\n') + '\n');
+    if (SO_FONTE) { for (const a of (sobARegua ? daFonte : [])) meus.push({ tela: cen.nome, tamanho: `${w}x${h}`, regra: a.regra, texto: a.texto });
+      await p.close(); return meus; }
     if (FOTOS) { fs.mkdirSync(FOTOS, { recursive: true }); await p.screenshot({ path: path.join(FOTOS, `${cen.nome}_${w}x${h}.png`) }); }
     /* FORN-BUSCA-UNICA-01 — `regiao` (opcional): o cenário varre só o que o seletor pega (a tela inteira sem ele) */
     if (cen.regiao && !(await p.$(cen.regiao))) erros.push(`regiao ${cen.regiao} nao achada`);
@@ -3881,7 +3970,9 @@ try {
     }
     /* `soRegras` (UI-SEM-CORTE-02): o cenario conta so' estas regras — a tabela do Financeiro V2, suspensa (FIN-V2-SEM-CORTE-01), entra
        so' pelo texto inclinado e pela sobreposicao. Erro de pagina conta sempre. */
-    const achados = cen.soRegras ? achadosTodos.filter((a) => a.regra === 'erro' || cen.soRegras.includes(a.regra)) : achadosTodos;
+    /* UI-FONTES-REGUA-01 — a régua vale também no cenário de `soRegras` (ela só olha o máximo: as exceções ao piso não a tocam) */
+    if (sobARegua) achadosTodos.push(...daFonte.map((a) => ({ regra: a.regra, texto: a.texto })));
+    const achados = cen.soRegras ? achadosTodos.filter((a) => a.regra === 'erro' || a.regra === 'fonte' || cen.soRegras.includes(a.regra)) : achadosTodos;
     for (const a of achados) if (!EXCECOES.some((x) => x.tela === cen.nome && x.regra === a.regra && x.texto === a.texto)) meus.push({ tela: cen.nome, tamanho: `${w}x${h}`, ...a });
     await p.close();
     return meus; }, () => paginas.fecharTodas());

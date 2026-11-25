@@ -17,6 +17,8 @@ export const FONTE_CONTROLE = 11;
 export const TITULO_MODAL = 'text-[13px] font-semibold';
 /** campo, gatilho de seletor e botão */
 export const CONTROLE = 'h-[26px] py-0 text-[11px]';
+/** botão de ícone ao lado de um campo (o "+" e o lápis do seletor de favorecido): o quadrado da altura do controle */
+export const QUADRADO_CONTROLE = 'h-[26px] w-[26px]';
 /** texto de apoio (nota sob o bloco, rodapé, soma): o tamanho do rótulo */
 export const TEXTO_ROTULO = 'text-[10px]';
 export const TH_FONTES = cn(TH_REGUA, 'text-[10px]');
