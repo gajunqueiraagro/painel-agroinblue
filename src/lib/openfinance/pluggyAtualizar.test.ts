@@ -103,7 +103,8 @@ describe('OF-ATUALIZAR-DO-BANCO-01 — Reconectar (o Widget em modo atualizaçã
       if (k === 'POST /connect_token') { corpos.push(JSON.parse(init.body ?? '{}')); return resposta(200, { accessToken: 'ct' }); }
       return resposta(404, {});
     };
-    const p: PecasConectar = { autorDoToken: async () => 'autor-1', podeConectar: async () => true, credenciais: () => ({ clientId: 'c', clientSecret: 's' }), busca, registrar: async () => true };
+    const p: PecasConectar = { autorDoToken: async () => 'autor-1', podeConectar: async () => true, credenciais: () => ({ clientId: 'c', clientSecret: 's' }), busca, registrar: async () => true,
+      aceitarTermo: async () => 'ok' };
     return { p, corpos };
   };
   it('com o item do cliente, o connect token leva o itemId; sem item, o de sempre (avoidDuplicates)', async () => {
@@ -111,7 +112,7 @@ describe('OF-ATUALIZAR-DO-BANCO-01 — Reconectar (o Widget em modo atualizaçã
     expect((await conectar({ token: 't', clienteId: CLIENTE, itemId: ITEM }, a.p)).status).toBe(200);
     expect(a.corpos[0]).toEqual({ itemId: ITEM, options: { clientUserId: CLIENTE } });
     const b = pc(ITEM_OK);
-    await conectar({ token: 't', clienteId: CLIENTE }, b.p);
+    await conectar({ token: 't', clienteId: CLIENTE, termo: { versao: 1, md5: '0123456789abcdef0123456789abcdef' } }, b.p);
     expect(b.corpos[0]).toEqual({ options: { clientUserId: CLIENTE, avoidDuplicates: true } });
   });
   it('item de outro cliente = 409 sem token; item inválido = 400', async () => {

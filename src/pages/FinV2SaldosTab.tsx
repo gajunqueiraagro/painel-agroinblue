@@ -115,7 +115,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const { fazendas, fazendaAtual } = useFazenda();
   const { user } = useAuth();
   const { perfil, isManager } = usePermissions();
-  const isAdmin = perfil === 'admin_agroinblue' || perfil === 'gestor_cliente';
+  const isAdmin = perfil === 'admin_agroinblue' || perfil === 'gestor_cliente' || perfil === 'proprietario';
   const isFinanceiro = perfil === 'financeiro';
   const curAM = currentAnoMes();
 

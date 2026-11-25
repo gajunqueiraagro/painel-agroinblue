@@ -28,7 +28,6 @@ vi.mock('sonner', () => ({ toast: { error: (...a: unknown[]) => toastErro(...a),
 
 import { BuscarDoBanco } from './BuscarDoBanco';
 import { SaldoDoBanco } from './SaldoDoBanco';
-import { LigarContaDoSistema } from '@/components/financeiro-v2/LigarContaDoSistema';
 
 const CONTA = '131b8501-caf7-4964-b1b1-3f552ad2b75d';
 const tx = (id: string, date: string, amount: number) =>
@@ -135,36 +134,8 @@ describe('Saldo do banco no Resumo do mês', () => {
   });
 });
 
-describe('Lança na conta (Escolher contas)', () => {
-  beforeEach(() => {
-    tabelas = {
-      openfinance_contas_permitidas: [{ id: 'perm-1', rotulo: 'Itaú · Conta corrente · 7225', final4: '7225', conta_bancaria_id: null }],
-      financeiro_contas_bancarias: [
-        { id: CONTA, nome_conta: 'Itaú Personalite', nome_exibicao: null, tipo_conta: 'cc', numero_conta: '3722', conta_digito: '5', ativa: true },
-        { id: 'bb', nome_conta: 'Banco do Brasil', nome_exibicao: null, tipo_conta: 'cc', numero_conta: '1234', conta_digito: '0', ativa: true },
-      ],
-    };
-  });
-  it('sugere pelo final; só grava depois da prévia; grava com a conta escolhida', async () => {
-    invoke.mockResolvedValueOnce({ data: { ok: true, mudou: true, simulado: true }, error: null })
-      .mockResolvedValueOnce({ data: { ok: true, mudou: true, simulado: false }, error: null });
-    render(<LigarContaDoSistema clienteId="cliente-teste" itemId="item-1" versao={0} />);
-    fireEvent.click(await screen.findByTestId('openfinance-ver-ligacao'));
-    await waitFor(() => expect(screen.getByTestId('openfinance-previa-ligacao').textContent).toBe('Liga Itaú · Conta corrente · 7225 em Itaú Personalite.'));
-    expect(invoke).toHaveBeenLastCalledWith('openfinance-contas', { body: { acao: 'ligar', cliente_id: 'cliente-teste', permitida_id: 'perm-1', conta_bancaria_id: CONTA, simular: true } });
-    fireEvent.click(screen.getByTestId('openfinance-gravar-ligacao'));
-    await waitFor(() => expect(invoke).toHaveBeenLastCalledWith('openfinance-contas', { body: { acao: 'ligar', cliente_id: 'cliente-teste', permitida_id: 'perm-1', conta_bancaria_id: CONTA, simular: false } }));
-    expect(toastOk).toHaveBeenCalledWith('Ligada: Itaú · Conta corrente · 7225 → Itaú Personalite.');
-  });
-  it('recusa da borda: a frase dela, nada gravado (a 2ª chamada não sai)', async () => {
-    invoke.mockResolvedValueOnce({ data: { ok: false, frase: 'Esta conta do sistema já recebe de outra conta do banco. Nada foi gravado.' }, error: null });
-    render(<LigarContaDoSistema clienteId="cliente-teste" itemId="item-1" versao={0} />);
-    fireEvent.click(await screen.findByTestId('openfinance-ver-ligacao'));
-    await waitFor(() => expect(toastErro).toHaveBeenCalledWith('Esta conta do sistema já recebe de outra conta do banco. Nada foi gravado.'));
-    expect(screen.queryByTestId('openfinance-gravar-ligacao')).toBeNull();
-    expect(invoke).toHaveBeenCalledTimes(1);
-  });
-});
+/* OPENFINANCE-PRONTO-NJ-01 (1): o "Lança na conta" virou uma coluna do Escolher contas (o LigarContaDoSistema saiu) — a ligação
+   (prévia, permitir + ligar, recusa da borda) é provada em `src/components/financeiro-v2/openFinanceDoAdmin.test.tsx`. */
 
 describe('OF-ATUALIZAR-DO-BANCO-01 — Atualizar do banco', () => {
   const item = (status: string, lastUpdatedAt = '2026-11-16T20:10:37.000Z') =>

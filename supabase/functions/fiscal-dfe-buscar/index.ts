@@ -65,7 +65,8 @@ Deno.serve(async (req) => {
       const { data: ehAdmin } = await admin.rpc("is_admin_agroinblue", { _user_id: autor });
       if (ehAdmin === true) return true;
       const { data: perfil } = await admin.rpc("get_user_perfil", { _user_id: autor, _cliente_id: clienteId });
-      return perfil === "gestor_cliente";
+      /* D-P2 (Gabriel 14:30): o certificado fiscal aceita o Proprietário, como o banco (118790) */
+      return perfil === "gestor_cliente" || perfil === "proprietario";
     },
     abrirPedido: async (titularId) => {
       const { data, error } = await admin.rpc("fn_fiscal_dfe_pedido_abrir", { p_titular_id: titularId });

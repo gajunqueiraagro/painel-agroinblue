@@ -1856,7 +1856,12 @@ const CENARIOS = [
   { nome: 'contas-lista-longo', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO },
   /* CONTAS-OF-LINHA-01 — a coluna "Open Finance" com o link do titular vivo, e o modal do "Conectar" da linha (altura fixa) */
   { nome: 'contas-of-link', url: 'tela=contas&barra=32&n=longo&of=link', tamanhos: TAMANHOS_DO_CONTRATO },
-  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-conectar-linha"]' },
+  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-conectar-linha"]',
+    antes: async (p) => { await p.locator('[data-testid="openfinance-termo-aceito"]').waitFor(); await p.waitForTimeout(300); } },
+  /* OPENFINANCE-PRONTO-NJ-01 (1)+(7) — "Bancos conectados" como a Pluggy vê: nome, Empresa, os 4 estados e a frase inteira das que não completaram */
+  { nome: 'contas-of-lista', url: 'tela=contas&barra=32&of=lista', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-desconectar-dialogo"]',
+    visivelNaTela: { sels: ['[data-testid="openfinance-conexao-frase"]'], inteirosEm: ['[data-testid="openfinance-conexoes"]'] },
+    antes: async (p) => { await p.locator('[data-testid="openfinance-conexao"]').first().waitFor(); await p.waitForTimeout(300); } },
   { nome: 'contas-inativas', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="mostrar-inativas"]') },
   ...['dados', 'gerente', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-editar-${aba}`, url: `tela=contas&barra=32&v=editar&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
@@ -2443,17 +2448,22 @@ const CENARIOS = [
       }
       await p.waitForTimeout(350);
     } })),
-  /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Escolher contas com o "Lança na conta", antes e depois da prévia da ligação: o
-     botão inteiro e na mesma largura, a frase "Liga … em …" na linha dela, inteira (sem "…" e sem passar da caixa) */
-  ...[['escolher-contas', false], ['escolher-contas-previa', true]].map(([nome, previa]) => ({ nome, url: 'tela=escolher-contas',
-    tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[role="dialog"]',
-    botoesDentro: '[data-testid="openfinance-lanca-na-conta"]',
-    visivelNaTela: { sels: [previa ? '[data-testid="openfinance-gravar-ligacao"]' : '[data-testid="openfinance-ver-ligacao"]', '[data-testid="openfinance-previa-ligacao"]'],
-      dentro: '[data-testid="openfinance-lanca-na-conta"]', altura: 88, inteirosEm: ['[data-testid="openfinance-lanca-na-conta"]'] },
-    semRolarNoLugar: '[data-testid="openfinance-lanca-na-conta"]',
+  /* OF-ESCOLHER-CONTAS-LAYOUT-01 + OPENFINANCE-PRONTO-NJ-01 (1) — Escolher contas num passo: a coluna "Lança na conta" (o seletor na
+     linha, a sugestão pela agência e conta), antes e depois da prévia (2 contas marcadas), e a Pluggy ainda lendo ("Ler de novo") */
+  ...[['escolher-contas', ''], ['escolher-contas-previa', 'previa'], ['escolher-contas-lendo', 'lendo']].map(([nome, estado]) => ({ nome,
+    url: `tela=escolher-contas${estado === 'lendo' ? '&v=lendo' : ''}`,
+    tamanhos: [[1000, 600], [1126, 640], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[role="dialog"]',
+    botoesDentro: '[data-testid="openfinance-previa"]',
+    visivelNaTela: { sels: ['[data-testid="openfinance-previa"]', estado === 'previa' ? '[data-testid="openfinance-gravar-escolha"]' : '[data-testid="openfinance-ver-previa"]'],
+      inteirosEm: ['[role="dialog"]'] },
     antes: async (p) => {
-      await p.locator('[data-testid="openfinance-ver-ligacao"]').waitFor();
-      if (previa) { await p.locator('[data-testid="openfinance-ver-ligacao"]').click(); await p.locator('[data-testid="openfinance-gravar-ligacao"]').waitFor(); }
+      if (estado === 'lendo') { await p.locator('[data-testid="openfinance-ler-de-novo"]').waitFor(); await p.waitForTimeout(300); return; }
+      await p.locator('[data-testid="openfinance-conta"]').first().waitFor();
+      if (estado === 'previa') {
+        const marcar = p.locator('[data-testid="openfinance-conta-marcar"]');
+        await marcar.nth(0).click(); await marcar.nth(1).click();
+        await p.locator('[data-testid="openfinance-ver-previa"]').click(); await p.locator('[data-testid="openfinance-gravar-escolha"]').waitFor();
+      }
       await p.waitForTimeout(300);
     } })),
   /* OF-CONFERIR-CASAMENTO-01 (Gabriel 17/11 09:04) — o "Conferir com o banco": até 90vh, uma rolagem só (o corpo), cabeçalhos presos, as

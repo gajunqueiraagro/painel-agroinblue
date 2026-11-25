@@ -279,7 +279,7 @@ export function GuiaDaAprovacao({ aberto, onFechar, passoInicial = 0, ehAdmin, c
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: as tabelas da 118160 não estão no types.ts
       const sb = supabase as any;
       const [membros, aprov, cfg] = await Promise.all([
-        sb.from('cliente_membros').select('user_id, perfil, ativo').eq('cliente_id', clienteId).in('perfil', ['gestor_cliente', 'financeiro']),
+        sb.from('cliente_membros').select('user_id, perfil, ativo').eq('cliente_id', clienteId).in('perfil', ['proprietario', 'gestor_cliente', 'financeiro']),
         sb.from('financeiro_aprovadores').select('user_id').eq('cliente_id', clienteId).eq('ativo', true),
         sb.from('financeiro_bpo_config').select('desde, dias_semana, aprova_abaixo_de').eq('cliente_id', clienteId).limit(1),
       ]);
