@@ -350,6 +350,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - UI-GATE-RAPIDO-01: durante o trabalho, `npm run check:ui-rapido` (cortes + deslocamento so' das telas que o diff contra o origin/proto
   alcanca); sai com 3 e "rode o completo" quando o diff toca `src/components/ui/*`, `index.css`, a barra lateral, a bancada/os gates ou
   arquivo que metade das telas alcanca — ai' o completo e' obrigatorio antes de publicar. Um gate de tela completo por vez na maquina.
+- UI-FONTES-REGUA-01 (Gabriel 25/11): régua de FONTE no `check:ui-cortes`, SÓ nas telas novas/alteradas do diff (`telasDaReguaDeFonte`; gate,
+  ui/* e index.css não contam): linha de tabela e campo/botão/aba ≤ 11px, rótulo/cabeçalho/data ≤ 10, título de modal ≤ 13, altura de campo/botão ≤ 28,
+  valor em destaque (KPI) ≤ 16. As antigas só no relatório (`--so-fonte --relatorio-fontes` + `scripts/ui-fontes-relatorio.mjs`).
 - REGRA DE CORTE (21/10 07h25): nome/texto em tabela = uma linha com "…" e o texto inteiro no `title`; numero, valor, data, CPF/CNPJ e
   contador nunca cortam; corte SECO reprova; fora de tabela, nada de "…" (o texto rola no lugar dele ou quebra). Data sempre dd/mm/aaaa.
 - ALINHAMENTO SOBERANO (Gabriel 29/10, P159c): nunca valor, data e texto na mesma linha corrida; cada informação na sua coluna; numa comparação

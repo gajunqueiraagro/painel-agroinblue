@@ -3,7 +3,7 @@
  * O mapa tela ← arquivo sai do `telas.tsx` (o ramo de cada `tela === '…'` e o que ele importa) e do grafo de imports de `src/`.
  */
 import { describe, it, expect } from 'vitest';
-import { telasDaBancada, COMPARTILHADOS, telaDoCenario } from '../../../scripts/ui-gate-rapido.mjs';
+import { telasDaBancada, COMPARTILHADOS, telaDoCenario, telasDaReguaPelosArquivos } from '../../../scripts/ui-gate-rapido.mjs';
 
 const telas: Map<string, { arquivos: Set<string> }> = telasDaBancada().telas;
 const regras: RegExp[] = COMPARTILHADOS;
@@ -38,5 +38,21 @@ describe('UI-GATE-RAPIDO-01 — as telas que um arquivo alcança', () => {
     expect(telaDoCenario({ url: 'tela=oc&v=venda&aba=financeiro&cc=1' })).toBe('oc');
     expect(telaDoCenario({ url: 'tela=oc-cc&v=buscar' })).toBe('oc-cc');
     expect(telaDoCenario({ url: 'v=1' })).toBe('mesclar');
+  });
+});
+
+/* UI-FONTES-REGUA-01 (Gabriel 25/11 07:41) — a régua de fonte reprova SÓ nas telas novas ou alteradas no diff; mexer no gate, num componente
+   da casa ou num arquivo de metade das telas NÃO põe as antigas sob a régua (elas vão para o relatório) */
+describe('UI-FONTES-REGUA-01 — as telas sob a régua de fonte', () => {
+  const ramo = (tela: string) => { const t = telasDaBancada().telas.get(tela); return t ? t.de + 1 : -1; };
+  it('a tela que o diff alcança entra; o gate, o index.css e o componente da casa não põem ninguém', () => {
+    expect([...telasDaReguaPelosArquivos(['src/v2/pages/V2Recorrencias.tsx']).telas]).toEqual(['recorrencias']);
+    const r = telasDaReguaPelosArquivos(['scripts/check-ui-cortes.mjs', 'src/index.css', 'src/components/ui/button.tsx']);
+    expect(r.telas.size).toBe(0);
+    expect(r.fora).toEqual(['scripts/check-ui-cortes.mjs', 'src/index.css', 'src/components/ui/button.tsx']);
+  });
+  it('cena nova na bancada: a tela do ramo mudado entra; o trecho comum (antes do 1º ramo) não', () => {
+    expect([...telasDaReguaPelosArquivos(['scripts/ui-cortes/telas.tsx'], [ramo('recorrencias')]).telas]).toEqual(['recorrencias']);
+    expect(telasDaReguaPelosArquivos(['scripts/ui-cortes/telas.tsx'], [1]).telas.size).toBe(0);
   });
 });
