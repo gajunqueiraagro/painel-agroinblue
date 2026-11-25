@@ -161,5 +161,5 @@ export async function ligarXmlDaReceitaAoDocumento(clienteId: string, documentoI
   const v = await supabase.from('financeiro_documento_vinculos').select('lancamento_id').eq('cliente_id', clienteId).eq('documento_id', documentoId);
   const ligados = [...new Set((v.data ?? []).map((x) => x.lancamento_id).filter((x): x is string => typeof x === 'string' && x !== doc.lancamento_id))];
   const r = await danfe(clienteId, { doc, chave: ch, ligados }, false);
-  return r.ok ? { ok: true, frase: 'XML ligado e DANFE gerado.' } : { ok: false, frase: `XML ligado; o DANFE não saiu (${r.frase}).` };
+  return r.ok === false ? { ok: false, frase: `XML ligado; o DANFE não saiu (${r.frase}).` } : { ok: true, frase: 'XML ligado e DANFE gerado.' };
 }

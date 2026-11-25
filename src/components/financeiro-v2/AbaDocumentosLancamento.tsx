@@ -318,7 +318,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
               className={`h-[19px] border-t text-[10px] leading-none ${d.cancelado ? 'bg-muted/40 text-muted-foreground/70' : ''}`}>
               {lancamentoId && (
                 <td className={cn(TD_REGUA, 'pl-[10px] whitespace-nowrap font-semibold')} data-testid="doc-papel"
-                  title={papel ? oQueOPapelFaz(papel.papel) || undefined : entregas && !entregas.ok ? `Não consegui ler o papel (${entregas.motivo})` : undefined}>
+                  title={papel ? oQueOPapelFaz(papel.papel) || undefined : entregas && entregas.ok === false ? `Não consegui ler o papel (${entregas.motivo})` : undefined}>
                   {d.cancelado ? '—' : papel ? rotuloDoPapel(papel) : entregas === null ? '…' : '—'}</td>
               )}
               <td className={cn(TD_REGUA, lancamentoId ? '' : 'pl-[10px]')}>
