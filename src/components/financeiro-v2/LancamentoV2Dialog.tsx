@@ -36,6 +36,9 @@ import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { linhaDoDocumento as textoDaLinhaDoDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import { ResumoDoLancamento } from '@/components/financeiro-v2/ResumoDoLancamento';
+import { useEntregasDoLancamento } from '@/hooks/useEntregasDoLancamento';
+import { xmlDaCaixaDaReceita } from '@/lib/fiscal/danfeDasNotasGuardadas';
+import { fraseDasEntregas } from '@/lib/financeiro/entregasDoLancamento';
 import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
 import { boletoDoResumo, seloDoBoleto, type BoletoDoResumo } from '@/lib/financeiro/boleto/boletoDaParcela';
 import {
@@ -663,11 +666,22 @@ export function LancamentoV2Dialog({
      nasce desligado (`null`) e a aba diz o que fazer, em vez de oferecer um botão que
      recusaria no servidor. */
   const documentosApi = useLancamentoDocumentos(lancamento?.id ?? null, clienteAtual?.id ?? null);
+  /* NOTA-ENTREGA-FUTURA-01 (B) — o papel dos documentos e o saldo a entregar: UMA leitura para a aba Documentos e o Resumo */
+  const entregasApi = useEntregasDoLancamento(lancamento?.id ?? null, documentosApi.documentos);
+  const entregasDoResumo = entregasApi.entregas?.ok && entregasApi.entregas.valor.entregas > 0
+    ? { compra: entregasApi.entregas.valor.compra ? formatNFNumber(entregasApi.entregas.valor.compra.nf) : null, entregas: fraseDasEntregas(entregasApi.entregas.valor) } : null;
   /* ITENS-NOTA-01 — os itens da nota: os guardados pela chave dos documentos; no novo que nasce de uma nota, os do proprio arquivo */
+  /* NOTA-ENTREGA-FUTURA-01 (Gabriel 25/11 09:26) — numa compra com entrega futura os itens que valem (custo, classificação) são os da COMPRA: as
+     remessas e as outras NF que não geram a conta (o confronto do banco) ficam de fora; com a compra conhecida, só a chave dela (e, sem itens
+     guardados, o XML dela na caixa da Receita). As remessas só alimentam o "entregue" do Saldo a entregar */
+  const naoFinanceirasDoLanc = documentosApi.confronto?.naoFinanceiras;
+  const chaveDaCompra = entregasApi.entregas?.ok ? entregasApi.entregas.valor.compra?.chave ?? null : null;
   const itensDaNota = useItensDaNota({
     clienteId: clienteAtual?.id ?? null,
-    chaves: (documentosApi.documentos ?? []).map((d) => d.chaveAcesso ?? '').filter(Boolean),
+    chaves: chaveDaCompra ? [chaveDaCompra]
+      : (documentosApi.documentos ?? []).filter((d) => !naoFinanceirasDoLanc?.has(d.id)).map((d) => d.chaveAcesso ?? '').filter(Boolean),
     arquivo: !lancamento ? prefill?.doXml?.arquivo ?? null : null,
+    daCaixa: chaveDaCompra ? xmlDaCaixaDaReceita : undefined,
   });
   /* FIN-CLASSIF-DIVIDIDA-01b — a classificacao dividida do lancamento SALVO: as partes gravadas e a ultima operacao que se desfaz (relidas
      a cada dividir/voltar/desfazer: `divisaoSeq`). O que se grava e' so' pelas RPCs da divisao, com motivo. */
@@ -3799,7 +3813,7 @@ export function LancamentoV2Dialog({
               )}
             </section>
             {lancamento?.id ? (
-              <AbaDocumentosLancamento api={documentosApi}
+              <AbaDocumentosLancamento api={documentosApi} lancamentoId={lancamento.id} entregasApi={entregasApi}
                 clienteId={clienteAtual?.id ?? null}
                 sugestao={sugestaoDoDocumento}
                 /* P127 + P128c — o "Novo documento" que lê a nota abre a MESMA prévia do "Ler a NF" (um caminho só: `onLerNotaFiscal`) */
@@ -4163,6 +4177,7 @@ export function LancamentoV2Dialog({
                   : isEdit && parcelaDaCompra ? `${parcelaDaCompra.numero} de ${parcelaDaCompra.total}`
                   : isEdit && soltaDoResumo ? `${soltaDoResumo.k} de ${soltaDoResumo.n}` : null}
                 documento={documentoDoResumo(docDoLancamento, tipoDocumento)}
+                entregas={entregasDoResumo}
                 boleto={boletoLigado ? {
                   selo: seloDoBoleto(boletoLigado),
                   /* 👁 = o PDF do boleto (o mesmo bucket dos documentos; a URL assinada de 60 s do clipe da lista) */

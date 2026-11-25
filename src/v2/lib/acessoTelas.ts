@@ -22,7 +22,9 @@ import {
 export type NivelTela = 'nao' | 'ver' | 'editar';
 
 /** Os perfis de membro de cliente (`cliente_membros.perfil`). O admin do AGROinBLUE nao entra na matriz: ele edita tudo. */
-export type PerfilCliente = 'gestor_cliente' | 'financeiro' | 'campo' | 'leitura';
+/* PERFIL-PROPRIETARIO (118780/118790, Gabriel 25/11): o Proprietário tem TUDO o que o Gestor tem (as mesmas células), mais conectar o
+   Open Finance; a diferença mora no dono de cada gesto (`podeConectarOpenFinance`), nunca numa tabela daqui. */
+export type PerfilCliente = 'proprietario' | 'gestor_cliente' | 'financeiro' | 'campo' | 'leitura';
 
 /** Os grupos da matriz: os `id` de `NAV_GRUPOS` mais a 'home' (a Visao Geral, que nao e' grupo do menu). */
 export type GrupoAcesso = 'home' | 'rebanho' | 'financeiro' | 'planejamento' | 'executivo' | 'auditoria' | 'cadastros' | 'validar';
@@ -33,14 +35,14 @@ export type GrupoAcesso = 'home' | 'rebanho' | 'financeiro' | 'planejamento' | '
  * ⚠ 'validar' e' a bancada do admin: 'nao' para todo perfil de cliente.
  */
 export const MATRIZ_ACESSO: Record<GrupoAcesso, Record<PerfilCliente, NivelTela>> = {
-  home:         { gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'ver',    leitura: 'ver' },
-  rebanho:      { gestor_cliente: 'editar', financeiro: 'ver',    campo: 'editar', leitura: 'ver' },
-  financeiro:   { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
-  planejamento: { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
-  executivo:    { gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
-  auditoria:    { gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
-  cadastros:    { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
-  validar:      { gestor_cliente: 'nao',    financeiro: 'nao',    campo: 'nao',    leitura: 'nao' },
+  home:         { proprietario: 'ver', gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'ver',    leitura: 'ver' },
+  rebanho:      { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'ver',    campo: 'editar', leitura: 'ver' },
+  financeiro:   { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
+  planejamento: { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
+  executivo:    { proprietario: 'ver', gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
+  auditoria:    { proprietario: 'ver', gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
+  cadastros:    { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
+  validar:      { proprietario: 'nao', gestor_cliente: 'nao',    financeiro: 'nao',    campo: 'nao',    leitura: 'nao' },
 };
 
 /**
@@ -52,7 +54,7 @@ export const MATRIZ_ACESSO: Record<GrupoAcesso, Record<PerfilCliente, NivelTela>
  *   CAPACIDADE, `podeNaOperacao` (`acessoOperacao.ts`) — aqui so' se decide quem ABRE. Campo e leitura: fora.
  * ⚠ A lista (`operacoes-comerciais`) e a tela da operacao andam JUNTAS: quem ve^ a lista abre a OC.
  */
-const GESTOR_E_FINANCEIRO: Record<PerfilCliente, NivelTela> = { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao', leitura: 'nao' };
+const GESTOR_E_FINANCEIRO: Record<PerfilCliente, NivelTela> = { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao', leitura: 'nao' };
 
 /**
  * AS TELAS DO TRABALHO DO FINANCEIRO — ACESSOS-FIN-01 (Gabriel, 06/10/2026: "O financeiro tem um acesso mais completo do
@@ -104,11 +106,11 @@ export const TELAS_DO_GESTOR: readonly V2Section[] = [
   'fechamento-periodo', 'indicadores-zoot',
   'config-fazendas', 'produtores', 'safras', 'locais-estoque', 'dividendos',
 ];
-const SO_GESTOR: Record<PerfilCliente, NivelTela> = { gestor_cliente: 'editar', financeiro: 'nao', campo: 'nao', leitura: 'nao' };
+const SO_GESTOR: Record<PerfilCliente, NivelTela> = { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'nao', campo: 'nao', leitura: 'nao' };
 
 export const NIVEL_POR_TELA: Partial<Record<V2Section, Record<PerfilCliente, NivelTela>>> = {
   /* BPO-APROVACAO-01 P1: o gestor e o financeiro VEEM a fila (decidir é do aprovador marcado — o banco recusa os outros) */
-  'aprovar-pagamentos': { gestor_cliente: 'ver', financeiro: 'ver', campo: 'nao', leitura: 'nao' },
+  'aprovar-pagamentos': { proprietario: 'ver', gestor_cliente: 'ver', financeiro: 'ver', campo: 'nao', leitura: 'nao' },
   'operacoes-comerciais': GESTOR_E_FINANCEIRO,
   [TELA_OPERACAO_COMERCIAL]: GESTOR_E_FINANCEIRO,
   ...Object.fromEntries(TELAS_DO_FINANCEIRO.map((t) => [t, GESTOR_E_FINANCEIRO])),
@@ -116,7 +118,7 @@ export const NIVEL_POR_TELA: Partial<Record<V2Section, Record<PerfilCliente, Niv
   ...Object.fromEntries(TELAS_DO_GESTOR.map((t) => [t, SO_GESTOR])),
 };
 
-const PERFIS: readonly string[] = ['gestor_cliente', 'financeiro', 'campo', 'leitura'];
+const PERFIS: readonly string[] = ['proprietario', 'gestor_cliente', 'financeiro', 'campo', 'leitura'];
 function ehPerfilCliente(p: string | null | undefined): p is PerfilCliente {
   return !!p && PERFIS.includes(p);
 }
@@ -152,6 +154,7 @@ function infoDaTela(tela: V2Section): { grupo: GrupoAcesso; liberada: boolean } 
  * DUAS PERGUNTAS SEPARADAS, as duas aqui; a tela so' consulta (`usePodeVerMeta`, `usePodeEditarMeta`):
  *      perfil            ver meta   editar meta
  *      admin             S          S
+ *      proprietario      S          N
  *      gestor_cliente    S          N
  *      financeiro        S          N
  *      campo             N          N
@@ -162,9 +165,9 @@ function infoDaTela(tela: V2Section): { grupo: GrupoAcesso; liberada: boolean } 
  *   em Pecuária › Lançamentos), quem nao edita ve^ em LEITURA, com os gestos de gravacao APAGADOS e `MOTIVO_META_SO_ADMIN`.
  * ⚠ E' O QUE A TELA OFERECE: o banco nao distingue perfil, e as telas buscam a meta mesmo sem mostrar — a trava e' o 01F.
  */
-export const VE_META: Record<PerfilCliente, boolean> = { gestor_cliente: true, financeiro: true, campo: false, leitura: false };
+export const VE_META: Record<PerfilCliente, boolean> = { proprietario: true, gestor_cliente: true, financeiro: true, campo: false, leitura: false };
 /** Nenhum perfil de CLIENTE edita meta: so' o admin do AGROinBLUE. Linha escrita para a decisao ser uma celula, como as outras. */
-export const EDITA_META: Record<PerfilCliente, boolean> = { gestor_cliente: false, financeiro: false, campo: false, leitura: false };
+export const EDITA_META: Record<PerfilCliente, boolean> = { proprietario: false, gestor_cliente: false, financeiro: false, campo: false, leitura: false };
 export const MOTIVO_SEM_META = 'meta: só para quem tem o Planejamento';
 export const MOTIVO_META_SO_ADMIN = 'meta: só o administrador edita';
 export function podeVerMeta(perfil: string | null | undefined, isAdmin: boolean): boolean {

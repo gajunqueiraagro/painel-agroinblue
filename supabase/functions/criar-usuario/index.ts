@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
         const rows = validIds.map(fid => ({
           user_id: userId,
           fazenda_id: fid,
-          papel: perfil === 'gestor_cliente' ? 'gerente' : perfil === 'campo' ? 'capataz' : 'membro',
+          papel: perfil === 'gestor_cliente' || perfil === 'proprietario' ? 'gerente' : perfil === 'campo' ? 'capataz' : 'membro',
         }));
         await adminClient.from("fazenda_membros").insert(rows);
       }
