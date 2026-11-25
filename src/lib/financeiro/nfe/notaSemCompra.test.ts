@@ -27,12 +27,14 @@ describe('a operação que não é compra', () => {
   it('pela natureza (sem CFOP): o caso do Gabriel = remessa para conserto', () => {
     expect(operacaoSemCompra({ naturezaOperacao: CONSERTO, cfops: [] })?.rotulo).toBe('remessa para conserto');
     expect(operacaoSemCompra({ naturezaOperacao: 'Retorno de mercadoria recebida para conserto', cfops: [] })?.rotulo).toBe('retorno de conserto');
-    expect(operacaoSemCompra({ naturezaOperacao: 'SIMPLES FATURAMENTO - VENDA P/ ENTREGA FUTURA', cfops: [] })?.rotulo).toBe('simples faturamento');
+    /* NOTA-ENTREGA-FUTURA-01 (Gabriel 25/11): o simples faturamento É a compra — nem pela natureza nem pelo CFOP vira "não é compra" */
+    expect(operacaoSemCompra({ naturezaOperacao: 'SIMPLES FATURAMENTO - VENDA P/ ENTREGA FUTURA', cfops: [] })).toBeNull();
+    expect(operacaoSemCompra({ naturezaOperacao: 'SIMPLES FAT. DE VENDA P/ ENTREGA FUTURA', cfops: ['5922'] })).toBeNull();
     expect(operacaoSemCompra({ naturezaOperacao: 'Bonificação', cfops: [] })?.rotulo).toBe('bonificação ou brinde');
   });
-  it('pelo CFOP (manda sobre a natureza): 6915, 5916, 5912, 5908, 5922', () => {
+  it('pelo CFOP (manda sobre a natureza): 6915, 5916, 5912, 5908; 5922 é compra', () => {
     expect(['6.915', '5916', '5912', '5908', '5922'].map((c) => operacaoSemCompra({ naturezaOperacao: 'OUTRAS', cfops: [c] })?.rotulo))
-      .toEqual(['remessa para conserto', 'retorno de conserto', 'remessa para demonstração', 'comodato', 'simples faturamento']);
+      .toEqual(['remessa para conserto', 'retorno de conserto', 'remessa para demonstração', 'comodato', undefined]);
   });
   it('venda comum NÃO avisa — nem quando a natureza cita a palavra mas o CFOP é de venda (5102)', () => {
     expect(operacaoSemCompra({ naturezaOperacao: 'VENDA DE MERCADORIA', cfops: ['5102'] })).toBeNull();
