@@ -173,24 +173,22 @@ export function ResumoDoLancamento(p: ResumoDoLancamentoProps) {
           </Tabela>
         </Bloco>
 
-        <Bloco titulo="Documento" altura={p.entregas ? 'h-[82px]' : 'h-[50px]'} testid="resumo-documento">
+        <Bloco titulo="Documento" altura={p.entregas ? 'h-[66px]' : 'h-[50px]'} testid="resumo-documento">
           {/* P121b: o número NUNCA corta (sem `truncate`, sem encolher). Gabriel 18/11 14:40 ("da co…"): a ORIGEM ("da compra" = a nota está
               na compra parcelada, vale para as parcelas · "ligado" = documento ligado) sai da linha e vai para o title do número — nada cortado */}
           <Tabela>
             {p.entregas ? (<>
+              {/* a NF da compra É a do LCDPR: uma linha só ("NF … · LCDPR"), para o Resumo seguir sem rolar a 1126×579 (P121) */}
               <tr className="h-[16px] text-[11px] leading-[14px]">
                 <td className={ROTULO} title="Compra: a NF que gera a conta">Compra</td>
-                <td className="align-middle"><span className={cn('whitespace-nowrap tabular-nums', !p.entregas.compra && 'text-muted-foreground')} data-testid="resumo-compra">
-                  {p.entregas.compra ? `NF ${p.entregas.compra}` : '—'}</span></td>
+                <td className="align-middle" title={p.entregas.compra ? `NF ${p.entregas.compra}: a NF do lançamento e a do LCDPR` : undefined}>
+                  <span className={cn('whitespace-nowrap tabular-nums', !p.entregas.compra && 'text-muted-foreground')} data-testid="resumo-compra">
+                    {p.entregas.compra ? `NF ${p.entregas.compra}` : '—'}</span>
+                  {p.entregas.compra && <span className="ml-1 whitespace-nowrap text-[10px] text-muted-foreground" data-testid="resumo-lcdpr">· LCDPR</span>}</td>
               </tr>
               <tr className="h-[16px] text-[11px] leading-[14px]">
                 <td className={ROTULO} title="Entregas (remessas) ligadas">Entregas</td>
                 <td className="align-middle"><span className="whitespace-nowrap tabular-nums" data-testid="resumo-entregas">{p.entregas.entregas}</span></td>
-              </tr>
-              <tr className="h-[16px] text-[11px] leading-[14px]">
-                <td className={ROTULO} title="A NF que vai no LCDPR">LCDPR</td>
-                <td className="align-middle"><span className={cn('whitespace-nowrap tabular-nums', !p.entregas.compra && 'text-muted-foreground')} data-testid="resumo-lcdpr">
-                  {p.entregas.compra ? `NF ${p.entregas.compra}` : '—'}</span></td>
               </tr>
             </>) : (
             <tr className="h-[16px] text-[11px] leading-[14px]">
@@ -222,7 +220,8 @@ export function ResumoDoLancamento(p: ResumoDoLancamentoProps) {
         </Bloco>
 
         {/* fora de tabela nada termina em "…": a frase cabe em 1 linha (o Documento ganhou a linha do Boleto) */}
-        <p className="mt-auto h-[12px] shrink-0 whitespace-nowrap text-[9.5px] leading-[12px] text-muted-foreground">
+        {/* com as entregas o Documento ganha uma linha: a dica sai (o lugar dela) para o Resumo seguir sem rolar */}
+        <p className={cn('mt-auto h-[12px] shrink-0 whitespace-nowrap text-[9.5px] leading-[12px] text-muted-foreground', p.entregas && 'hidden')}>
           Nome cortado: passe o mouse.
         </p>
       </div>

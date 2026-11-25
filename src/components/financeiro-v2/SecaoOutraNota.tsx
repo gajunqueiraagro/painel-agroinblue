@@ -68,7 +68,7 @@ export function SecaoOutraNota({ nfDaNota, outras, linhas, faturamento, escolha,
         Lançamento do mesmo fornecedor e valor, com <span className="ml-1 text-amber-700">{umaOutra ? 'outra nota' : 'outras notas'}</span></h4>
       {/* estreita (750–1000) a tabela rola de lado DENTRO do quadro (as colunas da lista não espremem); de 1126 para cima cabe inteira */}
       <div className="shrink-0 overflow-x-auto overflow-y-hidden rounded border" data-testid="nota-outra-nf-rolagem">
-        <table className="w-full min-w-[1100px] table-fixed border-collapse" data-testid="nota-outra-nf-tabela">
+        <table className="w-full min-w-[1050px] table-fixed border-collapse" data-testid="nota-outra-nf-tabela">
           <colgroup>{COLUNAS.map(([h, w]) => <col key={h} style={w === null ? undefined : { width: w }} />)}</colgroup>
           <thead className="bg-primary"><tr>{COLUNAS.map(([h, , a]) => <th key={h} className={cn(TH, a === 'n' ? 'text-right' : 'text-left')}>{h}</th>)}</tr></thead>
           <tbody>
