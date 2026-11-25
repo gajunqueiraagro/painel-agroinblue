@@ -6,7 +6,7 @@
  * DA-NOTA ETAPA 2 (Gabriel 19:07) — o subcentro mostra o que DIFERENCIA: o nome curto da conta + a atividade ("Manut. Máquinas · Pecuária"). PURO.
  */
 
-export const FRASE_CLASSIFICACOES_DIFERENTES = 'Classificações diferentes: escolha uma acima para juntar.';
+export const FRASE_CLASSIFICACOES_DIFERENTES = 'Escolha a classificação acima.';
 /** a recusa do banco que o aviso resolve (`fn_parcelamento_juntar_lancamentos`, motivo 'classificacoes') */
 export const ehRecusaDeClassificacoes = (frase: string) => /classifica[çc][õo]es diferentes/i.test(frase);
 

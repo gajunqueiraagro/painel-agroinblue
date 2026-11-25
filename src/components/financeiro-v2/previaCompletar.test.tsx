@@ -204,12 +204,13 @@ describe('DA-NOTA-CLASSIF-01 — a sugestão da conta pelos itens', () => {
     expect(screen.queryByTestId('previa-sugestao-usar')).toBeNull();
     expect(confirmar).not.toHaveBeenCalled();
   });
-  it('DA-NOTA ETAPA 2 — a troca de subcentro DESTACADA: "Subcentro muda de Manutenção para Peças e Pneus" (antes do clique: "não muda")', async () => {
+  it('DA-NOTA ETAPA 2 — a troca de subcentro DESTACADA: "Subcentro muda de Manutenção para Peças e Pneus" (antes do clique: a legenda)', async () => {
     estado.nomes.p9 = 'Peças e Pneus';
     banco.sugestaoDosItensDaNota.mockResolvedValueOnce({ ok: true, valor: [item(1, 'p9', 'Peças e Pneus')] });
     abrir();
     await conferido();
-    expect(screen.getByTestId('previa-troca-conta-nao').textContent).toBe('Subcentro não muda');
+    expect(screen.queryByTestId('previa-troca-conta')).toBeNull();
+    expect(screen.getByTestId('previa-legenda')).toBeTruthy();
     fireEvent.click(await screen.findByTestId('previa-sugestao-usar'));
     expect((await screen.findByTestId('previa-troca-conta-de')).textContent).toBe('Manutenção');
     expect(screen.getByTestId('previa-troca-conta-para').textContent).toBe('Peças e Pneus');
@@ -256,7 +257,7 @@ describe('NOTA-JUNTAR-CLASSIF-01 — juntar com classificações diferentes reso
     const botoes = within(linhaJ).getAllByRole('button').filter((b) => b.textContent && !/^\s*$/.test(b.textContent));
     expect(botoes.slice(0, 3).map((b) => b.textContent)).toEqual(['Usar a da 1/2 em todas', 'Usar a da 2/2 em todas', 'Dividir por item · em breve']);
     expect(within(linhaJ).getByText('Dividir por item · em breve')).toBeDisabled();
-    expect((await screen.findByTestId('previa-recusa')).textContent).toBe('Classificações diferentes: escolha uma acima para juntar.');
+    expect((await screen.findByTestId('previa-recusa')).textContent).toBe('Escolha a classificação acima.');
     expect(screen.getByTestId('previa-gravar')).toBeDisabled();
   });
   it('o clique leva a conta E a safra da parcela às DUAS (a conciliada inclusive) e o juntar passa; a escolhida fica marcada', async () => {

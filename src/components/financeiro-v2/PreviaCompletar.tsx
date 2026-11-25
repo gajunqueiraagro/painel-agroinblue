@@ -56,7 +56,10 @@ const DATA = 'text-[9.5px] tabular-nums';
 /* DA-NOTA ETAPA 2 (Gabriel 24/11 19:07: "não dá para ler") — NADA CORTADO NO QUE SE CONFERE e NENHUMA coluna fora da tela (1126/1280/1920): as colunas
    de número/data têm largura FIXA (px medidos para o conteúdo inteiro); as de TEXTO (Descrição, Fornecedor, Fazenda, Conta, Subcentro, Safra) dividem o
    resto e QUEBRAM LINHA (2 linhas, nunca "…"); a grade nunca rola de lado. */
-const LARGURA: Record<string, number> = { parc: 62, competencia: 74, vencimento: 80, pagamento: 64, documento: 88, valor: 76, status: 66 };
+const LARGURA: Record<string, number> = { parc: 62, competencia: 74, vencimento: 80, pagamento: 64, documento: 88, valor: 76, status: 72 };
+/* o mínimo de cada coluna de texto: com a Descrição e as 3 da classificação (o caso de sempre) a grade cabe INTEIRA de 1126px para cima; abaixo
+   disso (750–1000, as telas estreitas) a grade rola de lado em vez de espremer o texto letra a letra */
+const TEXTO_MIN = 100;
 /* o texto inteiro do campo (quebra), por baixo do seletor de sempre — que fica por cima, transparente, e é quem recebe o clique (a lista abre num portal) */
 const QUEBRA = 'block min-h-[15px] whitespace-normal break-words rounded-sm border border-input bg-background px-1 pr-2.5 text-left text-[10px] leading-[12px]';
 const GATILHO_POR_CIMA = '!h-full w-full';
@@ -65,7 +68,8 @@ function PorCima({ texto, classe, children }: { texto: string; classe?: string; 
   return (
     <span className="relative block rounded-sm focus-within:ring-1 focus-within:ring-ring">
       <span aria-hidden className={cn(QUEBRA, classe)} data-testid="previa-texto-inteiro">{texto}</span>
-      <span className="absolute inset-0 opacity-0 [&_*]:!h-full">{children}</span>
+      {/* o seletor POR CIMA de propósito (a exceção declarada do gate de sobreposição, `data-painel-por-cima`): transparente, recebe o clique */}
+      <span className="absolute inset-0 opacity-0 [&_*]:!h-full [&_*]:!text-[0px]" data-painel-por-cima="">{children}</span>
     </span>
   );
 }
@@ -404,19 +408,7 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
         </div>
       );
     })()}
-    {/* DA-NOTA ETAPA 2 — só rola para BAIXO: as colunas de texto quebram linha em vez de empurrar a grade para fora da tela */}
-    <div className="flex min-h-[18px] shrink-0 items-center gap-1 px-4 text-[10px] leading-[12px]" data-testid="previa-troca-conta"
-      title={trocasDeConta.map((t) => `${t.de} → ${t.para}`).join('\n') || undefined}>
-      {trocasDeConta.length === 0
-        ? <span className="text-muted-foreground" data-testid="previa-troca-conta-nao">Subcentro não muda</span>
-        : (<>
-            <span className="shrink-0 text-muted-foreground">Subcentro muda de</span>
-            <span className="min-w-0 font-medium text-foreground" data-testid="previa-troca-conta-de">{trocasDeConta[0].de}</span>
-            <span className="shrink-0 text-muted-foreground">para</span>
-            <span className={cn('min-w-0 rounded-sm border px-1 font-semibold', MUDA)} data-testid="previa-troca-conta-para">{trocasDeConta[0].para}</span>
-            {trocasDeConta.length > 1 && <span className="shrink-0 text-muted-foreground">+{trocasDeConta.length - 1} troca{trocasDeConta.length > 2 ? 's' : ''}</span>}
-          </>)}
-    </div>
+    {/* DA-NOTA ETAPA 2 — de 1126px para cima só rola para BAIXO: as colunas de texto quebram linha em vez de empurrar a grade para fora da tela */}
     {paraJuntar && (() => {
       const escolhida = marcadas.has('subcentro') ? paraJuntar.opcoes.find((o) => o.planoContaId === todas.planoContaId) ?? null : null;
       const nomeDaOpcao = (planoContaId: string, safraId: string | null) =>
@@ -443,8 +435,9 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
         </div>
       );
     })()}
-    <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-1" data-testid="previa-rolagem">
-      <table className="w-full table-fixed border-collapse" data-testid="previa-tabela">
+    <div className="min-h-0 flex-1 overflow-auto px-4 pb-1" data-testid="previa-rolagem">
+      <table className="w-full table-fixed border-collapse" style={{ minWidth: Object.values(LARGURA).reduce((t, x) => t + x, 0) + (1 + opcionais.length) * TEXTO_MIN }}
+        data-testid="previa-tabela">
         <colgroup>
           <col style={{ width: LARGURA.parc }} /><col style={{ width: LARGURA.competencia }} /><col style={{ width: LARGURA.vencimento }} /><col style={{ width: LARGURA.pagamento }} />
           {/* a Descrição e as de texto (fornecedor, fazenda, conta, subcentro, safra) dividem o resto, por igual */}
@@ -504,6 +497,18 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
       </table>
     </div>
     {/* a legenda numa linha: o que é azul, o igual, o cadeado e as colunas que ficaram iguais em todas (por isso não aparecem) */}
+    {/* DA-NOTA ETAPA 2 (Gabriel 19:30) — a troca de subcentro DESTACADA ("Subcentro muda de X para Y", nomes curtos com a atividade) no LUGAR da legenda
+        (a mesma linha de 18px: nada cresce, nada se desloca); sem troca, a legenda de sempre */}
+    {trocasDeConta.length > 0 ? (
+      <div className="flex h-[18px] shrink-0 items-center gap-1 overflow-hidden px-4 text-[10px]" data-testid="previa-troca-conta"
+        title={trocasDeConta.map((t) => `${t.de} → ${t.para}`).join('\n')}>
+        <span className="shrink-0 text-muted-foreground">Subcentro muda de</span>
+        <span className="shrink-0 font-medium text-foreground" data-testid="previa-troca-conta-de">{trocasDeConta[0].de}</span>
+        <span className="shrink-0 text-muted-foreground">para</span>
+        <span className={cn('shrink-0 rounded-sm border px-1 font-semibold leading-[13px]', MUDA)} data-testid="previa-troca-conta-para">{trocasDeConta[0].para}</span>
+        {trocasDeConta.length > 1 && <span className="shrink-0 text-muted-foreground">+{trocasDeConta.length - 1} troca{trocasDeConta.length > 2 ? 's' : ''}</span>}
+      </div>
+    ) : (
     <div className="flex h-[18px] shrink-0 items-center gap-3 overflow-hidden px-4 text-[9.5px] text-muted-foreground" data-testid="previa-legenda">
       <span className="flex shrink-0 items-center gap-1"><i className={cn('inline-block h-2.5 w-4 rounded-sm border', MUDA)} />vai mudar</span>
       <span className="flex shrink-0 items-center gap-1"><i className="inline-block h-2.5 w-4 rounded-sm border bg-background" />igual (pode editar)</span>
@@ -514,6 +519,7 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
         </span>
       )}
     </div>
+    )}
     {/* o rodapé numa linha: o DRE (ou o que impede, a frase pronta do banco) · nada é gravado antes do clique · Voltar · a ação */}
     {!semRodape && (
     <div className="flex h-10 shrink-0 items-center gap-2 border-t bg-card px-4 text-[10px]">
