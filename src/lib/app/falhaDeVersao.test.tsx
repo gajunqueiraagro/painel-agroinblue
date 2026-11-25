@@ -180,8 +180,9 @@ describe('fonte: todo import() dinâmico passa pelo dono', () => {
        + 2 no MAPA-IMPRESSAO-01: o react-pdf e o documento da folha do mapa (`gerarPdfDoMapa`)
        + 2 no CADERNO-CAMPO-01: o react-pdf e o documento do caderno (`gerarCadernoDoMes`)
        + 2 no NOTA-RECEITA-DANFE-ANEXO-01: o html2canvas e o jsPDF do DANFE em PDF (`danfePdfDoXml`)
-       + 1 no BOLETO-SEPARAR-01: o pdf-lib do `dividirPdf` (separar o boleto do PDF de vários, `useCaixaDeBoletos`) */
-    expect(tratados).toBe(28);
+       + 1 no BOLETO-SEPARAR-01: o pdf-lib do `dividirPdf` (separar o boleto do PDF de vários, `useCaixaDeBoletos`)
+       + 1 no VISUALIZADOR-PDF-02b: o pdf-lib do `pdfComTitulo` (a cópia com o título para o leitor do navegador, `VisualizadorDeDocumento`) */
+    expect(tratados).toBe(29);
   });
   it('quem usa o dono o importa ESTATICAMENTE', () => {
     for (const p of arquivos(resolve(process.cwd(), 'src'))) {
