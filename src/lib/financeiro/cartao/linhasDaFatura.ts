@@ -11,6 +11,10 @@
  *    corrente pegam compra do cartão lançada como boleto); 1 centavo de diferença ou outra conta/outro vencimento = "já lançado com
  *    diferença" (dito, nunca corrigido aqui);
  *  - o que sobra = "lança" (saída no cartão, forma Cartão de crédito, vencimento da fatura).
+ *  - CARTAO-FATURA-GRAVAR (25/11, achado no caso real do NJ): 2ª PASSADA, só para a compra à vista que sobrou — o lançamento JÁ NESTA FATURA
+ *    (o mesmo cartão e o vencimento dela) com o mesmo valor ao centavo é o já lançado, qualquer que seja a competência: a recorrência
+ *    prevista (competência no dia 1º; a "Internet" do NJ) e a compra lançada com outra data. Sem ela o Gravar lançava de novo (duplicata).
+ *    É a regra da parcela solta ("o mesmo valor + o vencimento desta fatura") estendida à compra à vista; vem DEPOIS de todas as outras.
  */
 import { normalizarParaBusca } from '@/lib/texto/busca';
 import type { FaturaLida, LinhaDaFatura } from './lerFaturaOurocard';
@@ -18,6 +22,8 @@ import type { FaturaLida, LinhaDaFatura } from './lerFaturaOurocard';
 export interface LancamentoNoCartao {
   id: string; contaId: string; vencimento: string | null; competencia: string | null; valorCent: number; descricao: string;
   fornecedor: string | null; parcela: { k: number; n: number } | null; status: string;
+  /** CARTAO-FATURA-GRAVAR: o `updated_at` lido (a string do banco) — vai como `lido_em` no mover/ajustar ("mudou desde a leitura") */
+  atualizadoEm?: string | null;
 }
 
 export type Decisao = 'transferencia' | 'anuidade_par' | 'ja_lancado' | 'ja_lancado_diferenca' | 'parcela' | 'parcela_diferenca' | 'lanca';
@@ -114,6 +120,13 @@ export function linhasDaFatura(f: FaturaLida, contaDaFatura: string, existentes:
       continue;
     }
     out.push({ linha: l, decisao: 'lanca', existente: null, diferencas: [] });
+  }
+
+  /* 2ª passada: a compra à vista que sobrou × o que já está NESTA fatura (mesmo cartão, mesmo vencimento, mesmo valor) */
+  for (const x of out) {
+    if (x.decisao !== 'lanca' || x.linha.parcela || x.linha.tipo !== 'compra') continue;
+    const naFatura = livres().find(e => e.contaId === contaDaFatura && e.vencimento === f.vencimento && e.valorCent === x.linha.valorCent && !parcelaDe(e));
+    if (naFatura) { usados.add(naFatura.id); x.decisao = 'ja_lancado'; x.existente = naFatura; }
   }
 
   const zero = () => ({ n: 0, cent: 0 });

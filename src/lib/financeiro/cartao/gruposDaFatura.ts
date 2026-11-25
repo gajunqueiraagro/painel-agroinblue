@@ -22,7 +22,7 @@ export const COR_DO_GRUPO: Record<GrupoDaFatura, 'verde' | 'ambar' | 'azul' | 'v
 
 /** o gesto que o "Gravar" faz com a linha (nada = já está certo; a transferência casa com o débito do banco, não cria saída) */
 export type GestoDaLinha = 'nada' | 'lancar' | 'mover' | 'ajustar' | 'transferencia';
-export interface Sugestao { planoContaId: string; rotulo: string }
+export interface Sugestao { planoContaId: string; rotulo: string; /** D1 (CARTAO-FATURA-GRAVAR): a fazenda da maioria dos mesmos casos */ fazendaId?: string | null }
 export interface LinhaDoGrupo {
   grupo: GrupoDaFatura; linha: LinhaDaFatura; existente: LancamentoNoCartao | null; sugestao: Sugestao | null; contaSugerida: string; oQueFaz: string; gesto: GestoDaLinha;
 }
@@ -36,7 +36,8 @@ const ddmm = (iso: string | null) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? `$
 const reais = (cent: number) => (cent / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ENCARGO = /\b(JUROS|ENCARGOS?|MULTA|IOF)\b/i;
 
-function umaLinha(p: LinhaDaPrevia, contaDaFatura: string, nomeDaConta: (id: string) => string, sugestao: Sugestao | null, anuladas: ReadonlySet<number>): LinhaDoGrupo {
+function umaLinha(p: LinhaDaPrevia, contaDaFatura: string, nomeDaConta: (id: string) => string, sugestao: Sugestao | null, anuladas: ReadonlySet<number>,
+  contaDosEncargos: Sugestao | null): LinhaDoGrupo {
   const { linha: l, existente: e } = p;
   const base = { linha: l, existente: e, sugestao: null, contaSugerida: '—' };
   if (p.decisao === 'transferencia') {
@@ -46,7 +47,7 @@ function umaLinha(p: LinhaDaPrevia, contaDaFatura: string, nomeDaConta: (id: str
   /* anuidade e o desconto dela se anulam SÓ quando a fatura traz os dois (o par); a anuidade sem desconto é cobrança: lança */
   if (p.decisao === 'anuidade_par') {
     if (anuladas.has(p.linha.ordem)) return { ...base, grupo: 'encargos', oQueFaz: 'anuidade e o desconto dela se anulam · nada a lançar', gesto: 'nada' };
-    return { ...base, grupo: 'encargos', sugestao, contaSugerida: sugestao?.rotulo ?? 'Despesas bancárias', oQueFaz: 'lançar', gesto: 'lancar' };
+    return { ...base, grupo: 'encargos', sugestao: sugestao ?? contaDosEncargos, contaSugerida: (sugestao ?? contaDosEncargos)?.rotulo ?? '—', oQueFaz: 'lançar', gesto: 'lancar' };
   }
   if (e && e.contaId !== contaDaFatura) {
     return { ...base, grupo: 'mover', oQueFaz: `está em ${nomeDaConta(e.contaId)} venc. ${ddmm(e.vencimento)} → mover para este cartão`, gesto: 'mover' };
@@ -62,7 +63,7 @@ function umaLinha(p: LinhaDaPrevia, contaDaFatura: string, nomeDaConta: (id: str
   }
   /* sobra: lançar */
   if (l.tipo === 'iof' || ENCARGO.test(l.descricao)) {
-    return { ...base, grupo: 'encargos', sugestao, contaSugerida: sugestao?.rotulo ?? 'Despesas bancárias', oQueFaz: 'lançar', gesto: 'lancar' };
+    return { ...base, grupo: 'encargos', sugestao: sugestao ?? contaDosEncargos, contaSugerida: (sugestao ?? contaDosEncargos)?.rotulo ?? '—', oQueFaz: 'lançar', gesto: 'lancar' };
   }
   if (sugestao) return { ...base, grupo: 'nova_sugestao', sugestao, contaSugerida: sugestao.rotulo, oQueFaz: 'lançar · sugestão do mesmo estabelecimento (12 m)', gesto: 'lancar' };
   return { ...base, grupo: 'nova_classificar', oQueFaz: 'escolher a conta', gesto: 'lancar' };
@@ -70,6 +71,8 @@ function umaLinha(p: LinhaDaPrevia, contaDaFatura: string, nomeDaConta: (id: str
 
 export function gruposDaFatura(previa: PreviaDaFatura, o: {
   contaDaFatura: string; nomeDaConta: (id: string) => string; sugestaoDe: (l: LinhaDaFatura) => Sugestao | null;
+  /** D5 (CARTAO-FATURA-GRAVAR): a conta dos encargos sem histórico ("Despesas Financeiras Administrativo" do plano; sem ela = classificar) */
+  contaDosEncargos?: Sugestao | null;
 }): GruposDaFatura {
   /* os pares anuidade × desconto (o mesmo valor com sinal trocado), um a um */
   const anuladas = new Set<number>();
@@ -79,7 +82,7 @@ export function gruposDaFatura(previa: PreviaDaFatura, o: {
     if (a) { anuladas.add(a.linha.ordem); anuladas.add(d.linha.ordem); }
   }
   const linhas = previa.linhas.map((p) => umaLinha(p, o.contaDaFatura, o.nomeDaConta,
-    p.decisao === 'lanca' || (p.decisao === 'anuidade_par' && !anuladas.has(p.linha.ordem)) ? o.sugestaoDe(p.linha) : null, anuladas));
+    p.decisao === 'lanca' || (p.decisao === 'anuidade_par' && !anuladas.has(p.linha.ordem)) ? o.sugestaoDe(p.linha) : null, anuladas, o.contaDosEncargos ?? null));
   const contagem: Record<GrupoDaFatura, number> = { ja_lancado: 0, parcela_casa: 0, diferenca: 0, mover: 0, nova_sugestao: 0, nova_classificar: 0, encargos: 0, pagamento: 0 };
   for (const x of linhas) contagem[x.grupo] += 1;
   const n = (g: GestoDaLinha) => linhas.filter((x) => x.gesto === g).length;

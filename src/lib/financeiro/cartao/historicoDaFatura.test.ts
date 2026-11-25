@@ -21,6 +21,9 @@ describe('a janela, a linha do banco e os termos', () => {
     expect(lancamentoDoBanco(base, () => 'LOJA EXEMPLO LTDA')).toMatchObject({ valorCent: 15610, fornecedor: 'LOJA EXEMPLO LTDA', contaId: 'k' });
     expect(lancamentoDoBanco({ ...base, tipo_operacao: '1-Entradas' }, () => null)).toBeNull();
     expect(lancamentoDoBanco({ ...base, conta_bancaria_id: null }, () => null)).toBeNull();
+    /* CARTAO-FATURA-GRAVAR: o `updated_at` lido vai inteiro (a string do banco) — é o `lido_em` do mover/ajustar */
+    expect(lancamentoDoBanco({ ...base, updated_at: '2031-10-01T12:34:56.789123+00:00' }, () => null)?.atualizadoEm).toBe('2031-10-01T12:34:56.789123+00:00');
+    expect(lancamentoDoBanco(base, () => null)?.atualizadoEm).toBeNull();
   });
   it('H2b a parcela COM ELO (financiamento_id) lê o "k/N" da descrição; sem elo fica sem parcela (a regra de 12/11 a trata como solta)', () => {
     const base = { id: 'x', conta_bancaria_id: 'k', data_vencimento: '2031-10-16', data_competencia: '2031-05-02', valor: 860, descricao: 'Maquinas Exemplo 3/4',
@@ -43,7 +46,16 @@ describe('a sugestão pelo histórico', () => {
       { descricao: 'Posto Avenida', fornecedor: null, planoContaId: 'p1' }, { descricao: 'POSTO AVENIDA', fornecedor: null, planoContaId: 'p1' },
       { descricao: 'Posto Avenida', fornecedor: null, planoContaId: 'p2' }, { descricao: 'Ferragem', fornecedor: null, planoContaId: 'p2' },
     ], rotulo);
-    expect(s(linha('POSTO AVENIDA CAMPO GRANDE'))).toEqual({ planoContaId: 'p1', rotulo: 'Combustível' });
+    expect(s(linha('POSTO AVENIDA CAMPO GRANDE'))).toEqual({ planoContaId: 'p1', rotulo: 'Combustível', fazendaId: null });
+  });
+  it('H8 (CARTAO-FATURA-GRAVAR D1) a FAZENDA da sugestão = a maioria estrita dos mesmos casos COM ESSA CONTA; misto = sem fazenda', () => {
+    const caso = (planoContaId: string, fazendaId: string | null) => ({ descricao: 'Posto Avenida', fornecedor: null, planoContaId, fazendaId });
+    const s = sugestaoPeloHistorico([caso('p1', 'faz-a'), caso('p1', 'faz-a'), caso('p1', 'faz-b'), caso('p2', 'faz-b')], rotulo);
+    expect(s(linha('POSTO AVENIDA'))).toEqual({ planoContaId: 'p1', rotulo: 'Combustível', fazendaId: 'faz-a' });
+    const misto = sugestaoPeloHistorico([caso('p1', 'faz-a'), caso('p1', 'faz-b'), caso('p1', null)], rotulo);
+    expect(misto(linha('POSTO AVENIDA'))?.fazendaId).toBeNull();
+    /* metade não é maioria */
+    expect(sugestaoPeloHistorico([caso('p1', 'faz-a'), caso('p1', null)], rotulo)(linha('POSTO AVENIDA'))?.fazendaId).toBeNull();
   });
   it('H5 histórico MISTO (empate) = sem sugestão; nada no histórico = sem sugestão; conta fora do plano = sem sugestão', () => {
     const misto = sugestaoPeloHistorico([

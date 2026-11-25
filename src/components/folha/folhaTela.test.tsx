@@ -191,3 +191,104 @@ describe('T6 o Editar lançamento', () => {
     expect((await screen.findByTestId('lanc-funcionario-abrir')).textContent).toContain('Antônio');
   });
 });
+
+/* ── T7 FOLHA-ADMISSAO-01 (Gabriel 25/11 08:05): a admissão é a fonte da data da contratação ─────────────────────────────────────── */
+import { FuncionarioDialog } from './FuncionarioDialog';
+import { aAtualizarDe, atuacaoVigente, avisoDoDesde, desdeInicial } from '@/lib/folha/admissao';
+import type { Ficha } from '@/lib/folha/folhaTela';
+
+const at = (desde: string, fazenda_id: string, atividade: string, pct = 100) => ({ desde, fazenda_id, fazenda: fazenda_id, atividade, pct });
+describe('T7a as regras (puras)', () => {
+  it('a atuação vigente: as vigências iguais seguidas são uma ("vale desde" a primeira); só futuras = null', () => {
+    expect(atuacaoVigente([at('2026-09-01', 'fA', 'pecuaria'), at('2022-05-07', 'fA', 'pecuaria')], '2026-11-25')?.desde).toBe('2022-05-07');
+    expect(atuacaoVigente([at('2026-09-01', 'fA', 'agricultura'), at('2024-01-01', 'fA', 'agricultura'), at('2022-05-07', 'fA', 'pecuaria')], '2026-11-25')?.desde).toBe('2024-01-01');
+    expect(atuacaoVigente([at('2027-02-01', 'fB', 'pecuaria'), at('2022-05-07', 'fA', 'pecuaria')], '2026-11-25')?.desde).toBe('2022-05-07');
+    expect(atuacaoVigente([at('2027-02-01', 'fB', 'pecuaria')], '2026-11-25')).toBeNull();
+    expect(atuacaoVigente([], '2026-11-25')).toBeNull();
+  });
+  it('o Desde: 1ª linha = admissão; linha nova vazia; sem admissão vazio — nunca hoje', () => {
+    expect(desdeInicial(false, '2022-05-07')).toBe('2022-05-07');
+    expect(desdeInicial(true, '2022-05-07')).toBe('');
+    expect(desdeInicial(false, null)).toBe('');
+  });
+  it('antes da admissão = aviso; depois (ou futura) nada', () => {
+    expect(avisoDoDesde('2020-01-01', '2022-05-07')).toBe('antes da admissão (07/05/2022)');
+    expect(avisoDoDesde('2031-01-01', '2022-05-07')).toBeNull();
+    expect(avisoDoDesde('2020-01-01', null)).toBeNull();
+    expect(avisoDoDesde('', '2022-05-07')).toBeNull();
+  });
+  it('"a atualizar" some quando o dado existe', () => {
+    expect(aAtualizarDe({ a_atualizar: ['salario', 'cpf', 'situacao'], cpf: null }, true)).toEqual(['cpf', 'situacao']);
+    expect(aAtualizarDe({ a_atualizar: ['salario', 'cpf', 'admissao'], cpf: '00000000000', admissao: '2022-05-07' }, false)).toEqual(['salario']);
+  });
+});
+
+/** o modal sozinho, com a ficha do funcionário trocada pelo caso */
+function montarDialogo(funcionarioId: string, ajustar?: (f: Ficha) => Ficha) {
+  const api = apiDaFolha('vera');
+  const original = api.ficha.bind(api);
+  api.ficha = async id => { const r = await original(id); return r.ok && ajustar ? { ok: true, dados: ajustar(r.dados) } : r; };
+  montar(api, <FuncionarioDialog clienteId="cli" funcionarioId={funcionarioId} aoFechar={() => {}} aoCriar={() => {}} />);
+  return api;
+}
+async function abaSalario() {
+  await waitFor(() => expect((screen.getByTestId('funcionario-nome') as HTMLInputElement).value).not.toBe(''));
+  fireEvent.click(within(screen.getByTestId('funcionario-dialog')).getByText('Salário e atuação'));
+  await screen.findByTestId('funcionario-aba-salario');
+}
+function digitarData(testid: string, ddmmaaaa: string) {
+  const i = screen.getByTestId(testid);
+  fireEvent.change(i, { target: { value: ddmmaaaa } });
+  fireEvent.blur(i);
+}
+function digitarSalario(v: string) {
+  const i = within(screen.getByTestId('funcionario-aba-salario')).getAllByTestId('campo-moeda')[0]?.querySelector('input');
+  if (!i) throw new Error('sem o campo do salário');
+  fireEvent.change(i, { target: { value: v } });
+  fireEvent.blur(i);
+}
+const valor = (testid: string) => (screen.getByTestId(testid) as HTMLInputElement).value;
+
+describe('T7b o modal: a data da contratação', () => {
+  it('COM admissão e histórico: os Desde começam vazios, a atuação diz "vale desde"; data ANTIGA grava como digitada (com o aviso) e o formulário limpa', async () => {
+    const api = montarDialogo('f00');
+    await abaSalario();
+    expect(valor('funcionario-sal-desde')).toBe('');
+    expect(valor('funcionario-atu-desde')).toBe('');
+    expect(screen.getByTestId('funcionario-atuacao-vigente').textContent).toBe('vale desde 01/11/2025');
+    digitarData('funcionario-sal-desde', '01/02/2019');
+    expect(screen.getByTestId('funcionario-aviso-salario').textContent).toBe('antes da admissão (03/01/2021)');
+    digitarSalario('3000');
+    fireEvent.click(screen.getByTestId('funcionario-gravar-salario'));
+    await waitFor(() => expect(api.chamadas.filter(c => c.fn === 'gravarSalario')).toHaveLength(2));
+    expect(api.chamadas.filter(c => c.fn === 'gravarSalario').map(c => [c.args[1], c.args[5]])).toEqual([['2019-02-01', true], ['2019-02-01', false]]);
+    await waitFor(() => expect(valor('funcionario-sal-desde')).toBe(''));
+    expect(screen.queryByTestId('funcionario-gravar-admissao')).toBeNull();
+  });
+  it('COM admissão e SEM linhas: a 1ª linha de salário e de atuação nasce na admissão', async () => {
+    montarDialogo('f00', f => ({ ...f, salarios: [], atuacoes: [] }));
+    await abaSalario();
+    expect(valor('funcionario-sal-desde')).toBe('03/01/2021');
+    expect(valor('funcionario-atu-desde')).toBe('03/01/2021');
+  });
+  it('SEM admissão: data FUTURA grava como digitada e oferece gravá-la como admissão (ele confirma)', async () => {
+    const api = montarDialogo('f00', f => ({ ...f, funcionario: { ...f.funcionario, admissao: null }, salarios: [] }));
+    await abaSalario();
+    expect(valor('funcionario-sal-desde')).toBe('');
+    digitarData('funcionario-sal-desde', '06/05/2030');
+    digitarSalario('4100');
+    fireEvent.click(screen.getByTestId('funcionario-gravar-salario'));
+    await waitFor(() => expect(api.chamadas.filter(c => c.fn === 'gravarSalario')).toHaveLength(2));
+    expect(api.chamadas.filter(c => c.fn === 'gravarSalario')[1]?.args[1]).toBe('2030-05-06');
+    expect(screen.getByTestId('funcionario-aviso-salario').textContent).toContain('admissão vazia: gravar 06/05/2030 como admissão?');
+    expect(api.chamadas.filter(c => c.fn === 'gravarFuncionario')).toHaveLength(0);
+    fireEvent.click(screen.getByTestId('funcionario-gravar-admissao'));
+    await waitFor(() => expect(api.chamadas.filter(c => c.fn === 'gravarFuncionario')).toHaveLength(2));
+    expect(api.chamadas.filter(c => c.fn === 'gravarFuncionario')[1]?.args[1]).toMatchObject({ id: 'f00', admissao: '2030-05-06' });
+  });
+  it('"a atualizar" não diz "salário" com salário gravado', async () => {
+    montarDialogo('f00', f => ({ ...f, funcionario: { ...f.funcionario, a_atualizar: ['salario', 'situacao'] } }));
+    await waitFor(() => expect(screen.getByTestId('funcionario-dialog').textContent).toContain('a atualizar: situação'));
+    expect(screen.getByTestId('funcionario-dialog').textContent).not.toContain('salário,');
+  });
+});

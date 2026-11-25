@@ -13,6 +13,7 @@ import {
   avisoDoVencimento, competenciaBR, cpfBR, dataBR, n2, rotuloAAtualizar, rotuloSituacao, rotuloStatus, rotuloVinculo,
   type Ficha, type FuncionarioDaLista,
 } from '@/lib/folha/folhaTela';
+import { aAtualizarDe } from '@/lib/folha/admissao';
 import { DocumentosDaFicha } from './DocumentosDaFicha';
 
 type AbaDaFicha = 'cadastro' | 'documentos';
@@ -81,7 +82,8 @@ function Campo({ rotulo, valor, aConfirmar, testid }: { rotulo: string; valor: s
 
 function Cadastro({ ficha, linha, onHistorico }: { ficha: Ficha; linha: FuncionarioDaLista | null; onHistorico: () => void }) {
   const f = ficha.funcionario;
-  const falta = new Set(f.a_atualizar);
+  const marcas = aAtualizarDe(f, ficha.salarios.length > 0);
+  const falta = new Set(marcas);
   const salario = ficha.salarios[0] ?? null;
   const pg = ficha.pagamento;
   const pix = pg?.pix_chave ? `${pg.pix_tipo_chave ? `${pg.pix_tipo_chave} ` : ''}${pg.pix_chave}` : null;
@@ -90,9 +92,9 @@ function Cadastro({ ficha, linha, onHistorico }: { ficha: Ficha; linha: Funciona
   const atuacoes = ficha.atuacoes.length ? ficha.atuacoes : (linha?.atuacao ?? []).map(a => ({ ...a, desde: null }));
   return (
     <div data-testid="folha-ficha-cadastro">
-      {f.a_atualizar.length > 0 && (
-        <p className="mt-1 truncate rounded bg-amber-50 px-1.5 py-[2px] text-[10px] text-amber-800" title={`a atualizar: ${f.a_atualizar.map(rotuloAAtualizar).join(', ')}`}>
-          a atualizar: {f.a_atualizar.map(rotuloAAtualizar).join(', ')}
+      {marcas.length > 0 && (
+        <p className="mt-1 truncate rounded bg-amber-50 px-1.5 py-[2px] text-[10px] text-amber-800" title={`a atualizar: ${marcas.map(rotuloAAtualizar).join(', ')}`}>
+          a atualizar: {marcas.map(rotuloAAtualizar).join(', ')}
         </p>
       )}
       <Titulo>Cadastro</Titulo>

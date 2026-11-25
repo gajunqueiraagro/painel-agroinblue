@@ -172,3 +172,35 @@ export function filtroRapido(nomeDoGate) {
   console.log(`${nomeDoGate} --rapido: telas ${[...r.telas].join(', ')} (de ${r.totalDeTelas})`);
   return (c) => r.telas.has(telaDoCenario(c));
 }
+
+/**
+ * UI-FONTES-REGUA-01 (Gabriel 25/11 07:41) — as telas NOVAS ou ALTERADAS no diff, onde a régua de fonte REPROVA (as já aprovadas não).
+ * As mesmas do modo rápido, com uma diferença: arquivo compartilhado (componente da casa, `index.css`, o gate, a bancada comum) ou
+ * alcançado por metade das telas NÃO põe todas sob a régua — senão mexer no gate reprovaria as telas antigas, que vão só para o relatório.
+ * Falhou o git (sem origin/proto): nenhuma tela (a régua não reprova o que não sabe se mudou) e o motivo vai no `aviso`.
+ */
+export function telasDaReguaDeFonte(base = 'origin/proto') {
+  let diff;
+  try { diff = arquivosDoDiff(base); } catch (e) { return { telas: new Set(), fora: [], aviso: `sem o diff contra ${base}: ${String(e).slice(0, 80)}` }; }
+  const { mb, arquivos } = diff;
+  const linhas = arquivos.includes('scripts/ui-cortes/telas.tsx') ? linhasMudadasDoTelas(mb) : [];
+  return { ...telasDaReguaPelosArquivos(arquivos, linhas), aviso: null };
+}
+
+/** O miolo (sem git): os arquivos do diff e as linhas mudadas do `telas.tsx` → as telas sob a régua e o que ficou de fora (compartilhado). */
+export function telasDaReguaPelosArquivos(arquivos, linhasDoTelas = []) {
+  const { telas } = telasDaBancada();
+  const metade = Math.ceil(telas.size / 2);
+  const escolhidas = new Set(); const fora = [];
+  for (const a of arquivos) {
+    if (COMPARTILHADOS.some((re) => re.test(a))) { fora.push(a); continue; }
+    if (a === 'scripts/ui-cortes/telas.tsx') {
+      for (const [n, t] of telas) if (linhasDoTelas.some((l) => l >= t.de && l <= t.ate)) escolhidas.add(n);
+      continue;
+    }
+    const ts = [...telas].filter(([, t]) => t.arquivos.has(a)).map(([n]) => n);
+    if (ts.length >= metade) { fora.push(a); continue; }
+    ts.forEach((t) => escolhidas.add(t));
+  }
+  return { telas: escolhidas, fora };
+}

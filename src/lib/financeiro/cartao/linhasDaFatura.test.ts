@@ -28,11 +28,31 @@ describe('prévia da fatura do cartão', () => {
   });
 
   it('4 dias de distância não casa; 1 centavo casa como diferença; outro cartão é dito', () => {
-    expect(linhasDaFatura(fatura([linha({})]), CARTAO, [ex({ competencia: '2026-09-08' })]).linhas[0].decisao).toBe('lanca');
+    /* (o lançamento de OUTRA fatura: com o desta fatura, a 2ª passada casa — ver "a recorrência prevista") */
+    expect(linhasDaFatura(fatura([linha({})]), CARTAO, [ex({ competencia: '2026-09-08', vencimento: '2026-11-16' })]).linhas[0].decisao).toBe('lanca');
     const c = linhasDaFatura(fatura([linha({})]), CARTAO, [ex({ valorCent: 10001 })]).linhas[0];
     expect([c.decisao, c.diferencas[0]]).toEqual(['ja_lancado_diferenca', 'valor 10001 (1 centavo)']);
     const o = linhasDaFatura(fatura([linha({})]), CARTAO, [ex({ contaId: OUTRO, vencimento: '2026-10-10' })]).linhas[0];
     expect([o.decisao, o.diferencas]).toEqual(['ja_lancado_diferenca', ['outra conta', 'vencimento 2026-10-10']]);
+  });
+
+  it('CARTAO-FATURA-GRAVAR: o que JÁ ESTÁ nesta fatura (mesmo cartão + vencimento + valor) casa em 2ª passada — a recorrência prevista do dia 1º não duplica', () => {
+    /* a "Internet" do NJ: 4 cobranças iguais na fatura (compras em setembro) × 4 previstas da recorrência (competência 01/10, venc. desta fatura) */
+    const prev = (id: string) => ex({ id, competencia: '2026-10-01', status: 'previsto', valorCent: 33900 });
+    const p = linhasDaFatura(fatura([1, 2, 3, 4].map((d) => linha({ dataCompra: `2026-09-1${d}`, valorCent: 33900, descricao: 'PROVEDOR EXEMPLO' }))),
+      CARTAO, [prev('r1'), prev('r2'), prev('r3'), prev('r4')]);
+    expect(p.linhas.map((l) => [l.decisao, l.existente?.id])).toEqual([['ja_lancado', 'r1'], ['ja_lancado', 'r2'], ['ja_lancado', 'r3'], ['ja_lancado', 'r4']]);
+    /* uma 5ª cobrança igual na fatura não tem par: lança */
+    const cinco = linhasDaFatura(fatura([1, 2, 3, 4, 5].map((d) => linha({ dataCompra: `2026-09-1${d}`, valorCent: 33900 }))), CARTAO, [prev('r1'), prev('r2'), prev('r3'), prev('r4')]);
+    expect(cinco.linhas.map((l) => l.decisao)).toEqual(['ja_lancado', 'ja_lancado', 'ja_lancado', 'ja_lancado', 'lanca']);
+    /* em outro cartão, em outra fatura ou com outro valor: nada casa pela 2ª passada */
+    expect(linhasDaFatura(fatura([linha({ valorCent: 33900 })]), CARTAO, [ex({ competencia: '2026-10-01', valorCent: 33900, contaId: OUTRO })]).linhas[0].decisao).toBe('lanca');
+    expect(linhasDaFatura(fatura([linha({ valorCent: 33900 })]), CARTAO, [ex({ competencia: '2026-10-01', valorCent: 33900, vencimento: '2026-11-16' })]).linhas[0].decisao).toBe('lanca');
+    expect(linhasDaFatura(fatura([linha({ valorCent: 33900 })]), CARTAO, [ex({ competencia: '2026-10-01', valorCent: 33901 })]).linhas[0].decisao).toBe('lanca');
+    /* a passada pela data vem ANTES: a compra com par pela data não perde o par para a 2ª passada de outra linha */
+    const ordem2 = linhasDaFatura(fatura([linha({ dataCompra: '2026-09-02', valorCent: 5000 }), linha({ dataCompra: '2026-09-20', valorCent: 5000 })]), CARTAO,
+      [ex({ id: 'pela-data', competencia: '2026-09-20', valorCent: 5000 })]);
+    expect(ordem2.linhas.map((l) => [l.decisao, l.existente?.id ?? null])).toEqual([['lanca', null], ['ja_lancado', 'pela-data']]);
   });
 
   it('o centavo exato vence o de 1 centavo de diferença, mesmo listado depois', () => {

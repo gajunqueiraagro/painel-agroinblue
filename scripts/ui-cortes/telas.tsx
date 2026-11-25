@@ -2003,8 +2003,10 @@ if (tela === 'mesclar') {
       : t === 'extrato_bancario_v2' && e?.sel?.startsWith('id, importacao_id') ? (semArquivos ? [] : (v === 'nj10' ? CONC.LIGACOES_NJ10 : CONC.LIGACOES).filter((l) => !e?.eq?.conta_bancaria_id || e.eq.conta_bancaria_id === 'cc1'))
       : t === 'extrato_bancario_v2' && e?.eq?.importacao_id ? CONC.MOVIMENTOS_DO_ARQUIVO
       /* CARTAO-FATURA-IMPORT-01 — `&v=fatura`: a prévia da fatura no painel do cartão (o que já está no sistema + o histórico; o plano) */
-      : t === 'financeiro_lancamentos_v2' && v === 'fatura' && e?.sel?.startsWith('id, conta_bancaria_id, data_vencimento') ? FAT.LANCAMENTOS_DA_FATURA
-      : t === 'financeiro_plano_contas' && v === 'fatura' ? FAT.PLANO_DA_FATURA
+      : t === 'financeiro_lancamentos_v2' && v.startsWith('fatura') && e?.sel?.startsWith('id, conta_bancaria_id, data_vencimento') ? FAT.LANCAMENTOS_DA_FATURA
+      : t === 'financeiro_plano_contas' && v.startsWith('fatura') ? FAT.PLANO_DA_FATURA
+      /* CARTAO-FATURA-GRAVAR — a gravação viva desta fatura (`&v=fatura-gravada`: o "Desfazer gravação") */
+      : t === 'fatura_cartao_gravacoes' ? (v === 'fatura-gravada' ? FAT.GRAVACAO_DA_FATURA : [])
       : t === 'financeiro_lancamentos_v2' && e?.sel?.includes('status_transacao, conta_bancaria_id') ? (v === 'sr' ? CONC.CANDIDATOS_SR : [])
       : t === 'conciliacao_bancaria_itens' ? []
       /* BAIXA-DESCONTO-BANCO-01 — a parte paga com desconto da NF do dia 03 (`&v=desconto-depois`) */
@@ -2017,8 +2019,12 @@ if (tela === 'mesclar') {
       /* P159a — o Espelho da conta escolhida (`dados/espelho.ts`): o Casar lançamentos (Extrato, Sistema, Evolução) e a Conferência */
       : fn === 'fn_extratos_espelhados' ? ESP.espelho(v)
       /* CONC-PAINEL-02 entrega 2 — o motor de cada linha sem par (`&v=nj10`) */
-      : fn === 'fn_candidatos_conciliacao' ? (v === 'nj10' ? CONC.candidatosNj10(a.p_extrato_id) : []) : null,
+      : fn === 'fn_candidatos_conciliacao' ? (v === 'nj10' ? CONC.candidatosNj10(a.p_extrato_id) : [])
+      /* CARTAO-FATURA-GRAVAR — a prévia/gravação e o desfazer da fatura (`dados/fatura.ts`, no teto) */
+      : fn === 'fn_fatura_cartao_gravar' ? FAT.gravarDaBancada(v, a)
+      : fn === 'fn_fatura_cartao_desfazer' ? FAT.desfazerDaBancada(a) : null,
   };
+  if (v.startsWith('fatura')) g.__fazendaBancada = { fazendas: FAT.FAZENDAS_DA_FATURA, fazendaAtual: null, isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {} };
   g.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
   /* P159b — montada COMO NO APP (`V2Index`, seção do app-shell: coluna flex que dá a altura até a lista). Num bloco solto quem rolava era
      a moldura da bancada, e o cabeçalho da Evolução "não ficava preso" só aqui. */

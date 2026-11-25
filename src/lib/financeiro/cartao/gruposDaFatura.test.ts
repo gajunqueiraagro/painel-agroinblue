@@ -53,7 +53,8 @@ describe('CARTAO-FATURA-IMPORT-01 — os grupos da prévia', () => {
       [9, 'pagamento', 'transferencia', 'transferência · casa com o débito no banco'],
     ]);
     expect(r.linhas[4].contaSugerida).toBe('Alimentação e Cantina');
-    expect(r.linhas[6].contaSugerida).toBe('Despesas bancárias');
+    /* D5 (CARTAO-FATURA-GRAVAR): sem histórico e sem a conta dos encargos no plano = nada sugerido ("—"), nunca um nome inventado */
+    expect(r.linhas[6].contaSugerida).toBe('—');
   });
   it('G2 a contagem por grupo (os selos) e o rodapé', () => {
     const r = g();
@@ -72,7 +73,9 @@ describe('CARTAO-FATURA-IMPORT-01 — os grupos da prévia', () => {
     const op = { contaDaFatura: 'cartao', nomeDaConta: (id: string) => id, sugestaoDe: () => null };
     const par = gruposDaFatura(linhasDaFatura({ ...FATURA, linhas: [anuidade, desconto] }, 'cartao', []), op);
     expect(par.linhas.map((x) => x.gesto)).toEqual(['nada', 'nada']);
-    const so = gruposDaFatura(linhasDaFatura({ ...FATURA, linhas: [anuidade] }, 'cartao', []), op);
-    expect(so.linhas.map((x) => [x.grupo, x.gesto, x.contaSugerida])).toEqual([['encargos', 'lancar', 'Despesas bancárias']]);
+    /* D5: a anuidade cobrada vai à conta dos encargos do plano ("Despesas Financeiras Administrativo") quando não há histórico */
+    const dfa = { planoContaId: 'p-dfa', rotulo: 'Despesas Financeiras Administrativo' };
+    const so = gruposDaFatura(linhasDaFatura({ ...FATURA, linhas: [anuidade] }, 'cartao', []), { ...op, contaDosEncargos: dfa });
+    expect(so.linhas.map((x) => [x.grupo, x.gesto, x.contaSugerida, x.sugestao?.planoContaId])).toEqual([['encargos', 'lancar', 'Despesas Financeiras Administrativo', 'p-dfa']]);
   });
 });
