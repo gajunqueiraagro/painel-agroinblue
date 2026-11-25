@@ -23,6 +23,7 @@ import {
   chipsQueCabem, dataBR, filtrarFuncionarios, n2, rotuloAAtualizar, rotuloAtuacao, rotuloSituacao, rotuloVinculo, tituloDaAtuacao,
   type FiltroFuncionarios, type FuncionarioDaLista,
 } from '@/lib/folha/folhaTela';
+import { aAtualizarDe } from '@/lib/folha/admissao';
 import { FichaFuncionario } from './FichaFuncionario';
 import { FuncionarioDialog } from './FuncionarioDialog';
 
@@ -60,7 +61,7 @@ const ORDENAVEIS: readonly ColunaOrdenavel<FuncionarioDaLista, Coluna>[] = [
   { coluna: 'admissao', tipo: 'data', valor: f => f.admissao },
   { coluna: 'salario', tipo: 'numero', valor: f => f.salario },
   { coluna: 'situacao', tipo: 'texto', valor: f => `${f.situacao}${f.desligamento ?? ''}` },
-  { coluna: 'a_atualizar', tipo: 'numero', valor: f => f.a_atualizar.length || null },
+  { coluna: 'a_atualizar', tipo: 'numero', valor: f => aAtualizarDe(f, f.salario != null).length || null },
 ];
 
 function Colunas({ cols }: { cols: readonly DefColuna[] }) {
@@ -187,7 +188,7 @@ export function AbaFuncionarios({ clienteId, funcionarioId, onEscolher, onHistor
 }
 
 function LinhaFuncionario({ f, cols, escolhido, onEscolher }: { f: FuncionarioDaLista; cols: readonly DefColuna[]; escolhido: boolean; onEscolher: () => void }) {
-  const chips = f.a_atualizar.map(rotuloAAtualizar);
+  const chips = aAtualizarDe(f, f.salario != null).map(rotuloAAtualizar);
   const { vistos, escondidos } = chipsQueCabem(chips, LARGURA_CHIPS);
   const tituloNome = [f.nome, f.empregador_registro, f.atuacao.length ? tituloDaAtuacao(f.atuacao) : null].filter(Boolean).join(' · ');
   const celula = (c: Coluna) => {
