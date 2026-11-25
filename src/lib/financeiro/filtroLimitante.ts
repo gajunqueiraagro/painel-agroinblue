@@ -18,6 +18,8 @@
 export interface FiltrosDaTela {
   anos: string[];
   meses: string[];
+  /** LANC-FILTROS-02a: o período do seletor (por datas) — limita como o ano */
+  periodo?: { de: string; ate: string } | null;
   /** O id da safra, ou a sentinela de "sem safra" — que não limita. */
   safra: string;
   /**
@@ -52,6 +54,7 @@ const escolhido = (v: string | undefined): boolean => !!v && v.trim() !== '' && 
  * sair desta lista no mesmo PR — senão vira a permissão para puxar tudo.
  */
 export function temFiltroLimitante(f: FiltrosDaTela): boolean {
+  if (f.periodo) return true;
   if (f.anos.length > 0) return true;
   if (f.meses.length > 0) return true;
   /* A safra atravessa dois anos civis de propósito — exigir um ano junto seria pedir ao

@@ -20,6 +20,8 @@ export interface FiltrosDaTelaV2 {
   fornecedores?: readonly string[] | null;
   /** FIN-PRONTO-PAGAR-01: o seletor "Pagamento" (ausente/'todos' = não vai) */
   prontoPagar?: FiltroPronto;
+  /** LANC-FILTROS-02a: o PERÍODO do seletor (por dia, os dois inclusivos); vindo, vai como `de`/`ate` e MANDA — anos/meses não vão */
+  periodo?: { de: string; ate: string } | null;
 }
 
 const valor = (v: string) => (v && v !== '__all__' ? v : undefined);
@@ -37,8 +39,11 @@ export function filtrosDaPaginaV2(f: FiltrosDaTelaV2): Record<string, unknown> {
   ];
   for (const [k, v] of por) if (v !== undefined) out[k] = v;
   const anos = inteiros(f.anos); const meses = inteiros(f.meses);
-  if (anos.length) out.anos = anos;
-  if (meses.length) out.meses = meses;
+  if (f.periodo) { out.de = f.periodo.de; out.ate = f.periodo.ate; }
+  else {
+    if (anos.length) out.anos = anos;
+    if (meses.length) out.meses = meses;
+  }
   if (f.status.length) out.status = [...f.status];
   if (f.fornecedores && f.fornecedores.length > 1) out.fornecedor_ids = [...f.fornecedores];
   if (f.prontoPagar && f.prontoPagar !== 'todos') out.pronto_pagar = f.prontoPagar;

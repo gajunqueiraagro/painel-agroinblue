@@ -106,6 +106,15 @@ const TAMANHOS_DO_P92 = [[750, 483], [750, 520], [750, 600], [814, 530], [900, 6
 const EXCETO_CONSORCIO = '[data-testid="lista-parcelas-consorcio"], [data-testid="lista-faixas-consorcio"]';
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await p.waitForTimeout(500); };
 const clicarRotulo = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await p.waitForTimeout(500); };
+/* LANC-FILTROS-02a — os seletores de exibição da lista de Lançamentos (Class., Sem caixa, Pagamento) moram no "Exibir ▾" do desktop: abre,
+   clica e fecha (Esc); no celular (< 1000) seguem na faixa, e o clique é direto */
+const naExibir = (acao) => async (p) => {
+  const exibir = p.locator('[data-testid="btn-exibir"]');
+  const comExibir = await exibir.count() > 0 && await exibir.first().isVisible();
+  if (comExibir) { await exibir.first().click(); await p.waitForTimeout(300); }
+  await acao(p);
+  if (comExibir) { await p.keyboard.press('Escape'); await p.waitForTimeout(300); }
+};
 const clicarTexto = (txt) => async (p) => { await p.getByText(txt, { exact: true }).first().click(); await p.waitForTimeout(500); };
 /* CONC-CRIAR-COM-NOTA-01 — o "Criar lançamento" da estação, a aba Documentos e (com `ler`) a NF SINTÉTICA da bancada solta no "Ler a NF" */
 const criarComNota = (ler) => async (p) => {
@@ -190,7 +199,7 @@ const CENARIOS = [
     antes: clicar('[data-testid="btn-novo"]') },
   /* P94 — os avisos da conferência e os chips do que veio da OC, na faixa dos totais: rolam no lugar reservado, sem "…"; e os seletores da
      barra com o valor fora das opções ("valor inexistente (limpar)", vermelho) na largura da barra */
-  { nome: 'financeiro-fantasma', url: 'tela=financeiro&fantasma=1', regiao: '[data-testid="faixa-totais"]' },
+  { nome: 'financeiro-fantasma', url: 'tela=financeiro&fantasma=1', regiao: '[data-testid="faixa-totais"], [data-testid="cabecalho-dos-filtros"]' },
   { nome: 'valor-inexistente', url: 'tela=valor-inexistente', regiao: '[data-testid="barra-inexistente"]' },
   /* FORN-BUSCA-UNICA-01 — o filtro de fornecedor com um nome longo escolhido: o chip mostra o nome inteiro. FIN-FILTRO-DOC-01 —
      `alturaFixa`: a fileira de filtros tem de ter a MESMA altura antes e depois de escolher o nome longo (nada empurra a tela) */
@@ -2660,13 +2669,36 @@ const CENARIOS = [
   { nome: 'financeiro-tabela-pagina-2', url: 'tela=financeiro&v=volume&n=450', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: clicar('[data-testid="pagina-proxima"]') },
   /* o item 2 do 01b: a faixa de totais + controles nunca fica por cima do que vem embaixo — dez trocas de filtro e o "sobreposicao" */
-  { nome: 'financeiro-faixa-totais', url: 'tela=financeiro', regiao: '[data-testid="faixa-totais"]', tamanhos: TAMANHOS_DO_CONTRATO,
-    botoesDentro: '[data-testid="faixa-totais"]',
-    antes: async (p) => { for (let i = 0; i < 10; i++) await clicarRotulo([/^Macro$/, /^Subcentro$/, /^Centro$/, /^Mostrar$/, /^Ocultar$/][i % 5])(p); } },
+  { nome: 'financeiro-faixa-totais', url: 'tela=financeiro', regiao: '[data-testid="faixa-totais"], [data-testid="resumo-da-lista"]', tamanhos: TAMANHOS_DO_CONTRATO,
+    botoesDentro: '[data-testid="faixa-totais"], [data-testid="cabecalho-dos-filtros"]',
+    antes: async (p) => { for (let i = 0; i < 10; i++) await naExibir(clicarRotulo([/^Macro$/, /^Subcentro$/, /^Centro$/, /^Mostrar$/, /^Ocultar$/][i % 5]))(p); } },
   /* FIN-PRONTO-PAGAR-01 — o seletor "Pagamento" em Faltando: a tabela só com os pontos laranja (o ponto antes do status, sem coluna nova) */
   { nome: 'financeiro-pronto-faltando', url: 'tela=financeiro', regiao: '[data-testid="quadro-lancamentos"]',
     tamanhos: [[1240, 700], [1024, 600], [1280, 800], [1920, 1080], ...TAMANHOS_DO_CONTRATO],
-    antes: async (p) => { await clicarRotulo(/^Faltando/)(p); await p.locator('[data-testid="ponto-pronto"][data-pronto="nao"]').first().waitFor({ timeout: 8000 }); } },
+    antes: async (p) => { await naExibir(clicarRotulo(/^Faltando/))(p); await p.locator('[data-testid="ponto-pronto"][data-pronto="nao"]').first().waitFor({ timeout: 8000 }); } },
+  /* LANC-FILTROS-02a (Gabriel 25/11, mock lancamentos-filtros-ref/mock-aprovado.html) — a caixa de filtros do desktop (6 colunas, 24px a 10,5,
+     Período no lugar de Ano/Mês), recolhida (os ativos em chips), o calendário aberto (o compacto do DRE) e o resumo Caixa × A pagar, nos
+     5 tamanhos do pedido (o celular, abaixo de 768, não mudou); o ESTRESSE: −R$ 99.999.999,99 em todos os cards — nada corta nem empurra */
+  ...(() => {
+    const T5 = [[918, 600], [1024, 640], [1126, 579], [1280, 720], [1366, 768]];
+    const escolherForn = async (p) => {
+      await p.locator('[data-testid="filtro-fornecedor-largo"] [role="combobox"]').first().click(); await p.waitForTimeout(300);
+      await p.locator('[data-testid="favorecido-opcao"]').filter({ hasText: 'Cooperativa' }).first().click(); await p.waitForTimeout(500);
+    };
+    return [
+      { nome: 'financeiro-filtros-02-aberta', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]', tamanhos: T5,
+        botoesDentro: '[data-testid="cabecalho-dos-filtros"]' },
+      { nome: 'financeiro-filtros-02-recolhida', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]', tamanhos: T5.slice(1),
+        antes: async (p) => { await escolherForn(p); await clicar('[data-testid="recolher-filtros"]')(p); } },
+      { nome: 'financeiro-filtros-02-calendario', url: 'tela=financeiro', regiao: '[data-testid="lanc-periodo-popup"]', tamanhos: T5.slice(1),
+        antes: clicar('[data-testid="lanc-periodo"]') },
+      { nome: 'financeiro-filtros-02-exibir', url: 'tela=financeiro', regiao: '[data-testid="painel-exibir"]', tamanhos: T5.slice(1),
+        antes: clicar('[data-testid="btn-exibir"]') },
+      { nome: 'financeiro-resumo-02', url: 'tela=financeiro', regiao: '[data-testid="resumo-da-lista"]', tamanhos: T5.slice(1) },
+      { nome: 'financeiro-resumo-02-estresse', url: 'tela=financeiro&estresse=1', regiao: '[data-testid="resumo-da-lista"]', tamanhos: T5.slice(1),
+        alturaFixa: '[data-testid="resumo-da-lista"]' },
+    ];
+  })(),
 ];
 /* UI-TEXTO-LONGO-01 — o que tem de ter a mesma altura com texto curto e longo (o que não existe na tela é pulado nos dois lados) */
 const ALTURAS_DO_MODAL = ['[role="dialog"]', '[role="dialog"] aside', '[data-testid="grade-de-parcelas"]'];

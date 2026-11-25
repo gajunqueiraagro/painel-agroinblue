@@ -190,8 +190,10 @@ describe('a ligação na tela (lida da fonte)', () => {
   });
   it('P123 — o Fornecedor na altura dos outros campos (24px) e nenhum campo da barra abaixo do piso (8px)', () => {
     const chamadas = tela.match(/size="compact" triggerClassName="[^"]*"/g) ?? [];
-    expect(chamadas).toHaveLength(2);   // computador e celular
+    expect(chamadas).toHaveLength(1);   // o celular; o computador usa o campo da régua (LANC-FILTROS-02a)
     for (const c of chamadas) expect(c).toContain('h-6');
+    expect(tela).toContain("size=\"compact\" triggerClassName={cn(campoCls(fornecedorFiltro !== '__all__'), '!text-[10.5px]')}");
+    expect(tela).toContain("const campoCls = (ativo: boolean) => cn('h-6 w-full rounded-md border");
     expect(tela).not.toContain('!text-[8px]');
     expect(tela).not.toContain('placeholder:!text-[9px]');
   });

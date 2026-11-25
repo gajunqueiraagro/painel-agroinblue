@@ -1,5 +1,10 @@
 import { casaNaBusca } from '@/lib/texto/busca';
 import { CabecalhoDaTela } from '@/components/ui/cabecalho-da-tela';
+import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
+import { rotuloDoIntervalo, type AtividadeDaSafra, type Intervalo } from '@/lib/periodo/intervaloDeDatas';
+import { useBpoAtivo } from '@/hooks/useBpoAtivo';
+import { moedaComSinal, ResumoDaListaV2 } from '@/components/financeiro-v2/ResumoDaListaV2';
+import { chipsDosFiltros, periodoDosAnosEMeses, textoDosAnosEMeses, textoDosAtivos, type FiltroDaCaixa } from '@/lib/financeiro/filtrosAtivosDaLista';
 import type { ErroDeFormato } from '@/lib/financeiro/formatoDoLancamento';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -68,7 +73,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2, ListChecks } from 'lucide-react';
+import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2, ListChecks, ChevronDown } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -127,6 +132,15 @@ const CHAVE_ESTADO_FIN = 'financeiro_v2_state';
 
 /* a reserva dos totais do topo: o maior valor que a faixa mostra (dezenas de milhões) */
 const RESERVA_TOTAL = 'R$ 00.000.000,00';
+/* LANC-FILTROS-02a — a régua da caixa de filtros (UI-FONTES-REGUA-01): rótulo 9,5 · campo 24px a 10,5; no padrão cinza, ativo azul claro */
+const LBL = 'mb-px block text-[9.5px] leading-[11px] text-[#5b6577]';
+const campoCls = (ativo: boolean) => cn('h-6 w-full rounded-md border px-[7px] text-[10.5px] font-normal',
+  ativo ? 'border-[#9fb3d6] bg-[#eef3fb] text-[#1a2742]' : 'border-[#c5cdd9] bg-[#eef1f6]');
+/* os atalhos do Período nesta tela: Este mês · Mês passado · Este ano · Esta safra · 12 meses · Ano… (os "último/última" ficam de fora) */
+const ATALHOS_FORA_DA_LISTA: readonly string[] = ['ultimo-ano', 'ultima-safra-pecuaria', 'ultima-safra-agricultura'];
+const AS_DUAS_ATIVIDADES: readonly AtividadeDaSafra[] = ['pecuaria', 'agricultura'];
+const ROTULO_DATA_POR: Readonly<Record<string, string>> = { financeira: 'Financeira', competencia: 'Competência', vencimento: 'Vencimento', pagamento: 'Pagamento' };
+const ROTULO_TIPO: Readonly<Record<string, string>> = { '1-Entradas': 'Entradas', '2-Saídas': 'Saídas', '3-Transferências': 'Transferências' };
 /* FIN-PRONTO-PAGAR-01 — a contagem do seletor e dos totais Prontos/Faltando reserva 5 algarismos (o NJ tem ~5.700 linhas no ano) */
 const RESERVA_CONTAGEM_PRONTO = '00.000';
 
@@ -433,7 +447,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
    * num PR de filtro seria arrastar duas telas junto. Lista vazia = "Todos", que é o mesmo
    * que o `'__todos__'` sempre significou.
    */
-  const [anosSelecionados, setAnosSelecionados] = useState<string[]>(defaults.anosSelecionados);
+  const [anosSelecionados, setAnosCru] = useState<string[]>(defaults.anosSelecionados);
+  /* LANC-FILTROS-02a (Gabriel 25/11, D1 a) — o PERÍODO do seletor (o mesmo do DRE) no lugar de Ano/Mês no desktop: vai ao banco como
+     `de`/`ate` e MANDA. Quem mexe em ano/mês (o mobile, o drill, a memória antiga, a barra global, o Limpar) volta ao par ano × mês: os
+     dois setters abaixo limpam o período — um lugar só, em vez de lembrar em cada um dos chamadores. */
+  const [periodo, setPeriodo] = useState<Intervalo | null>(null);
+  const setAnosSelecionados = useCallback((v: string[] | ((prev: string[]) => string[])) => { setPeriodo(null); setAnosCru(v); }, []);
   const [anoPopoverOpen, setAnoPopoverOpen] = useState(false);
   const ano = anosSelecionados.length === 1 ? anosSelecionados[0] : (anosSelecionados.length === 0 ? '__todos__' : anosSelecionados[0]);
   const anoLabel = anosSelecionados.length === 0
@@ -443,7 +462,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       : `${anosSelecionados.length} anos`;
   const toggleAno = (val: string) => setAnosSelecionados(prev =>
     prev.includes(val) ? prev.filter(a => a !== val) : [...prev, val].sort());
-  const [mesesSelecionados, setMesesSelecionados] = useState<string[]>(defaults.mesesSelecionados);
+  const [mesesSelecionados, setMesesCru] = useState<string[]>(defaults.mesesSelecionados);
+  const setMesesSelecionados = useCallback((v: string[] | ((prev: string[]) => string[])) => { setPeriodo(null); setMesesCru(v); }, []);
   const [statusSelecionados, setStatusSelecionados] = useState<StatusFiltroFinanceiro[]>(defaults.statusSelecionados);
   const [statusPopoverOpen, setStatusPopoverOpen] = useState(false);
   const [tipoOperacao, setTipoOperacao] = useState(defaults.tipoOperacao);
@@ -540,6 +560,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (Array.isArray(f.anosSelecionados)) setAnosSelecionados(f.anosSelecionados);
     else if (f.ano !== undefined) setAnosSelecionados(f.ano === '__todos__' ? [] : [f.ano]);
     if (Array.isArray(f.mesesSelecionados)) setMesesSelecionados(f.mesesSelecionados);
+    /* LANC-FILTROS-02a — o período volta DEPOIS do ano/mês (os setters deles o limpam) */
+    if (Array.isArray(f.periodo) && f.periodo.length === 2 && typeof f.periodo[0] === 'string' && typeof f.periodo[1] === 'string') {
+      setPeriodo({ de: f.periodo[0], ate: f.periodo[1] });
+    }
     if (Array.isArray(f.statusSelecionados)) setStatusSelecionados(f.statusSelecionados.filter(isStatusFiltroFinanceiro));
     if (f.tipoOperacao !== undefined) setTipoOperacao(f.tipoOperacao);
     if (f.contaOrigem !== undefined) setContaOrigem(f.contaOrigem);
@@ -608,6 +632,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         subcentroFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro,
         safraFiltro,
         culturaFiltro,
+        periodo: periodo ? [periodo.de, periodo.ate] : [],
       },
       {
         fazendaId: p.fazendaId, anosSelecionados: p.anosSelecionados, mesesSelecionados: p.mesesSelecionados,
@@ -618,10 +643,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         fornecedorFiltro: p.fornecedorFiltro, atividadeFiltro: p.atividadeFiltro,
         safraFiltro: p.safraFiltro,
         culturaFiltro: p.culturaFiltro,
+        periodo: [],
       },
     ));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fazendaId, anosSelecionados, mesesSelecionados, statusSelecionados, tipoOperacao, contaOrigem,
+  }, [fazendaId, anosSelecionados, mesesSelecionados, periodo, statusSelecionados, tipoOperacao, contaOrigem,
       contaDestino, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, produtoFiltro,
       documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro, culturaFiltro]);
 
@@ -1000,9 +1026,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     fazenda_id: fazendaId !== '__all__' ? fazendaId : undefined,
     ano,
     /* `anos` tem precedência no plano; `ano` segue indo para quem ainda o lê. */
-    anos: anosSelecionados.length > 0 ? anosSelecionados : undefined,
-    mes: mesesSelecionados.length === 0 ? 'todos' : undefined,
-    meses: mesesSelecionados.length > 0 ? mesesSelecionados : undefined,
+    /* LANC-FILTROS-02a — com o período, só ele recorta (anos/meses não vão) */
+    periodo: periodo ? { de: periodo.de, ate: periodo.ate } : undefined,
+    anos: !periodo && anosSelecionados.length > 0 ? anosSelecionados : undefined,
+    mes: !periodo && mesesSelecionados.length === 0 ? 'todos' : undefined,
+    meses: !periodo && mesesSelecionados.length > 0 ? mesesSelecionados : undefined,
     conta_bancaria_id: contaOrigem !== '__all__' ? contaOrigem : undefined,
     conta_destino_id: contaDestino !== '__all__' ? contaDestino : undefined,
     tipo_operacao: tipoOperacao !== '__all__' ? tipoOperacao : undefined,
@@ -1031,7 +1059,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        inteira hoje e fica peneirado em memória. */
     cultura: (culturaFiltro !== '__all__' && culturaFiltro !== SEM_CULTURA) ? culturaFiltro : undefined,
     dimensao: dataPor,   // PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana (default 'financeira')
-  }), [fazendaId, ano, anosSelecionados, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusParaBanco, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, fornecedorFiltro, produtoFiltro, safraFiltro, culturaFiltro, dataPor]);
+  }), [fazendaId, ano, anosSelecionados, mesesSelecionados, periodo, contaOrigem, contaDestino, tipoOperacao, statusParaBanco, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, fornecedorFiltro, produtoFiltro, safraFiltro, culturaFiltro, dataPor]);
 
   /**
    * ⚠ A CONSULTA QUE NINGUÉM PEDE NÃO ACONTECE — FIN-LISTA-PERF-01.
@@ -1044,10 +1072,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
    * no primeiro filtro novo, e a defesa viraria teatro.
    */
   const podeConsultar = useMemo(() => temFiltroLimitante({
-    anos: anosSelecionados, meses: mesesSelecionados, safra: safraFiltro, cultura: culturaFiltro,
+    anos: anosSelecionados, meses: mesesSelecionados, periodo, safra: safraFiltro, cultura: culturaFiltro,
     fornecedor: fornecedorFiltro, produto: produtoFiltro,
     contaOrigem, contaDestino, centro: centroFiltro, subcentro: subcentroFiltro,
-  }), [anosSelecionados, mesesSelecionados, safraFiltro, culturaFiltro, fornecedorFiltro, produtoFiltro,
+  }), [anosSelecionados, mesesSelecionados, periodo, safraFiltro, culturaFiltro, fornecedorFiltro, produtoFiltro,
        contaOrigem, contaDestino, centroFiltro, subcentroFiltro]);
 
   useEffect(() => {
@@ -1405,16 +1433,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const escolherPorPagina = useCallback((v: PorPaginaV2) => { setPorPaginaEstado(v); guardarPorPaginaV2(null, v); }, []);
   /* FIN-PRONTO-PAGAR-01 — o seletor "Pagamento" (Todos · Prontos · Faltando); a contagem vem do banco, do recorte sem ele */
   const [prontoPagarFiltro, setProntoPagarFiltro] = useState<FiltroPronto>('todos');
+  /* LANC-FILTROS-02a — a caixa de filtros recolhida (só os ativos em chips) e o BPO do cliente (o "sem BPO" do resumo) */
+  const [filtrosRecolhidos, setFiltrosRecolhidos] = useState(false);
+  const bpoAtivo = useBpoAtivo(clienteAtual?.id);
   /* a aba em que o modal do lançamento abre (o ponto abre na Pagamento); limpa ao fechar */
   const [abaDoLancamento, setAbaDoLancamento] = useState<'pagamento' | undefined>(undefined);
   /* FORN-FORMA-PELO-EXTRATO-01 — o atalho do "Faltando" */
   const [formaPeloExtrato, setFormaPeloExtrato] = useState(false);
   const filtrosV2 = useMemo(() => filtrosDaPaginaV2({
-    fazendaId, anos: anosSelecionados, meses: mesesSelecionados, dimensao: dataPor, tipoOperacao, status: statusSelecionados,
+    fazendaId, anos: anosSelecionados, meses: mesesSelecionados, periodo, dimensao: dataPor, tipoOperacao, status: statusSelecionados,
     contaOrigem, contaDestino, macro: macroFiltro, grupo: grupoFiltro, centro: centroFiltro, subcentro: subcentroFiltro,
     safra: safraFiltro, cultura: culturaFiltro, atividade: atividadeFiltro, produto: produtoFiltro, documento: documentoFiltro,
     fornecedor: fornecedorFiltro, fornecedores: conjuntoDoFornecedor, modoSemCaixa, prontoPagar: prontoPagarFiltro,
-  }), [fazendaId, anosSelecionados, mesesSelecionados, dataPor, tipoOperacao, statusSelecionados, contaOrigem, contaDestino, macroFiltro,
+  }), [fazendaId, anosSelecionados, mesesSelecionados, periodo, dataPor, tipoOperacao, statusSelecionados, contaOrigem, contaDestino, macroFiltro,
        grupoFiltro, centroFiltro, subcentroFiltro, safraFiltro, culturaFiltro, atividadeFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, conjuntoDoFornecedor, modoSemCaixa, prontoPagarFiltro]);
   const ordemV2 = useMemo(() => ordemDaPaginaV2(sortField, sortDir, nivelClassif), [sortField, sortDir, nivelClassif]);
   const chaveDoRecorte = JSON.stringify([filtrosV2, ordemV2, porPagina]);
@@ -1899,47 +1930,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     <NovoMenuLancamentos className={className} boletosPedemAcao={boletosPedemAcao} notasDaReceita={notasPedemAcao}
       onEmBranco={openNew} onDaNota={() => setXmlAberto(true)} onDosBoletos={() => setCaixaAberta(true)} />
   );
-  const blocoDeAcoesDesktop = (
-    <div data-testid="bloco-acoes" className="grid w-[190px] shrink-0 grid-cols-2 gap-1 [&>*]:min-w-0">
-      {menuNovo('w-full')}
-      <div className="flex items-center [&>*]:w-full [&_button]:w-full">
-        <FinanceiroV2ExportMenu
-          carregarConjunto={carregarConjuntoExportacao}
-          fornecedores={hook.fornecedores}
-          ano={ano}
-          fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
-          totalCount={totalLancamentosFiltrados}
-          dimensao={dataPor}
-          fazendas={fazendas}
-          contas={contasParaExportar}
-          safras={hook.safras}
-        />
-      </div>
-      <div data-testid="celula-reservada" aria-hidden="true" className="h-6" />
-      <Button
-        size="sm"
-        variant={modoIntensivo ? "default" : "outline"}
-        onClick={() => toggleIntensivo()}
-        className={cn("h-6 w-full text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
-        title={modoIntensivo ? "Retornar à lista normal" : "Ampliar a lista (mais colunas)"}
-      >
-        {modoIntensivo ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
-        {modoIntensivo ? 'Retornar' : 'Ampliar'}
-      </Button>
-      {onBack ? (
-        <Button size="sm" variant="outline" onClick={onBack} data-testid="btn-voltar" className="h-6 w-full text-[10px] gap-0.5 px-1.5" title="Voltar">
-          <ChevronLeft className="h-3 w-3" /> Voltar
-        </Button>
-      ) : (
-        <div data-testid="celula-voltar" aria-hidden="true" className="h-6" />
-      )}
-      <Button size="sm" variant="ghost" onClick={handleLimparFiltros} data-testid="btn-limpar"
-        className="h-6 w-full gap-0.5 px-1.5 text-[10px] text-muted-foreground">
-        <FilterX className="h-3 w-3" /> Limpar
-      </Button>
-    </div>
-  );
-
   /* ⚠ `actionButtons` (o bloco em linhas) ficou SÓ para o ramo MOBILE, que não foi redesenhado; com a flag ligada ele é o gêmeo. */
   const actionButtons = (
     <div className="flex flex-col gap-1">
@@ -2003,6 +1993,55 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     podeAbrirFinanciamento, onAbrirFinanciamento, podeAbrirOC, nivelClassif, fazendaNameMap, fazendaCodigoMap,
     safraCodigoMap, safraEscopoMap, contaNomeMap, foco, paginaDaLista,
   ];
+  /* LANC-FILTROS-02a — o Período: o escolhido no seletor, ou o ano × mês de hoje quando é um intervalo só ("2026", "out/2026") */
+  const valorDoPeriodo = periodo ?? periodoDosAnosEMeses(anosSelecionados, mesesSelecionados);
+  const anosDoPadrao = getDefaults().anosSelecionados;
+  const periodoAtivo = periodo
+    ? !(anosDoPadrao.length === 1 && periodo.de === `${anosDoPadrao[0]}-01-01` && periodo.ate === `${anosDoPadrao[0]}-12-31`)
+    : !(mesesSelecionados.length === 0 && anosSelecionados.length === anosDoPadrao.length && anosSelecionados.every((a, i) => a === anosDoPadrao[i]));
+  const anoMaisAntigoDaLista = anos.length > 0 ? Math.min(...anos.map(Number).filter(Number.isFinite)) : null;
+  const filtrosDaCaixa: FiltroDaCaixa[] = [
+    { campo: 'periodo', rotulo: 'Período', texto: valorDoPeriodo ? rotuloDoIntervalo(valorDoPeriodo) : textoDosAnosEMeses(anosSelecionados, mesesSelecionados), ativo: periodoAtivo },
+    { campo: 'dataPor', rotulo: 'Data por', texto: ROTULO_DATA_POR[dataPor] ?? dataPor, ativo: dataPor !== 'financeira' },
+    { campo: 'tipo', rotulo: 'Tipo', texto: ROTULO_TIPO[tipoOperacao] ?? tipoOperacao, ativo: tipoOperacao !== '__all__' },
+    { campo: 'status', rotulo: 'Status', texto: statusLabel, ativo: statusSelecionados.length > 0 },
+    { campo: 'fazenda', rotulo: 'Fazenda', texto: fazOperacionais.find(f => f.id === fazendaId)?.nome ?? '—', ativo: fazendaId !== '__all__' },
+    { campo: 'atividade', rotulo: 'Atividade', texto: ATIVIDADES.find(a => a.valor === atividadeFiltro)?.rotulo ?? atividadeFiltro, ativo: atividadeFiltro !== '__all__' },
+    { campo: 'safra', rotulo: 'Safra', texto: safraFiltro === SEM_SAFRA ? 'Sem safra' : (safrasDoFiltro.find(sf => sf.id === safraFiltro)?.codigo ?? '—'), ativo: safraFiltro !== '__all__' },
+    { campo: 'cultura', rotulo: 'Cultura', texto: culturaFiltro === SEM_CULTURA ? 'Sem cultura' : (CULTURAS_LANCAMENTO.find(c => c.valor === culturaFiltro)?.label ?? culturaFiltro), ativo: culturaFiltro !== '__all__' },
+    { campo: 'contaOrigem', rotulo: 'Conta origem', texto: contaNomeMap.get(contaOrigem) ?? '—', ativo: contaOrigem !== '__all__' },
+    { campo: 'contaDestino', rotulo: 'Conta destino', texto: contaNomeMap.get(contaDestino) ?? '—', ativo: contaDestino !== '__all__' },
+    { campo: 'documento', rotulo: 'Documento', texto: documentoFiltro.trim(), ativo: documentoFiltro.trim() !== '' },
+    { campo: 'macro', rotulo: 'Macro', texto: macroFiltro, ativo: macroFiltro !== '__all__' },
+    { campo: 'grupo', rotulo: 'Grupo', texto: grupoFiltro, ativo: grupoFiltro !== '__all__' },
+    { campo: 'centro', rotulo: 'Centro', texto: centroFiltro, ativo: centroFiltro !== '__all__' },
+    { campo: 'subcentro', rotulo: 'Subcentro', texto: subcentroFiltro, ativo: subcentroFiltro !== '__all__' },
+    { campo: 'produto', rotulo: 'Produto', texto: produtoFiltro.trim(), ativo: produtoFiltro.trim() !== '' },
+    { campo: 'fornecedor', rotulo: 'Fornecedor', texto: fornecedoresMap.get(fornecedorFiltro) ?? '—', ativo: fornecedorFiltro !== '__all__' },
+  ];
+  const chipsDaCaixa = chipsDosFiltros(filtrosDaCaixa);
+  /* o ✕ do chip volta AQUELE filtro ao padrão (o mesmo valor do Limpar) */
+  const limparFiltroDaCaixa = (campo: string) => {
+    switch (campo) {
+      case 'periodo': setAnosSelecionados(getDefaults().anosSelecionados); setMesesSelecionados([]); break;
+      case 'dataPor': setDataPor('financeira'); break;
+      case 'tipo': setTipoOperacao('__all__'); break;
+      case 'status': setStatusSelecionados([]); break;
+      case 'fazenda': setFazendaId('__all__'); break;
+      case 'atividade': setAtividadeFiltro('__all__'); break;
+      case 'safra': setSafraFiltro('__all__'); break;
+      case 'cultura': setCulturaFiltro('__all__'); break;
+      case 'contaOrigem': setContaOrigem('__all__'); break;
+      case 'contaDestino': setContaDestino('__all__'); break;
+      case 'documento': setDocumentoFiltro(''); break;
+      case 'macro': setMacroFiltro('__all__'); setGrupoFiltro('__all__'); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); break;
+      case 'grupo': setGrupoFiltro('__all__'); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); break;
+      case 'centro': setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); break;
+      case 'subcentro': setSubcentroFiltro('__all__'); break;
+      case 'produto': setProdutoFiltro(''); break;
+      case 'fornecedor': setFornecedorFiltro('__all__'); break;
+    }
+  };
   return (
     /* ⚠ O AFASTAMENTO MORA AQUI, NO RAIZ — FIN-LISTA-VISUAL-03. A seção do /v2 não tem
        padding lateral (`w-full min-w-0 pb-16`), então tudo encostava na borda da tela. Pôr
@@ -2018,23 +2057,24 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        card não tem onde cair. 8px é o menor recuo em que ainda se vê que é um card.
        FIN-V2-DESEMPENHO-01b: o Ampliado desconta a barra do topo (32px) — com 100vh−8 a página rolava 24px e o rodapé da página
        (agora DENTRO do quadro) ficava abaixo da janela. */
-    <div className={cn("relative px-2", modoIntensivo ? "flex flex-col h-[calc(100vh-40px)]" : "space-y-1 pb-20")}>
+    <div className={cn("relative", isMobile ? "px-2" : "px-2.5", modoIntensivo ? "flex flex-col gap-1 h-[calc(100vh-40px)]" : "space-y-1 pb-20")}>
       {/* UI-MESES-PADRAO-01 (D1; revisão 11:33) — o cabeçalho navy da casa em UMA linha (título + subtítulo curto). Os filtros ficam COMO
           ESTÃO (Gabriel 11:25), no card branco logo abaixo. `-mx-2` encosta a faixa nas bordas. No Ampliado ele não entra (a altura é da tabela). */}
       {!modoIntensivo && (
-        <CabecalhoDaTela className="-mx-2" titulo="Lançamentos financeiros" subtitulo="Previsto, programado e realizado" />
+        isMobile
+          ? <CabecalhoDaTela className="-mx-2" titulo="Lançamentos financeiros" subtitulo="Previsto, programado e realizado" />
+          /* LANC-FILTROS-02a — no desktop o topo navy é só o título e o "+ Novo" (o menu de hoje) */
+          : <CabecalhoDaTela className="-mx-2.5" titulo="Lançamentos" acoes={menuNovo()} />
       )}
       {/* FILTERS */}
       {/* ⚠ CANTO RETO NOS DOIS CARDS — FIN-LISTA-VISUAL-05. O raio de 8px comia a largura
           justamente nas pontas, onde moram a primeira e a última coluna, e um card
           arredondado sobre uma tabela de cantos vivos parecia dois desenhos. Se um dia
           voltar o raio, volta nos dois — meio arredondado é a única saída errada. */}
+      {isMobile ? (
       <Card data-testid="filtros-da-lista" className="filtros-uma-linha rounded-none bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
         {/* Padding interno pequeno: o afastamento da borda da tela é do container raiz. */}
-        {/* FORN-CAMPO-01 — no desktop a sobra embaixo da 3ª linha de filtros cai de 9 para 4px (`pb-[3px]` + a borda): a linha do CNPJ ·
-            Cidade/UF sob o Fornecedor (11px) custa só +6px ao card (137 → 143), como no mock v4 */}
-        <CardContent className={cn("p-2 space-y-1", !isMobile && "pb-[3px]")}>
-          {isMobile ? (
+        <CardContent className="p-2 space-y-1">
             <>
               {/* MOBILE: Row 1 — Ano | Mês | Data por | Tipo | Status */}
               <div className="grid grid-cols-5 gap-1 items-end">
@@ -2353,90 +2393,141 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </div>
               </div>
             </>
-          ) : (
-            <>
-              {/* PR-FIN-V2-HEADER-DENSIDADE-01 — cabeçalho desktop em duas colunas: FILTROS (flex-1 min-w-0)
-                  | AÇÕES (shrink-0, não encolhe). Impede os filtros de comprimirem/quebrarem os botões. */}
-              <div className="flex items-start gap-1.5">
-                <div className="flex-1 min-w-0 space-y-1">
-              {/* ⚠ UMA GRADE SÓ, DOZE COLUNAS, QUATRO LINHAS — FIN-LISTA-LAYOUT-01.
-                  Eram três grades independentes com faixas próprias (`62px 77px …`,
-                  `minmax(150px,1.4fr) …`, `180px 260px 180px`), e por isso nada se alinhava
-                  na vertical: cada linha decidia as suas colunas sozinha.
-                  ⚠ E O `min-w-0` EM CADA CÉLULA É A CORREÇÃO DE FUNDO, não a grade. Item de
-                  grid nasce com `min-width: auto`: um valor selecionado longo fazia a faixa
-                  CRESCER além dos 62/106/120px e empurrava os vizinhos — a barra se mexia a
-                  cada filtro. Com `min-w-0` a faixa manda e o texto trunca, que é o que o
-                  `line-clamp-1` do `SelectTrigger` sempre quis fazer e não conseguia.
-                  Distribuição (12 faixas por linha):
-                    1: Ano 1 · Mês 2 · Data por 2 · Tipo 2 · Status 2 · Fazenda 3
-                    2: Atividade 2 · Safra 3 · C. Origem 3 · C. Destino 4
-                    3: Macro 3 · Grupo 3 · Centro 3 · Subcentro 3
-                    4: Produto 4 · Fornecedor 4 · Documento 4 */}
-              {/* FORN-CAMPO-01 — `pb-[11px]`: o lugar da linha do CNPJ sob o Fornecedor (a célula dele desconta os 11px com `-mb-[11px]`, então
-                  a 3ª linha segue alinhada pelo pé como as outras; `items-start` subia 3px a Data por, o Tipo e a Fazenda — medido) */}
-              <div className="grid grid-cols-12 gap-1.5 items-end pb-[11px]">
-                  {/* ⚠ DUAS FAIXAS ERAM DEMAIS E UMA ERA DE MENOS, e a segunda tentativa é o
-                      meio: o Ano mostra "2026" ou "2 anos" e o Mês mostra "12 meses" — os dois
-                      são curtos, e o que quebrava era a faixa de ~55px, não o conteúdo. Com a
-                      grade de 12 não há meia faixa, então os dois ficam com 2 e o Fazenda
-                      devolve a que sobrava (de 3 para 2: ele trunca e tem `title`). */}
-                  <div className="col-span-2 min-w-0">
-                  <label className={lblCls}>Ano</label>
-                  {/* ⚠ MESMO PADRÃO DO MÊS — Popover + Checkbox, não um Select novo. Os dois
-                      respondem a mesma pergunta ("quais?") e um Select multi seria um terceiro
-                      idioma de multisseleção na mesma barra. */}
-                  <Popover open={anoPopoverOpen} onOpenChange={setAnoPopoverOpen}>
+            </>
+        </CardContent>
+      </Card>
+      ) : (
+            /* LANC-FILTROS-02a (Gabriel 25/11, mock lancamentos-filtros-ref/mock-aprovado.html) — a CAIXA DE FILTROS do desktop: branca,
+               cantos de 10px, os MESMOS filtros na MESMA ordem de hoje numa grade de 6 colunas (campos de 24px a 10,5; rótulo 9,5 —
+               UI-FONTES-REGUA-01). Campo no padrão em cinza; filtro ativo em azul claro. O cabeçalho: "Filtros" · N ativos · Limpar · a faixa
+               reservada dos avisos (P94: chips da OC, frases da conferência, os 2 avisos; recolhida, também os chips dos ativos) · recolher/abrir ·
+               Exibir ▾ (Class., Sem caixa, Pagamento — D5) · Colunas (as contas do Ampliado) · Exportar · Ampliar. Período no lugar de Ano/Mês
+               (o MESMO `SeletorDePeriodo compacto` do DRE; vai ao banco como `de`/`ate`, lote 118770). */
+            <div data-testid="filtros-da-lista" data-recolhida={filtrosRecolhidos ? 'sim' : 'nao'}
+              className="shrink-0 rounded-[10px] border border-[#c5cdd9] bg-white px-2.5 pb-1.5 pt-1">
+              <div className="flex h-[26px] min-w-0 items-center gap-2" data-testid="cabecalho-dos-filtros">
+                <b className="flex-none text-[11px] font-semibold text-[#1a2742]">Filtros</b>
+                <span className="w-[52px] flex-none rounded-[9px] bg-[#eef3fb] text-center text-[10px] leading-[15px] text-[#2d5fb8] tabular-nums" data-testid="filtros-ativos">
+                  {textoDosAtivos(chipsDaCaixa.ativos)}
+                </span>
+                <button type="button" onClick={handleLimparFiltros} data-testid="btn-limpar"
+                  className={cn('flex-none text-[10.5px] hover:underline', chipsDaCaixa.ativos > 0 ? 'text-[#2d5fb8]' : 'text-[#8b96aa]')}>Limpar</button>
+                {/* P94 — O LUGAR DOS AVISOS DO FILTRO, RESERVADO (veio da faixa dos totais): sempre desenhado, com a largura que sobra; o aviso que
+                    aparece ou some não move nada. Recolhida, os chips dos filtros ativos (até 3 e "+N") moram no começo dele. */}
+                <span data-testid="avisos-do-filtro" data-desloca className="flex h-5 min-w-0 flex-1 items-center"
+                  title={[...chipsDaOC.map(ch => ch.texto), ...avisosDoFiltro].join('\n') || undefined}>
+                 <span data-desloca-livre className="uma-linha-que-rola flex min-w-0 flex-1 items-center gap-1">
+                  {filtrosRecolhidos && chipsDaCaixa.chips.map(ch => (
+                    <button key={ch.campo} type="button" data-testid="chip-do-filtro" onClick={() => limparFiltroDaCaixa(ch.campo)}
+                      title={`${ch.rotulo}: ${ch.texto} — clique para limpar`}
+                      className="inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-[#9fb3d6] bg-[#eef3fb] px-2 text-[10.5px] text-[#1a2742]">
+                      {ch.rotulo}: {ch.texto} <X className="h-2.5 w-2.5 text-[#5b6577]" />
+                    </button>
+                  ))}
+                  {filtrosRecolhidos && chipsDaCaixa.mais > 0 && <span className="shrink-0 text-[10.5px] text-[#5b6577]" data-testid="chips-mais">+{chipsDaCaixa.mais}</span>}
+                  {podeConsultar && <CorrecaoTransferenciasBanner contas={hook.contasBancarias} onFixed={() => { void listaV2.recarregar(); }} />}
+                  {podeConsultar && <SeloRegraFazenda clienteId={clienteAtual?.id} fazendas={fazendas} onCorrigido={() => { void listaV2.recarregar(); }}
+                    contasAdm={contasAdministrativas}
+                    camada={{ coberta: camadas.coberta('regra'), retorno: camadas.retornoPara('regra'), aoAbrir: () => camadas.abrir('regra'),
+                      aoFechar: () => camadas.fechar('regra'), abrirLancamento: (id) => { void abrirLancamentoDaRegra(id); } }} />}
+                  {avisosDoFiltro.map((frase, i) => (
+                    <span key={frase} data-testid="aviso-do-filtro" className="inline-flex shrink-0 items-center gap-0.5 text-[9.5px] text-amber-800">
+                      {frase}
+                      <button type="button" aria-label="Fechar o aviso" onClick={() => setAvisosDoFiltro(av => av.filter((_, j) => j !== i))}>
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                  {chipsDaOC.map(ch => (
+                    <button key={ch.campo} type="button" data-testid="chip-vindo-da-oc" onClick={() => tirarChipDaOC(ch.campo)}
+                      title="Este filtro veio da Operação Comercial. Clique para voltar ao padrão."
+                      className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded border border-amber-400 bg-amber-50 px-1 text-[9.5px] text-amber-900">
+                      {ch.texto} <X className="h-2.5 w-2.5" />
+                    </button>
+                  ))}
+                 </span>
+                </span>
+                <span className="flex flex-none items-center gap-1.5" data-testid="bloco-acoes">
+                  <button type="button" data-testid="recolher-filtros" aria-expanded={!filtrosRecolhidos} onClick={() => setFiltrosRecolhidos(v => !v)}
+                    className="w-[58px] flex-none text-left text-[10.5px] text-[#2d5fb8] hover:underline">{filtrosRecolhidos ? '▾ abrir' : '▴ recolher'}</button>
+                  <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className="h-6 w-full justify-between truncate bg-white px-1.5 text-[10px] font-normal border-[#C9D4E2] hover:border-[#AFC2D8]">
-                        {anoLabel}
-                        <ChevronsUpDown className="h-2.5 w-2.5 shrink-0 opacity-50" />
-                      </Button>
+                      <Button size="sm" variant="outline" data-testid="btn-exibir" className="h-6 gap-0.5 px-2 text-[11px] font-normal">Exibir <ChevronDown className="h-3 w-3" /></Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-32 p-1.5" align="start">
-                      <div className="mb-0.5 flex justify-between">
-                        <button className="text-[9px] text-primary hover:underline" onClick={() => setAnosSelecionados([])}>Todos</button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-0.5">
-                        {anos.map(a => (
-                          <label key={a} className="flex cursor-pointer items-center gap-0.5 rounded px-0.5 py-0.5 text-[10px] hover:bg-muted">
-                            <Checkbox checked={anosSelecionados.includes(a)} onCheckedChange={() => toggleAno(a)} className="h-2.5 w-2.5" />
-                            {a}
-                          </label>
-                        ))}
+                    <PopoverContent align="end" className="w-auto p-2 text-[10.5px]" data-testid="painel-exibir">
+                      <div className="grid grid-cols-[auto_auto] items-center gap-x-2 gap-y-1.5">
+                        <span className="text-muted-foreground" title="Classificação: o nível mostrado na coluna">Class.</span>
+                        <Segmentado altura={20} valor={nivelClassif} onEscolher={setNivelClassif}
+                          opcoes={NIVEIS_CLASSIFICACAO.map(n => ({ valor: n, rotulo: ROTULO_NIVEL[n] }))} />
+                        <span className="text-muted-foreground">Sem caixa</span>
+                        <Segmentado altura={20} valor={modoSemCaixa} onEscolher={setModoSemCaixa} opcoes={[
+                          { valor: 'ocultar', rotulo: 'Ocultar', title: 'Só o que movimenta caixa' },
+                          { valor: 'mostrar', rotulo: 'Mostrar', title: mostrarSemCaixa
+                            ? `Sem caixa (só DRE): ${paginaDaLista ? formatMoeda(paginaDaLista.semCaixa.total) : '—'} — na seção abaixo da lista`
+                            : 'Também o sem caixa (entregas, barter, consumo), na seção abaixo da lista' },
+                          { valor: 'so_dre', rotulo: 'Só c/ DRE', title: 'Só os lançamentos sem caixa que compõem o DRE' },
+                        ]} />
+                        <span className="text-muted-foreground">Pagamento</span>
+                        <Segmentado altura={20} valor={prontoPagarFiltro} onEscolher={setProntoPagarFiltro} opcoes={[
+                          { valor: 'todos', rotulo: 'Todos', title: 'Todos os lançamentos' },
+                          { valor: 'prontos', rotulo: <>Prontos <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.prontos.toLocaleString('pt-BR') : '—'} /></>,
+                            title: 'Saídas a pagar com o que a forma de pagamento precisa (boleto ligado, chave PIX, dados bancários) ou que não precisam de nada' },
+                          { valor: 'faltando', rotulo: <>Faltando <TextoReservado reserva={RESERVA_CONTAGEM_PRONTO} alinhar="direita" texto={paginaDaLista?.prontoPagar ? paginaDaLista.prontoPagar.faltando.toLocaleString('pt-BR') : '—'} /></>,
+                            title: 'Saídas a pagar em que falta algo: a forma, o boleto, a chave PIX ou os dados bancários' },
+                        ]} />
                       </div>
                     </PopoverContent>
                   </Popover>
+                  {/* Colunas: a única escolha de colunas de hoje são as contas de origem/destino do Ampliado (o chip saiu da faixa) */}
+                  <Button size="sm" variant="outline" data-testid="chip-contas" aria-pressed={modoIntensivo && contasAmpliado} disabled={!modoIntensivo}
+                    onClick={alternarContasAmpliado}
+                    title={modoIntensivo ? 'Mostrar ou esconder as colunas C. Origem e C. Destino' : 'As colunas C. Origem e C. Destino: só no Ampliado'}
+                    className={cn('h-6 px-2 text-[11px] font-normal', modoIntensivo && contasAmpliado && 'border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>
+                    Colunas
+                  </Button>
+                  <FinanceiroV2ExportMenu
+                    carregarConjunto={carregarConjuntoExportacao}
+                    fornecedores={hook.fornecedores}
+                    ano={ano}
+                    fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
+                    totalCount={totalLancamentosFiltrados}
+                    dimensao={dataPor}
+                    fazendas={fazendas}
+                    contas={contasParaExportar}
+                    safras={hook.safras}
+                  />
+                  <Button size="sm" variant={modoIntensivo ? 'default' : 'outline'} onClick={() => toggleIntensivo()}
+                    className={cn('h-6 w-[76px] gap-0.5 px-1.5 text-[11px] font-normal', modoIntensivo && 'bg-primary text-primary-foreground')}
+                    title={modoIntensivo ? 'Retornar à lista normal' : 'Ampliar a lista (mais colunas)'}>
+                    {modoIntensivo ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+                    {modoIntensivo ? 'Retornar' : 'Ampliar'}
+                  </Button>
+                  {onBack && (
+                    <Button size="sm" variant="outline" onClick={onBack} data-testid="btn-voltar" className="h-6 gap-0.5 px-1.5 text-[11px] font-normal" title="Voltar">
+                      <ChevronLeft className="h-3 w-3" /> Voltar
+                    </Button>
+                  )}
+                  {/* no Ampliado o cabeçalho navy não entra: o "+ Novo" mora aqui */}
+                  {modoIntensivo && menuNovo()}
+                </span>
+              </div>
+
+              {/* a grade: L1 Período (2) · Data por · Tipo · Status · Fazenda | L2 Atividade · Safra · Cultura · Conta origem · Conta destino ·
+                  Documento | L3 Macro · Grupo · Centro · Subcentro · Produto · Fornecedor (com a linha CNPJ · cidade/UF SEMPRE reservada).
+                  `min-w-0` em cada célula: a faixa manda, o texto não empurra o vizinho (FIN-LISTA-LAYOUT-01). */}
+              {!filtrosRecolhidos && (
+              <div className="mt-1 grid grid-cols-6 items-start gap-x-2 gap-y-1" data-testid="grade-dos-filtros">
+                <div className="col-span-2 min-w-0" data-testid="filtro-periodo">
+                  <label className={LBL}>Período</label>
+                  <SeletorDePeriodo testid="lanc-periodo" compacto valor={valorDoPeriodo} onChange={setPeriodo}
+                    rotuloVazio={textoDosAnosEMeses(anosSelecionados, mesesSelecionados)} atividades={AS_DUAS_ATIVIDADES}
+                    atalhosOcultos={ATALHOS_FORA_DA_LISTA} anoMaisAntigo={anoMaisAntigoDaLista}
+                    className={cn('w-full', periodoAtivo ? 'border-[#9fb3d6] bg-[#eef3fb]' : 'border-[#1a2742] bg-white', 'text-[10.5px] text-[#1a2742]')} />
                 </div>
-                  <div className="col-span-2 min-w-0">
-                  <label className={lblCls}>Mês</label>
-                  <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8]">
-                        {mesLabel}
-                        <ChevronsUpDown className="h-2.5 w-2.5 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-44 p-1.5" align="start">
-                      <div className="flex justify-between mb-0.5">
-                        <button className="text-[9px] text-primary hover:underline" onClick={() => setMesesSelecionados([])}>Todos</button>
-                        <button className="text-[9px] text-primary hover:underline" onClick={() => setMesesSelecionados(MESES_LIST.map(m => m.value))}>Marcar todos</button>
-                      </div>
-                      <div className="grid grid-cols-3 gap-0.5">
-                        {MESES_LIST.map(m => (
-                          <label key={m.value} className="flex items-center gap-0.5 text-[10px] cursor-pointer hover:bg-muted rounded px-0.5 py-0.5">
-                            <Checkbox checked={mesesSelecionados.includes(m.value)} onCheckedChange={() => toggleMes(m.value)} className="h-2.5 w-2.5" />
-                            {m.label}
-                          </label>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                  <div className="col-span-2 min-w-0">
-                  <label className={lblCls}>Data por</label>
+                <div className="min-w-0">
+                  <label className={LBL}>Data por</label>
                   <Select value={dataPor} onValueChange={handleDataPorChange}>
-                    <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
+                    <SelectTrigger className={campoCls(dataPor !== 'financeira')}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="financeira">Financeira</SelectItem>
                       <SelectItem value="competencia">Competência</SelectItem>
@@ -2445,10 +2536,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
-                  <div className="col-span-2 min-w-0">
-                  <label className={lblCls}>Tipo</label>
+                <div className="min-w-0">
+                  <label className={LBL}>Tipo</label>
                   <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); setMacroLocked(false); }}>
-                    <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
+                    <SelectTrigger className={campoCls(tipoOperacao !== '__all__')}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__all__">Todos</SelectItem>
                       <SelectItem value="1-Entradas">Entradas</SelectItem>
@@ -2457,20 +2548,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
-                  <div className="col-span-2 min-w-0">
-                  <label className={lblCls}>Status</label>
-                  {/* PR-FIN-STATUS-UX-03A-1 — Status multisseleção (mesmo padrão do filtro de meses). */}
+                <div className="min-w-0">
+                  <label className={LBL}>Status</label>
                   <Popover open={statusPopoverOpen} onOpenChange={setStatusPopoverOpen}>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8]">
-                        {statusLabel}
-                        <ChevronsUpDown className="h-2.5 w-2.5 opacity-50" />
+                      <Button variant="outline" className={cn(campoCls(statusSelecionados.length > 0), 'justify-between hover:bg-[#e6eaf1]')}>
+                        <span className="min-w-0 whitespace-nowrap">{statusLabel}</span>
+                        <ChevronsUpDown className="h-2.5 w-2.5 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-44 p-1.5" align="start">
                       <div className="flex justify-between mb-0.5">
-                        <button className="text-[9px] text-primary hover:underline" onClick={() => setStatusSelecionados([])}>Todos</button>
-                        <button className="text-[9px] text-primary hover:underline" onClick={() => setStatusSelecionados(STATUS_FINANCEIRO_OPCOES_FILTRO.map(o => o.value))}>Marcar todos</button>
+                        <button className="text-[9.5px] text-primary hover:underline" onClick={() => setStatusSelecionados([])}>Todos</button>
+                        <button className="text-[9.5px] text-primary hover:underline" onClick={() => setStatusSelecionados(STATUS_FINANCEIRO_OPCOES_FILTRO.map(o => o.value))}>Marcar todos</button>
                       </div>
                       <div className="grid grid-cols-1 gap-0.5">
                         {STATUS_FINANCEIRO_OPCOES_FILTRO.map(o => (
@@ -2483,33 +2573,31 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </PopoverContent>
                   </Popover>
                 </div>
-                  <div className="col-span-2 min-w-0">
-                  <label className={lblCls}>Fazenda</label>
+                <div className="min-w-0">
+                  <label className={LBL}>Fazenda</label>
                   <SearchableSelect value={fazendaId} valorInexistente={inexistente('fazendaId')} onValueChange={setFazendaId} options={fazOperacionais.map(f => ({ value: f.id, label: f.nome }))}
-                    allValue="__all__" allLabel="Todas" placeholder="Buscar fazenda..."
-                    triggerClassName={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`} />
+                    allValue="__all__" allLabel="Todas" placeholder="Buscar fazenda..." triggerClassName={campoCls(fazendaId !== '__all__')} />
                 </div>
-                  <div className="col-span-2 min-w-0">
-                  <label className={lblCls}>Atividade</label>
+
+                <div className="min-w-0">
+                  <label className={LBL}>Atividade</label>
                   <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
-                    <SelectTrigger className={cn(`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`, inexistente('atividadeFiltro') && CLASSE_DO_INEXISTENTE)}><SelectValue>{inexistente('atividadeFiltro') ? <ValorInexistente onLimpar={() => setAtividadeFiltro('__all__')} /> : undefined}</SelectValue></SelectTrigger>
+                    <SelectTrigger className={cn(campoCls(atividadeFiltro !== '__all__'), inexistente('atividadeFiltro') && CLASSE_DO_INEXISTENTE)}><SelectValue>{inexistente('atividadeFiltro') ? <ValorInexistente onLimpar={() => setAtividadeFiltro('__all__')} /> : undefined}</SelectValue></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__all__">Todas</SelectItem>
-                      {/* Mesma fonte do painel mobile, dez linhas acima — e do card do modal. */}
                       {ATIVIDADES.map((a) => (
                         <SelectItem key={a.valor} value={a.valor}>{a.rotulo}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                  <div className="col-span-2 min-w-0">
-                  <label className={lblCls}>Safra</label>
+                <div className="min-w-0">
+                  <label className={LBL}>Safra</label>
                   <Select value={safraFiltro} onValueChange={setSafraFiltro}>
-                    <SelectTrigger className={cn(`${selCls} bg-white border-[#C9D4E2]`, inexistente('safraFiltro') && CLASSE_DO_INEXISTENTE)}><SelectValue>{inexistente('safraFiltro') ? <ValorInexistente onLimpar={() => setSafraFiltro('__all__')} /> : undefined}</SelectValue></SelectTrigger>
+                    <SelectTrigger className={cn(campoCls(safraFiltro !== '__all__'), inexistente('safraFiltro') && CLASSE_DO_INEXISTENTE)}><SelectValue>{inexistente('safraFiltro') ? <ValorInexistente onLimpar={() => setSafraFiltro('__all__')} /> : undefined}</SelectValue></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__all__">Todas</SelectItem>
-                      {/* ⚠ "Sem safra" NÃO é "Todas": é a pergunta oposta, e é a que acha o
-                          torto — financiamento e administrativo não têm safra por regra. */}
+                      {/* ⚠ "Sem safra" NÃO é "Todas": é a pergunta oposta, e é a que acha o torto. */}
                       <SelectItem value={SEM_SAFRA}>Sem safra</SelectItem>
                       {safrasDoFiltro.map(sf => (
                         <SelectItem key={sf.id} value={sf.id}>
@@ -2524,164 +2612,91 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
-                {mostraCultura && (
-                  <div className="col-span-2 min-w-0">
-                    <label className={lblCls}>Cultura</label>
+                {/* Cultura: com outra atividade a célula FICA (desabilitada, "—"): a grade não pula ao trocar a atividade */}
+                <div className="min-w-0" data-testid="filtro-cultura">
+                  <label className={LBL}>Cultura</label>
+                  {mostraCultura ? (
                     <Select value={culturaFiltro} onValueChange={setCulturaFiltro}>
-                      <SelectTrigger className={cn(`${selCls} bg-white border-[#C9D4E2]`, inexistente('culturaFiltro') && CLASSE_DO_INEXISTENTE)}><SelectValue>{inexistente('culturaFiltro') ? <ValorInexistente onLimpar={() => setCulturaFiltro('__all__')} /> : undefined}</SelectValue></SelectTrigger>
+                      <SelectTrigger className={cn(campoCls(culturaFiltro !== '__all__'), inexistente('culturaFiltro') && CLASSE_DO_INEXISTENTE)}><SelectValue>{inexistente('culturaFiltro') ? <ValorInexistente onLimpar={() => setCulturaFiltro('__all__')} /> : undefined}</SelectValue></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__all__">Todas</SelectItem>
-                        {/* ⚠ "Sem cultura" É A PERGUNTA DA AUDITORIA: são os compartilhados, os
-                            que vão ratear — e, hoje, também todos os que ninguém classificou
-                            ainda. Achá-los é o primeiro passo para classificar. */}
+                        {/* ⚠ "Sem cultura" É A PERGUNTA DA AUDITORIA: são os compartilhados, os que vão ratear. */}
                         <SelectItem value={SEM_CULTURA}>Sem cultura (rateia)</SelectItem>
                         {CULTURAS_LANCAMENTO.map(c => (
                           <SelectItem key={c.valor} value={c.valor}>{c.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                )}
-                  <div className="col-span-2 min-w-0">
-                    <label className={lblCls}>Conta Origem</label>
-                    {/* PR-H2 — ContaBancariaSelect compartilhado. */}
-                    <ContaBancariaSelect
-                      value={contaOrigem}
-                      valorInexistente={inexistente('contaOrigem')}
-                      onValueChange={setContaOrigem}
-                      contas={sortedContas}
-                      placeholder="Todas"
-                      disabled={isEntrada}
-                      showBankDetails="agencia"
-                      prependItems={[{ value: '__all__', label: 'Todas' }]}
-                      className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isEntrada ? 'opacity-40' : ''}`}
-                    />
-                  </div>
-                  <div className="col-span-2 min-w-0">
-                    <label className={lblCls}>Conta Destino</label>
-                    <ContaBancariaSelect
-                      value={contaDestino}
-                      valorInexistente={inexistente('contaDestino')}
-                      onValueChange={setContaDestino}
-                      contas={sortedContas}
-                      placeholder="Todas"
-                      disabled={isSaida}
-                      showBankDetails="agencia"
-                      prependItems={[{ value: '__all__', label: 'Todas' }]}
-                      className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isSaida ? 'opacity-40' : ''}`}
-                    />
-                  </div>
-                  <div className="col-span-2 min-w-0">
-                    <label className={lblCls}>Documento</label>
-                    <Input
-                      value={documentoFiltro}
-                      onChange={e => setDocumentoFiltro(e.target.value)}
-                      placeholder={PLACEHOLDER_FILTRO_DOCUMENTO}
-                      className="h-6 !text-[10px] placeholder:!text-[10px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
-                      autoCorrect="off" autoCapitalize="none" spellCheck={false}
-                    />
-                  </div>
-                  <div className="col-span-2 min-w-0">
-                    <label className={lblCls}>Macro</label>
-                    <SearchableSelect
-                      value={macroFiltro}
-                      valorInexistente={inexistente('macroFiltro')}
-                      persistKey={CHAVE_BUSCA_MACRO}
-                      onValueChange={v => { setMacroFiltro(v); setGrupoFiltro('__all__'); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
-                      options={macrosUnicos.map(m => ({ value: m, label: m }))}
-                      disabled={macroLocked}
-                      placeholder="Buscar macro..."
-                    />
-                  </div>
-                  <div className="col-span-2 min-w-0">
-                    <label className={lblCls}>Grupo</label>
-                    <SearchableSelect
-                      value={grupoFiltro}
-                      valorInexistente={inexistente('grupoFiltro')}
-                      persistKey={CHAVE_BUSCA_GRUPO}
-                      onValueChange={v => { setGrupoFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
-                      options={gruposUnicos.map(g => ({ value: g, label: g }))}
-                      disabled={macroLocked}
-                      placeholder="Buscar grupo..."
-                    />
-                  </div>
-                  <div className="col-span-2 min-w-0">
-                    <label className={lblCls}>Centro</label>
-                    <SearchableSelect
-                      value={centroFiltro}
-                      valorInexistente={inexistente('centroFiltro')}
-                      persistKey={CHAVE_BUSCA_CENTRO}
-                      onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
-                      options={centrosUnicos.map(c => ({ value: c, label: c }))}
-                      disabled={macroLocked}
-                      placeholder="Buscar centro..."
-                    />
-                  </div>
-                  <div className="col-span-2 min-w-0">
-                    <label className={lblCls}>Subcentro</label>
-                    <SearchableSelect
-                      value={subcentroFiltro}
-                      valorInexistente={inexistente('subcentroFiltro')}
-                      persistKey={CHAVE_BUSCA_SUBCENTRO}
-                      onValueChange={handleSubcentroChange}
-                      options={subcentrosUnicos.map(s => ({ value: s, label: s }))}
-                      placeholder="Buscar subcentro..."
-                    />
-                  </div>
-                  <div className="col-span-2 min-w-0">
-                    <label className={lblCls}>Produto</label>
-                    <Input
-                      value={produtoFiltro}
-                      onChange={e => setProdutoFiltro(e.target.value)}
-                      placeholder="Buscar..."
-                      className="h-6 !text-[10px] placeholder:!text-[10px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
-                      autoCorrect="off" autoCapitalize="none" spellCheck={false}
-                    />
-                  </div>
-                  {/* P123: o Fornecedor na altura dos outros campos (24px; o `compact` do seletor é 20px) e o texto a 10px, como os
-                      seletores; Produto e Documento saíram de 8px (abaixo do piso) para 10px. */}
-                  {/* FORN-CAMPO-01 (Gabriel 30/10, mock v4) — o Fornecedor vai até a margem direita, EMBAIXO do "Limpar": a coluna das ações
-                      (190px + o intervalo de 6px) tem 3 linhas de botão (80px) e acaba antes da 3ª linha de filtros, então ali não mora nada
-                      em largura nenhuma (o gate de sobreposição prova). Embaixo dele, "CNPJ · Cidade/UF" em 8,5px (`linhaCompacta`), linha
-                      SEMPRE presente (vazia com "Todos"). Nome longo: "…" e o nome inteiro no `title` (saiu o `nomeInteiro`). */}
-                  <div className="col-span-2 min-w-0 -mb-[11px]">
-                    <div className="w-[calc(100%+196px)]" data-testid="filtro-fornecedor-largo">
-                    <label className={lblCls}>Fornecedor</label>
-                    <FavorecidoSelect
+                  ) : (
+                    <div className={cn(campoCls(false), 'flex items-center text-muted-foreground opacity-60')} title="A cultura é da Agricultura: escolha a atividade Agricultura (ou Todas)">—</div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <label className={LBL}>Conta origem</label>
+                  <ContaBancariaSelect value={contaOrigem} valorInexistente={inexistente('contaOrigem')} onValueChange={setContaOrigem} contas={sortedContas}
+                    placeholder="Todas" disabled={isEntrada} showBankDetails="agencia" prependItems={[{ value: '__all__', label: 'Todas' }]}
+                    className={cn(campoCls(contaOrigem !== '__all__'), isEntrada && 'opacity-40')} />
+                </div>
+                <div className="min-w-0">
+                  <label className={LBL}>Conta destino</label>
+                  <ContaBancariaSelect value={contaDestino} valorInexistente={inexistente('contaDestino')} onValueChange={setContaDestino} contas={sortedContas}
+                    placeholder="Todas" disabled={isSaida} showBankDetails="agencia" prependItems={[{ value: '__all__', label: 'Todas' }]}
+                    className={cn(campoCls(contaDestino !== '__all__'), isSaida && 'opacity-40')} />
+                </div>
+                <div className="min-w-0">
+                  <label className={LBL}>Documento</label>
+                  <Input value={documentoFiltro} onChange={e => setDocumentoFiltro(e.target.value)} placeholder={PLACEHOLDER_FILTRO_DOCUMENTO}
+                    className={cn(campoCls(documentoFiltro.trim() !== ''), '!text-[10.5px] placeholder:!text-[10.5px] leading-tight', documentoFiltro.trim() === '' && 'bg-white')}
+                    autoCorrect="off" autoCapitalize="none" spellCheck={false} />
+                </div>
+
+                <div className="min-w-0">
+                  <label className={LBL}>Macro</label>
+                  <SearchableSelect value={macroFiltro} valorInexistente={inexistente('macroFiltro')} persistKey={CHAVE_BUSCA_MACRO}
+                    onValueChange={v => { setMacroFiltro(v); setGrupoFiltro('__all__'); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                    options={macrosUnicos.map(m => ({ value: m, label: m }))} disabled={macroLocked} placeholder="Buscar macro..." triggerClassName={campoCls(macroFiltro !== '__all__')} />
+                </div>
+                <div className="min-w-0">
+                  <label className={LBL}>Grupo</label>
+                  <SearchableSelect value={grupoFiltro} valorInexistente={inexistente('grupoFiltro')} persistKey={CHAVE_BUSCA_GRUPO}
+                    onValueChange={v => { setGrupoFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                    options={gruposUnicos.map(g => ({ value: g, label: g }))} disabled={macroLocked} placeholder="Buscar grupo..." triggerClassName={campoCls(grupoFiltro !== '__all__')} />
+                </div>
+                <div className="min-w-0">
+                  <label className={LBL}>Centro</label>
+                  <SearchableSelect value={centroFiltro} valorInexistente={inexistente('centroFiltro')} persistKey={CHAVE_BUSCA_CENTRO}
+                    onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                    options={centrosUnicos.map(c => ({ value: c, label: c }))} disabled={macroLocked} placeholder="Buscar centro..." triggerClassName={campoCls(centroFiltro !== '__all__')} />
+                </div>
+                <div className="min-w-0">
+                  <label className={LBL}>Subcentro</label>
+                  <SearchableSelect value={subcentroFiltro} valorInexistente={inexistente('subcentroFiltro')} persistKey={CHAVE_BUSCA_SUBCENTRO}
+                    onValueChange={handleSubcentroChange} options={subcentrosUnicos.map(s => ({ value: s, label: s }))} placeholder="Buscar subcentro..."
+                    triggerClassName={campoCls(subcentroFiltro !== '__all__')} />
+                </div>
+                <div className="min-w-0">
+                  <label className={LBL}>Produto</label>
+                  <Input value={produtoFiltro} onChange={e => setProdutoFiltro(e.target.value)} placeholder="Buscar..."
+                    className={cn(campoCls(produtoFiltro.trim() !== ''), '!text-[10.5px] placeholder:!text-[10.5px] leading-tight', produtoFiltro.trim() === '' && 'bg-white')}
+                    autoCorrect="off" autoCapitalize="none" spellCheck={false} />
+                </div>
+                {/* FORN-CAMPO-01 — embaixo do Fornecedor, "CNPJ · Cidade/UF", linha SEMPRE presente (vazia com "Todos"): a grade não pula ao
+                    escolher ou limpar o fornecedor. Nome longo: "…" e o inteiro no `title`. */}
+                <div className="min-w-0" data-testid="filtro-fornecedor-largo">
+                  <label className={LBL}>Fornecedor</label>
+                  <FavorecidoSelect
                     value={fornecedorFiltro === '__all__' ? '' : fornecedorFiltro}
                     onChange={(id) => setFornecedorFiltro(id || '__all__')}
                     fornecedores={fornecedoresDoFiltro}
                     situacao="todos" mostrarUso={!!paginaDaLista} mostrarIguais={false} limpavel rotuloDoVazio="Todos" placeholder="Todos"
-                    linhaDoDocumento linhaCompacta size="compact" triggerClassName="h-6 bg-white border-[#C9D4E2] !text-[10px]"
+                    linhaDoDocumento linhaCompacta size="compact" triggerClassName={cn(campoCls(fornecedorFiltro !== '__all__'), '!text-[10.5px]')}
                     valorInexistente={inexistente('fornecedorFiltro')} marcarInativo
                   />
-                    </div>
-                  </div>
-                  
-              </div>
-
-                </div>
-                {/* ⚠ AÇÕES E TOTAIS NA MESMA COLUNA À DIREITA — FIN-LISTA-LAYOUT-01. Os totais
-                    moravam no fim da terceira linha de filtros, então mudavam de lugar toda vez
-                    que uma linha de filtro crescia. Aqui, ao lado dos botões e fora da grade,
-                    eles ficam onde o olho aprendeu a procurá-los.
-                    ⚠ `shrink-0` E LARGURA FIXA: sem os dois, "Entradas: R$ 12.345.678,90"
-                    empurraria a grade de filtros para a esquerda — o mesmo reflow, por outra
-                    porta. */}
-                <div className="flex w-[190px] shrink-0 flex-col items-end gap-1 pb-[1px]">
-                  {/* UI-BOTOES-LUGAR-FIXO-01: a grade fixa (o Limpar mora na célula da linha 3). Com a flag da lista paginada,
-                      o gêmeo, que tem a mesma grade e o Limpar dele. */}
-                  {blocoDeAcoesDesktop}
-                  {/* ⚠ OS TOTAIS SAÍRAM DAQUI — FIN-LISTA-TOTAIS-FAIXA-01. Empilhados nesta
-                      coluna, eles cresciam e encolhiam com o filtro (o "Transf." só existia
-                      quando havia transferência), e a tabela subia e descia junto. Agora vivem
-                      numa faixa de altura fixa acima da lista. */}
                 </div>
               </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+              )}
+            </div>
+      )}
 
       {/**
         * A FAIXA DE TOTAIS — FIN-LISTA-TOTAIS-FAIXA-01.
@@ -2698,7 +2713,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         * sempre que a tela está no modo lista. É a única forma de a tabela ter sempre o mesmo
         * ponto de partida vertical.
         */}
-      {mode === 'list' && (
+      {/* LANC-FILTROS-02a — no desktop o RESUMO em dois blocos (Caixa · A pagar), colunas de largura fixa; os controles e os avisos da faixa
+          foram para o cabeçalho da caixa de filtros (D5). O mobile segue com a faixa de antes. */}
+      {mode === 'list' && !isMobile && (
+        <ResumoDaListaV2 totais={paginaDaLista ? { entradas: totalEntradas, saidas: totalSaidas, transferencias: totalTransferencias } : null}
+          pronto={paginaDaLista?.prontoPagar ?? null} bpoAtivo={bpoAtivo}
+          peloExtrato={<button type="button" data-testid="atalho-forma-pelo-extrato" disabled={!clienteAtual?.id} onClick={() => setFormaPeloExtrato(true)}
+            title="Falta a forma? Sugerir a forma de pagamento de cada fornecedor pelo extrato conciliado"
+            className="h-[13px] shrink-0 rounded border border-[#E08A00] px-1 text-[9.5px] leading-[11px] text-[#9a5b00] hover:bg-amber-50">pelo extrato</button>} />
+      )}
+      {mode === 'list' && isMobile && (
         /* FIN-V2-DESEMPENHO-01b — a faixa SOBREPUNHA a de baixo: `h-6` fixo com `flex-wrap` — numa janela estreita os controles
            desciam para uma segunda linha DENTRO de 24px e transbordavam por cima do que vinha depois (a barra "Classificação ·
            Sem caixa" coberta pelo cabeçalho azul da tabela). Agora a altura é a do conteúdo (`min-h-6`, sem teto) e cada total
@@ -2863,7 +2887,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
            {/* TABELA-ALTURA-FIXA-01 (Gabriel, 22/10): o quadro tem ALTURA FIXA até o fim da tela, independente do número de linhas — com 6, 1
                ou 0 lançamentos o espaço vazio fica DENTRO do quadro e a barra da página não sobe. Antes: `maxHeight: calc(100vh − 264px)`
                no scrollport, e o quadro encolhia com a lista. */}
-           <div ref={quadroAteOFim.ref} className={cn("flex min-h-0 flex-col overflow-hidden border border-[hsl(var(--border))] bg-card", modoIntensivo && "flex-1")}
+           <div ref={quadroAteOFim.ref} className={cn("flex min-h-0 flex-col overflow-hidden border bg-card", isMobile ? "border-[hsl(var(--border))]" : "rounded-[10px] border-[#c5cdd9]", modoIntensivo && "flex-1")}
              style={modoIntensivo ? undefined : { height: quadroAteOFim.altura ?? 'calc(100vh - 264px)' }} data-testid="quadro-lancamentos">
            <div ref={scrollContainerRef} className="min-h-0 flex-1 bg-card overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista">
               {/*
@@ -3061,7 +3085,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </td>
                   </tr>
                 ) : (
-                  linhasDaGrade.slice(inicio, fim).map(l => {
+                  linhasDaGrade.slice(inicio, fim).map((l, k) => {
                     const fornNome = fornecedoresMap.get(l.favorecido_id || '');
                     const rotuloForn = rotulosDoRecorte.get(l.favorecido_id || '');
                     // PR-OC-FIN-EDIT-FIX-01 — apresentação: título de OC não exibe o fornecedor no Produto.
@@ -3108,7 +3132,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                        financiamento e histórico antigo ficam sem cursor e sem `onClick` —
                        um clique que não faz nada ensina a desconfiar do resto da tela. */
                     return (
-                      <LinhaDaLista key={l.id} marcada={selectedIds.has(l.id)} abrir={canEditRow ? () => openEdit(l) : undefined}>
+                      <LinhaDaLista key={l.id} marcada={selectedIds.has(l.id)} abrir={canEditRow ? () => openEdit(l) : undefined} zebra={(inicio + k) % 2 === 1}>
                         {/* ⚠ A FAIXA CINZA COMEÇA NA BORDA — FIN-LISTA-DENSIDADE-01, e isto
                             DESFAZ o `bg-card` que estas duas células ganharam no c9cefcf3.
                             Lá o objetivo era não ter cinza avulso sobre o card branco; aqui o
@@ -3362,6 +3386,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               </span>
               <span className="min-w-0 flex-1 truncate text-primary-foreground/80" title={listaV2.erro ?? undefined} data-testid="estado-lancamentos">
                 {listaV2.erro ?? (listaV2.carregando ? 'Carregando…' : '')}
+              </span>
+              {/* LANC-FILTROS-02a — o total do recorte no rodapé (o Resultado do Caixa: Entradas − Saídas do banco), lugar reservado */}
+              <span className="flex flex-none items-center gap-1" data-testid="total-do-rodape" title="Resultado do recorte: Entradas − Saídas (as transferências ficam fora)">Total
+                <b className="tabular-nums"><TextoReservado reserva={`−${RESERVA_TOTAL}`} alinhar="direita"
+                  texto={paginaDaLista ? moedaComSinal(totalEntradas - Math.abs(totalSaidas)) : '—'} /></b>
               </span>
               <div className="flex flex-none items-center gap-1">
                 <button type="button" data-testid="pagina-anterior" className="h-[18px] rounded px-1.5 hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent"
