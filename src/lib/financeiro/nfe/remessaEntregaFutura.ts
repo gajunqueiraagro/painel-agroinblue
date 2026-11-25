@@ -33,7 +33,7 @@ export function fraseDaRemessa(nota: Pick<NotaLida, 'naturezaOperacao' | 'cfops'
 /**
  * NOTA-PAGTO-PARCELADO-01 P3 (Gabriel 11/11, NF Iguaçu 74.367 "REMESSA DE MERCADORIA OU BEM PARA CONSERTO OU REPARO": a prévia ofereceu
  * criar uma compra de R$ 210.000) — a nota que NÃO É COMPRA: remessa/retorno de conserto, demonstração, comodato, industrialização,
- * armazenagem, bonificação/brinde/amostra e simples faturamento. A prévia AVISA em destaque e NÃO SUGERE PAGAMENTO (sem forma, sem
+ * armazenagem e bonificação/brinde/amostra (o simples faturamento É compra: NOTA-ENTREGA-FUTURA-01). A prévia AVISA em destaque e NÃO SUGERE PAGAMENTO (sem forma, sem
  * vencimento, sem duplicatas na proposta); nunca bloqueia — o operador ainda decide. PURO; pelo CFOP (a regra fiscal) ou pela natureza.
  */
 export interface OperacaoSemCompra { rotulo: string; cfops: readonly string[]; natureza: readonly string[][] }
@@ -47,7 +47,8 @@ export const OPERACOES_SEM_COMPRA: readonly OperacaoSemCompra[] = [
   { rotulo: 'armazenagem', cfops: ['5905', '6905', '5906', '6906', '5907', '6907'], natureza: [['ARMAZENAGEM'], ['DEPOSITO']] },
   { rotulo: 'bonificação ou brinde', cfops: ['5910', '6910'], natureza: [['BONIFICACAO'], ['BRINDE']] },
   { rotulo: 'amostra grátis', cfops: ['5911', '6911'], natureza: [['AMOSTRA']] },
-  { rotulo: 'simples faturamento', cfops: ['5922', '6922'], natureza: [['SIMPLES', 'FATURAMENTO']] },
+  /* NOTA-ENTREGA-FUTURA-01 (Gabriel 25/11 07:24): o SIMPLES FATURAMENTO (5922/6922) É a compra (gera a conta a pagar) — saiu daqui; a remessa
+     da entrega (5116/6116) segue com o aviso âmbar dela (`fraseDaRemessa`) e só se anexa ao lançamento do faturamento */
 ];
 
 /** A operação que não é compra (a primeira que casa: o CFOP manda; sem CFOP conhecido, a natureza), ou `null`. */

@@ -38,6 +38,12 @@ import {
 /** P163-D1 — de início vêm marcadas SÓ a Descrição, a Competência (= emissão) e o Nº/nota; as opcionais nunca (nada do que já está no lançamento
  *  muda sem a pessoa marcar). A Safra desmarcada acompanha a competência (o banco põe a da competência nova, P138). */
 /* URGENTE 29/10 — a Descrição vem DESMARCADA (o texto do usuário nunca some sem ele marcar); só Competência e Nº marcados */
+/** a ordem das colunas opcionais na grade = a da lista do Financeiro; o cabeçalho com o nome da lista */
+const ORDEM_DA_LISTA: readonly ColunaCompletar[] = ['favorecido', 'fazenda', 'subcentro', 'safra', 'conta'];
+const CABECALHO_DA_LISTA: Partial<Record<ColunaCompletar, string>> = { subcentro: 'Plano de contas', documento: 'NF' };
+const cabecalhoDe = (c: ColunaCompletar) => CABECALHO_DA_LISTA[c] ?? ROTULO_DA_COLUNA[c];
+/** a frase curta quando a prévia do banco não veio (o motivo vai no ⓘ) */
+export const FRASE_SEM_PREVIA = 'Não consegui conferir agora. Tente de novo.';
 const MARCADAS_DE_INICIO: ReadonlySet<ColunaCompletar> = new Set<ColunaCompletar>(['competencia', 'documento']);
 const dataBr = (x: unknown) => (typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) ? `${x.slice(8, 10)}/${x.slice(5, 7)}/${x.slice(0, 4)}` : null);
 const dataIso = (t: string) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(t.trim()); return m ? `${m[3]}-${m[2]}-${m[1]}` : null; };
@@ -86,6 +92,8 @@ export interface OpcoesDaPrevia {
 export interface EstadoDaPrevia { pode: boolean; gravando: boolean; impedimento: string | null; fraseDre: string | null; gravar: () => void;
   /** DA-NOTA-ETAPAS-01 — os campos que mudam em alguma parcela (a etapa 4 Confirmar: "Atualizar N campos"); vazio enquanto confere */
   mudam: readonly string[];
+  /** NOTA-ENTREGA-FUTURA-01 (3) — o motivo técnico da falha (vai ao title/ⓘ, nunca à frase da tela); `null` sem falha */
+  motivo?: string | null;
   /** DA-NOTA ETAPA 2 — o subcentro troca em alguma parcela (o Resultado diz "DRE muda (subcentro)", nunca "veja o title") */
   trocaConta?: boolean }
 
@@ -178,7 +186,9 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
   const podeGravar = !!previa && previa.ok && !falha && !conferindo && !gravando && recusas.length === 0;
   const rotuloDoBotao = juntar ? `Juntar as ${n}, padronizar e anexar` : atualizarNaoPagas ? `Atualizar as ${n} e anexar` : `Completar as ${n} e anexar`;
   /* as colunas OPCIONAIS: só as que mudam ou diferem (a legenda diz as que ficaram iguais) */
-  const opcionais = useMemo(() => colunasQueAparecem(previa?.linhas ?? [], todas, alvos), [previa, todas, alvos]);
+  /* NOTA-ENTREGA-FUTURA-01 (3, Gabriel 25/11) — as colunas na ORDEM DA LISTA do Financeiro (Fornecedor · Faz. · Plano de contas · Conta · NF · Valor
+     · Status); a Safra ao lado do plano (é classificação); só o desenho: quais aparecem segue a regra de sempre */
+  const opcionais = useMemo(() => ORDEM_DA_LISTA.filter((c) => colunasQueAparecem(previa?.linhas ?? [], todas, alvos).includes(c)), [previa, todas, alvos]);
   const iguais = COLUNAS_OPCIONAIS.filter((c) => !opcionais.includes(c));
   const trocarMarca = (c: ColunaCompletar) => setMarcadas((m) => { const x = new Set(m); if (x.has(c)) x.delete(c); else x.add(c); return x; });
   const editar = (k: string, valor: string | number | null, texto?: string) => {
@@ -210,13 +220,14 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
   /* o botão único do modal da nota: o estado (pode, o que impede, o DRE) sobe a cada mudança; o gravar é sempre o desta renderização */
   const gravarRef = useRef(gravar);
   gravarRef.current = gravar;
-  const impedimento = falha ? `Não consegui conferir a prévia (${falha}).` : recusas.length ? `${recusas[0]}${recusas.length > 1 ? ` (+${recusas.length - 1})` : ''}` : erro;
+  /* NOTA-ENTREGA-FUTURA-01 (3, mock aprovado 25/11): sem mensagem técnica na tela — a frase curta; o motivo vai no ⓘ / title (`motivo`) */
+  const impedimento = falha ? FRASE_SEM_PREVIA : recusas.length ? `${recusas[0]}${recusas.length > 1 ? ` (+${recusas.length - 1})` : ''}` : erro;
   const mudam = useMemo(() => (previa ? camposQueMudam(previa.linhas) : []), [previa]);
   const chaveDasMudancas = conferindo ? '' : mudam.join('|');
   useEffect(() => {
-    aoMudarEstado?.({ pode: podeGravar, gravando, impedimento, fraseDre: conferindo ? null : fraseDre ?? 'DRE: não muda', gravar: () => { void gravarRef.current(); },
+    aoMudarEstado?.({ pode: podeGravar, gravando, impedimento, motivo: falha, fraseDre: conferindo ? null : fraseDre ?? 'DRE: não muda', gravar: () => { void gravarRef.current(); },
       mudam: chaveDasMudancas ? chaveDasMudancas.split('|') : [], trocaConta: !conferindo && mudam.includes(ROTULO_DA_COLUNA.subcentro) });
-  }, [aoMudarEstado, podeGravar, gravando, impedimento, fraseDre, conferindo, chaveDasMudancas, mudam]);
+  }, [aoMudarEstado, podeGravar, gravando, impedimento, falha, fraseDre, conferindo, chaveDasMudancas, mudam]);
 
   /* ── a célula de uma coluna da grade (Comp., Descrição, Nº e as opcionais) ── */
   const celula = (a: AlvoDaPrevia, c: ColunaCompletar, campo: CampoDaPrevia | undefined): ReactNode => {
@@ -441,8 +452,9 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
         <colgroup>
           <col style={{ width: LARGURA.parc }} /><col style={{ width: LARGURA.competencia }} /><col style={{ width: LARGURA.vencimento }} /><col style={{ width: LARGURA.pagamento }} />
           {/* a Descrição e as de texto (fornecedor, fazenda, conta, subcentro, safra) dividem o resto, por igual */}
-          <col /><col style={{ width: LARGURA.documento }} />
+          <col />
           {opcionais.map((c) => <col key={c} />)}
+          <col style={{ width: LARGURA.documento }} />
           <col style={{ width: LARGURA.valor }} /><col style={{ width: LARGURA.status }} />
         </colgroup>
         <thead className="sticky top-0 z-10 bg-primary"><tr>
@@ -451,8 +463,8 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
           <th className={cn(TH_REGUA, 'text-left')} title="Vencimento">Venc.</th>
           <th className={cn(TH_REGUA, 'text-left')} title="Pagamento">Pgto.</th>
           <th className={cn(TH_REGUA, 'text-left')}>{cabeca('descricao', 'Descrição')}</th>
-          <th className={cn(TH_REGUA, 'text-left')}>{cabeca('documento', 'Nº documento')}</th>
-          {opcionais.map((c) => <th key={c} className={cn(TH_REGUA, 'text-left')}>{cabeca(c, ROTULO_DA_COLUNA[c])}</th>)}
+          {opcionais.map((c) => <th key={c} className={cn(TH_REGUA, 'text-left')}>{cabeca(c, cabecalhoDe(c))}</th>)}
+          <th className={cn(TH_REGUA, 'text-left')}>{cabeca('documento', cabecalhoDe('documento'))}</th>
           <th className={cn(TH_REGUA, 'text-right')} title="Valor">Valor</th>
           <th className={cn(TH_REGUA, 'text-right')} title="Status">Status</th>
         </tr>
@@ -466,9 +478,9 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
               {/* a base e o "· i/N" do mock: cada parcela leva «base i/N» */}
               <span className="flex min-w-0 items-center gap-1">{todasDe('descricao')}<span className="shrink-0 font-normal text-muted-foreground">· i/{n}</span></span>
             </td>
-            <td className={TD_REGUA}>{todasDe('documento')}</td>
             {/* a Safra vazia diz "a da competência" inteiro (quebra se precisar) */}
             {opcionais.map((c) => <td key={c} className={TD_REGUA} title={c === 'safra' && !todas.safraId ? 'a da competência: a safra que o banco põe pela competência' : undefined}>{todasDe(c)}</td>)}
+            <td className={TD_REGUA}>{todasDe('documento')}</td>
             <td className={TD_REGUA_NUM} title={valorNotaCent !== null ? 'o valor da nota' : 'a soma das parcelas hoje'}>{valorNotaCent !== null ? reais(valorNotaCent) : previa ? reais(somaCent) : '—'}</td>
             <td className={TD_REGUA} />
           </tr>
@@ -484,8 +496,8 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
                 <td className={TD_REGUA} data-coluna="vencimento">{campos ? dinheiro(a, 'vencimento', campos.data_vencimento) : '—'}</td>
                 <td className={cn(TD_REGUA, DATA, 'text-muted-foreground')}>{dataBr(a.pagamento) ?? '—'}</td>
                 <td className={TD_REGUA} data-coluna="descricao">{campos ? celula(a, 'descricao', campos[CAMPO_DA_COLUNA.descricao]) : '…'}</td>
-                <td className={TD_REGUA} data-coluna="documento">{campos ? celula(a, 'documento', campos[CAMPO_DA_COLUNA.documento]) : '…'}</td>
                 {opcionais.map((c) => <td key={c} className={TD_REGUA} data-coluna={c}>{campos ? celula(a, c, campos[CAMPO_DA_COLUNA[c]]) : '…'}</td>)}
+                <td className={TD_REGUA} data-coluna="documento">{campos ? celula(a, 'documento', campos[CAMPO_DA_COLUNA.documento]) : '…'}</td>
                 <td className={TD_REGUA_NUM} data-coluna="valor">{campos ? dinheiro(a, 'valor', campos.valor) : '—'}</td>
                 <td className={cn(TD_REGUA, 'text-right')}>
                   {l && <span className={cn('inline-block rounded-full px-1.5 text-[9px] leading-[14px]', SELO_SITUACAO[l.situacao])}>{ROTULO_SITUACAO[l.situacao]}</span>}
@@ -525,7 +537,8 @@ export function PreviaCompletar({ open, onFechar, clienteId, alvos, rotulos, tod
     <div className="flex h-10 shrink-0 items-center gap-2 border-t bg-card px-4 text-[10px]">
       {/* P104: frase nunca rola nem corta — duas linhas reservadas (a 750 o "nada é gravado…" desce para a 2ª) */}
       <span className="flex h-[26px] min-w-0 flex-1 items-center leading-[13px]" data-testid="previa-rodape-frase"><span className="line-clamp-2">
-        {falha ? <span className="text-destructive" data-testid="previa-falha">Não consegui conferir a prévia ({falha}).</span>
+        {falha ? <span className="inline-flex items-center gap-1 text-destructive"><span data-testid="previa-falha">{FRASE_SEM_PREVIA}</span>
+            <Ajuda titulo="Por que a prévia não veio" oQueE={`O banco não respondeu à conferência: ${falha}.`} porQue="Sem a prévia nada é gravado: o Aplicar só grava o que o banco conferiu." comoFazer="Tente de novo em instantes; se continuar, feche e abra a nota." /></span>
           : recusas.length ? <span className="text-destructive" data-testid="previa-recusa">{recusas[0]}{recusas.length > 1 ? ` (+${recusas.length - 1})` : ''}</span>
           : erro ? <span className="text-destructive" data-testid="previa-erro">{erro}</span>
           : <span className="text-muted-foreground"><span className="text-foreground" data-testid="previa-dre">{fraseDre ?? 'DRE: não muda'}</span> · {conferindo ? 'conferindo com o banco…' : 'nada é gravado antes de você clicar'}</span>}
