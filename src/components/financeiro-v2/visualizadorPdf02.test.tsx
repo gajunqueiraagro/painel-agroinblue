@@ -36,12 +36,14 @@ const roda = (alvo: Element, init: WheelEventInit) => {
 };
 
 describe('VISUALIZADOR-PDF-02 — com um PDF que abre', () => {
-  it('abre em "Página inteira" (a folha toda no quadro), e "Ajustar à largura" é a opção', async () => {
+  it('VISUALIZADOR-PDF-02b: abre em 100% (sem leitor do navegador); "Página inteira" e "Ajustar à largura" são opções', async () => {
     render(<VisualizadorDeDocumento open {...props} />);
     const quadro = await screen.findByTestId('visualizador-quadro');
-    expect(quadro.getAttribute('data-modo')).toBe('pagina');
-    await waitFor(() => expect(zoom()).toBe('103%'));
+    expect(quadro.getAttribute('data-modo')).toBe('livre');
+    await waitFor(() => expect(zoom()).toBe('100%'));
     expect(screen.getByTestId('visualizador-pagina-n').textContent).toBe('1/3');
+    fireEvent.click(screen.getByTestId('visualizador-pagina'));
+    await waitFor(() => expect(zoom()).toBe('103%'));
     fireEvent.click(screen.getByTestId('visualizador-largura'));
     await waitFor(() => expect(zoom()).toBe('163%'));
   });
@@ -49,26 +51,29 @@ describe('VISUALIZADOR-PDF-02 — com um PDF que abre', () => {
   it('Ctrl + roda amplia e cancela o zoom do navegador (o PDF abriu: nada de "falhou" para rodar o efeito de novo)', async () => {
     render(<VisualizadorDeDocumento open {...props} />);
     const quadro = await screen.findByTestId('visualizador-quadro');
-    await waitFor(() => expect(zoom()).toBe('103%'));
+    await waitFor(() => expect(zoom()).toBe('100%'));
     expect(screen.queryByTestId('visualizador-falhou')).toBeNull();
     const e = roda(quadro, { deltaY: -100, ctrlKey: true, clientX: 10, clientY: 10 });
     expect(e.defaultPrevented).toBe(true);
-    await waitFor(() => expect(zoom()).toBe('126%'));
+    await waitFor(() => expect(zoom()).toBe('125%'));
     expect(quadro.getAttribute('data-modo')).toBe('livre');
   });
 
-  it('um dente da roda (deltaY 100) é ≈ +22%, nunca ×2,7', async () => {
+  it('VISUALIZADOR-PDF-02b: a roda e a pinça andam como no leitor do Chrome (a tabela MEDIDA em 25/11, um evento a partir de 100%)', async () => {
     const { zoomPelaRoda } = await import('./VisualizadorDeDocumento');
-    expect(zoomPelaRoda(1, -100)).toBe(1.22);
-    expect(zoomPelaRoda(1, 100)).toBe(0.82);
+    const medido: [number, number][] = [[-1, 1.01], [-3, 1.03], [-5, 1.05], [-10, 1.11], [-20, 1.22], [-40, 1.25], [-100, 1.25], [-200, 1.25],
+      [1, 0.99], [5, 0.95], [10, 0.9], [50, 0.75], [100, 0.75], [120, 0.75]];
+    for (const [delta, esperado] of medido) expect(zoomPelaRoda(1, delta), `deltaY ${delta}`).toBe(esperado);
+    expect(zoomPelaRoda(5, -100)).toBe(5);       // o teto do Chrome: 500%
+    expect(zoomPelaRoda(0.25, 100)).toBe(0.25);  // o piso: 25%
   });
 
   it('a pinça do trackpad no Chrome do Mac (roda com ctrlKey, deltaY pequeno e seguidos) amplia aos poucos; ⌘ + roda reduz', async () => {
     render(<VisualizadorDeDocumento open {...props} />);
     const quadro = await screen.findByTestId('visualizador-quadro');
-    await waitFor(() => expect(zoom()).toBe('103%'));
+    await waitFor(() => expect(zoom()).toBe('100%'));
     for (let i = 0; i < 5; i++) expect(roda(quadro, { deltaY: -8, ctrlKey: true }).defaultPrevented).toBe(true);
-    await waitFor(() => expect(Number.parseInt(zoom() ?? '0', 10)).toBeGreaterThan(103));
+    await waitFor(() => expect(Number.parseInt(zoom() ?? '0', 10)).toBeGreaterThan(100));
     const antes = Number.parseInt(zoom() ?? '0', 10);
     expect(roda(quadro, { deltaY: 200, metaKey: true }).defaultPrevented).toBe(true);
     await waitFor(() => expect(Number.parseInt(zoom() ?? '0', 10)).toBeLessThan(antes));
@@ -78,8 +83,8 @@ describe('VISUALIZADOR-PDF-02 — com um PDF que abre', () => {
     const { rerender } = render(<VisualizadorDeDocumento open={false} {...props} />);
     rerender(<VisualizadorDeDocumento open {...props} />);
     const quadro = await screen.findByTestId('visualizador-quadro');
-    await waitFor(() => expect(zoom()).toBe('103%'));
+    await waitFor(() => expect(zoom()).toBe('100%'));
     expect(roda(quadro, { deltaY: -100, ctrlKey: true }).defaultPrevented).toBe(true);
-    await waitFor(() => expect(zoom()).toBe('126%'));
+    await waitFor(() => expect(zoom()).toBe('125%'));
   });
 });

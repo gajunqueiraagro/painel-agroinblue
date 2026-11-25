@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   carregarWidget, conectoresDaConexao, conexoesDoCliente, type EventoDaFila, FRASE_REGISTRO_FALHOU, fraseDoItem, fraseDoRegistro, lerRespostaDaBorda, PLUGGY_CONNECT_URL, tokenDaConexao,
   contasDaResposta, escolhaMudou, fraseDoPermitir, frasePrevia, itemDoSucesso, marcadasDePartida,
+  conexoesDaResposta, fraseDasLigacoes, lendoDaResposta, planoDaGravacao, podeVerOpenFinance, podeConectarOpenFinance, MOTIVO_SO_PROPRIETARIO, type ContaDaConexao,
 } from './openfinanceTela';
 
 describe('OPENFINANCE P3 mínima — a resposta da borda', () => {
@@ -126,5 +127,56 @@ describe('OPENFINANCE-P3a — Escolher contas (regras da tela)', () => {
     expect(fraseDoPermitir({ ligar: 1, manter: 1 })).toMatch(/^Escolha gravada: 2 contas entram/);
     expect(itemDoSucesso({ item: { id: 'i-1' } })).toBe('i-1');
     expect(itemDoSucesso({})).toBeNull();
+  });
+});
+
+describe('OPENFINANCE-PRONTO-NJ-01 — as regras da tela', () => {
+  it('(8) VÊ: o admin, o proprietário e o gestor; o financeiro e o campo não', () => {
+    expect(podeVerOpenFinance(true, 'financeiro')).toBe(true);
+    expect(podeVerOpenFinance(false, 'proprietario')).toBe(true);
+    expect(podeVerOpenFinance(false, 'gestor_cliente')).toBe(true);
+    expect(podeVerOpenFinance(false, 'financeiro')).toBe(false);
+    expect(podeVerOpenFinance(false, 'campo')).toBe(false);
+    expect(podeVerOpenFinance(false, null)).toBe(false);
+  });
+  it('(8) CONECTA: só o admin e o proprietário; o gestor só vê (Gabriel 15:36)', () => {
+    expect(podeConectarOpenFinance(true, 'gestor_cliente')).toBe(true);
+    expect(podeConectarOpenFinance(false, 'proprietario')).toBe(true);
+    expect(podeConectarOpenFinance(false, 'gestor_cliente')).toBe(false);
+    expect(podeConectarOpenFinance(false, 'financeiro')).toBe(false);
+    expect(podeConectarOpenFinance(false, null)).toBe(false);
+    expect(MOTIVO_SO_PROPRIETARIO).toBe('Só o proprietário conecta os bancos.');
+  });
+  it('(1)+(7) as conexões da função: situação desconhecida ou sem id fica de fora; sem banco = "Banco"', () => {
+    expect(conexoesDaResposta({ conexoes: [
+      { item_id: 'i1', banco: 'Sicredi', empresa: false, situacao: 'conectado', frase: null, criado_em: '2026-11-25T13:47:35Z' },
+      { item_id: 'i2', situacao: 'erro', frase: 'O banco esperou a confirmação no app e o tempo acabou. Tente de novo com o celular em mãos.' },
+      { item_id: 'i3', situacao: 'inventada' }, { situacao: 'conectado' }, 'lixo',
+    ] })).toEqual([
+      { itemId: 'i1', banco: 'Sicredi', empresa: false, situacao: 'conectado', frase: null, criadoEm: '2026-11-25T13:47:35Z' },
+      { itemId: 'i2', banco: 'Banco', empresa: false, situacao: 'erro', frase: 'O banco esperou a confirmação no app e o tempo acabou. Tente de novo com o celular em mãos.', criadoEm: null },
+    ]);
+    expect(conexoesDaResposta({})).toEqual([]);
+    expect(lendoDaResposta({ lendo: true })).toBe(true);
+    expect(lendoDaResposta({ lendo: 'sim' })).toBe(false);
+  });
+  it('(1) a conta da Pluggy traz o tipo e a agência (para a sugestão)', () => {
+    const [cc, cartao] = contasDaResposta({ contas: [
+      { account_id: 'a', tipo: 'BANK', agencia: '0748', final4: '9823' }, { account_id: 'b', tipo: 'CREDIT', agencia: null }] });
+    expect(cc).toMatchObject({ tipo: 'BANK', agencia: '0748' });
+    expect(cartao).toMatchObject({ tipo: 'CREDIT', agencia: null });
+  });
+  it('(1) o plano da gravação: entra o marcado; liga só a conta corrente marcada cuja escolha MUDOU; o cartão nunca liga; a mesma conta do sistema 2× bloqueia', () => {
+    const conta = (accountId: string, tipo: 'BANK' | 'CREDIT', final4: string): ContaDaConexao => ({ accountId, tipo, final4, tipoLegivel: tipo === 'BANK' ? 'Conta corrente' : 'Cartão de crédito',
+      banco: 'Sicredi', titular: null, documento: null, permitida: false, agencia: null });
+    const contas = [conta('cc1', 'BANK', '9823'), conta('cc2', 'BANK', '4956'), conta('car', 'CREDIT', '9876')];
+    const p = planoDaGravacao(contas, new Set(['cc1', 'car']), { cc1: 'k-lav', cc2: 'k-pes' }, {});
+    expect(p).toEqual({ accountIds: ['cc1', 'car'], ligacoes: [{ accountId: 'cc1', contaId: 'k-lav' }], repetida: null });
+    expect(fraseDasLigacoes(p)).toBe('Liga 1 conta corrente à conta escolhida.');
+    expect(planoDaGravacao(contas, new Set(['cc1']), { cc1: 'k-lav' }, { cc1: 'k-lav' }).ligacoes).toEqual([]);   // já está assim
+    expect(planoDaGravacao(contas, new Set(['cc1']), { cc1: '' }, { cc1: 'k-lav' }).ligacoes).toEqual([{ accountId: 'cc1', contaId: null }]); // desliga
+    expect(planoDaGravacao(contas, new Set(['cc1', 'cc2']), { cc1: 'k-lav', cc2: 'k-lav' }, {}).repetida).toBe('k-lav');
+    expect(fraseDasLigacoes(planoDaGravacao(contas, new Set(['cc1', 'cc2']), { cc1: 'a', cc2: 'b' }, {}))).toBe('Liga 2 contas correntes às contas escolhidas.');
+    expect(fraseDasLigacoes(planoDaGravacao(contas, new Set(), {}, {}))).toBe('');
   });
 });

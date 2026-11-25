@@ -8,7 +8,7 @@
  *   · barra: busca (conta, banco ou gerente) · Todas/Conta corrente/Investimento/Cartão · fazenda · Mostrar inativas · + Nova conta
  *   · estreitando, somem Telefone e Início, depois Gerente e Agência, depois Fazenda (`colunasEscondidas`, pela largura da lista)
  *   · clique na linha abre o modal (`ContaBancariaModal`); salvou, a lista relê SÓ a conta salva
- *   · CONTAS-OF-LINHA-01 (mock aprovado 23/11 18:10, só o admin): selo "Open Finance · N bancos conectados" no título (abre as conexões)
+ *   · CONTAS-OF-LINHA-01 (mock aprovado 23/11 18:10; admin e, desde OPENFINANCE-PRONTO-NJ-01, o gestor do cliente): selo "Open Finance · N bancos conectados" no título (abre as conexões)
  *     e a coluna FIXA "Open Finance" (132px) antes do Status — Conectado · Conectar · Link enviado · ⚠ Reconectar · — (`estadoNaLinha`);
  *     saíram os 3 botões soltos da barra (Conectar banco · Bancos conectados · Registrar webhook)
  */
@@ -23,7 +23,8 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/lib/utils';
 import { ContaBancariaModal } from '@/components/financeiro-v2/ContaBancariaModal';
-import { OpenFinanceDoAdmin, SeloOpenFinance, type PedidoOpenFinance } from '@/components/financeiro-v2/OpenFinanceDoAdmin';
+import { OpenFinanceDoAdmin, SeloOpenFinance, usePodeOpenFinance, usePodeConectarOpenFinance, type PedidoOpenFinance } from '@/components/financeiro-v2/OpenFinanceDoAdmin';
+import { MOTIVO_SO_PROPRIETARIO } from '@/lib/openfinance/openfinanceTela';
 import { useOpenFinanceDasContas } from '@/hooks/useOpenFinanceDasContas';
 import { conexoesDoCliente } from '@/lib/openfinance/openfinanceTela';
 import { bancoDaConta, estadoNaLinha, finaisDaConta, textoDoEstado, type EstadoNaLinha } from '@/lib/openfinance/openfinanceNaLinha';
@@ -60,12 +61,16 @@ function Cel({ c, className }: { c: Celula; className?: string }) {
 }
 
 export function FinV2ContasTab() {
-  const { clienteAtual, isAdmin } = useCliente();
+  const { clienteAtual } = useCliente();
+  /* OPENFINANCE-PRONTO-NJ-01 (8): o Open Finance aparece ao admin AGROinBLUE E ao gestor do cliente */
+  const podeOF = usePodeOpenFinance();
+  /* OPENFINANCE-PRONTO-NJ-01 (8): o gestor VÊ a coluna; conectar e reconectar só o admin e o proprietário */
+  const conectaOF = usePodeConectarOpenFinance();
   const { fazendas } = useFazenda();
   const clienteId = clienteAtual?.id ?? null;
   const [pedidoOF, setPedidoOF] = useState<PedidoOpenFinance | null>(null);
   const fecharPedidoOF = useCallback(() => setPedidoOF(null), []);
-  const of = useOpenFinanceDasContas(clienteId, isAdmin);
+  const of = useOpenFinanceDasContas(clienteId, podeOF);
   const nConectados = of.dados && clienteId ? conexoesDoCliente(of.dados.eventos, clienteId).length : null;
   const [contas, setContas] = useState<ContaBancariaCadastro[]>([]);
   const [bancos, setBancos] = useState<BancoReferencia[]>([]);
@@ -123,9 +128,9 @@ export function FinV2ContasTab() {
   }, []);
   /* a coluna Open Finance (só o admin) tem largura FIXA: as opcionais somem antes, como se a lista fosse 132px mais estreita */
   const LARGURA_OF = 132;
-  const escondidas = colunasEscondidas(largura - (isAdmin ? LARGURA_OF : 0));
+  const escondidas = colunasEscondidas(largura - (podeOF ? LARGURA_OF : 0));
   const mostra = (c: ColunaOpcional) => !escondidas.has(c);
-  const nColunas = 12 - escondidas.size + (isAdmin ? 1 : 0);
+  const nColunas = 12 - escondidas.size + (podeOF ? 1 : 0);
   const estadoDa = (c: ContaBancariaCadastro): EstadoNaLinha | null => (of.dados
     ? estadoNaLinha(c, { bancos, ...of.dados, agoraIso: new Date().toISOString() }) : null);
   const pedirConectar = (c: ContaBancariaCadastro) => setPedidoOF({ tipo: 'conectar',
@@ -147,7 +152,7 @@ export function FinV2ContasTab() {
           <SearchableSelect value={fazendaFiltro} onValueChange={setFazendaFiltro} allValue={TODAS_FAZENDAS} allLabel="Todas as fazendas"
             options={fazendasReais.map(f => ({ value: f.id, label: f.nome }))} placeholder="Todas as fazendas" dense triggerClassName="h-6 text-[11px]" />
         </div>
-        <label className="flex items-center gap-1 whitespace-nowrap text-[11px] text-muted-foreground">
+        <label className="flex items-center gap-1 whitespace-nowrap text-[10px] text-muted-foreground">
           <Checkbox checked={mostrarInativas} onCheckedChange={v => setMostrarInativas(v === true)} data-testid="mostrar-inativas" />Mostrar inativas
         </label>
         <Button size="sm" className="ml-auto h-6 px-2.5 text-[11px]" onClick={() => setModal({ conta: null })} data-testid="nova-conta">+ Nova conta</Button>
@@ -162,14 +167,14 @@ export function FinV2ContasTab() {
             {mostra('agencia') && <col style={{ width: 80 }} />}<col style={{ width: 92 }} />
             {mostra('fazenda') && <col style={{ width: 120 }} />}{mostra('gerente') && <col />}
             {mostra('telefone') && <col style={{ width: 112 }} />}{mostra('inicio') && <col style={{ width: 84 }} />}
-            {isAdmin && <col style={{ width: LARGURA_OF }} />}<col style={{ width: 54 }} /><col style={{ width: 24 }} />
+            {podeOF && <col style={{ width: LARGURA_OF }} />}<col style={{ width: 54 }} /><col style={{ width: 24 }} />
           </colgroup>
           <thead><tr>
             <th className={TH}>Cód.</th><th className={TH}>Nome da conta</th><th className={TH}>Tipo</th><th className={TH}>Banco</th>
             {mostra('agencia') && <th className={TH}>Agência</th>}<th className={TH}>Conta</th>
             {mostra('fazenda') && <th className={TH}>Fazenda</th>}{mostra('gerente') && <th className={TH}>Gerente</th>}
             {mostra('telefone') && <th className={TH}>Telefone</th>}{mostra('inicio') && <th className={TH}>Início</th>}
-            {isAdmin && <th className={TH}>Open Finance</th>}
+            {podeOF && <th className={TH}>Open Finance</th>}
             <th className={cn(TH, 'text-center')}>Status</th><th className={TH} aria-label="Editar" />
           </tr></thead>
           <tbody>
@@ -192,7 +197,7 @@ export function FinV2ContasTab() {
                       {mostra('gerente') && <Cel c={celulaGerente(c)} className="max-w-0 truncate" />}
                       {mostra('telefone') && <Cel c={celulaTelefone(c)} className="tabular-nums" />}
                       {mostra('inicio') && <Cel c={celulaInicio(c)} className="tabular-nums" />}
-                      {isAdmin && <CelulaOpenFinance estado={estadoDa(c)} erro={of.erro} onConectar={() => pedirConectar(c)}
+                      {podeOF && <CelulaOpenFinance estado={estadoDa(c)} erro={of.erro} conecta={conectaOF} onConectar={() => pedirConectar(c)}
                         onReconectar={(itemId) => setPedidoOF({ tipo: 'reconectar', itemId })} />}
                       <td className={cn(TD, 'text-center')}>
                         <span className={cn('inline-block rounded-full px-1.5 text-[9.5px] font-semibold leading-[15px]',
@@ -226,8 +231,8 @@ export function FinV2ContasTab() {
 }
 
 /* a célula da coluna Open Finance: os botões param o clique (a linha abre o Editar conta) */
-function CelulaOpenFinance({ estado, erro, onConectar, onReconectar }: {
-  estado: EstadoNaLinha | null; erro: boolean; onConectar: () => void; onReconectar: (itemId: string) => void;
+function CelulaOpenFinance({ estado, erro, conecta, onConectar, onReconectar }: {
+  estado: EstadoNaLinha | null; erro: boolean; conecta: boolean; onConectar: () => void; onReconectar: (itemId: string) => void;
 }) {
   if (erro) return <td className={cn(TD, 'text-muted-foreground')} title="Não consegui ler o Open Finance deste cliente agora" data-testid="of-linha">—</td>;
   if (!estado) return <td className={TD} data-testid="of-linha" />;
@@ -235,13 +240,13 @@ function CelulaOpenFinance({ estado, erro, onConectar, onReconectar }: {
   const parar = (e: { stopPropagation: () => void }) => e.stopPropagation();
   if (estado.tipo === 'conectar') return (
     <td className={TD} data-testid="of-linha" data-estado="conectar">
-      <button type="button" title={titulo} onClick={(e) => { parar(e); onConectar(); }} data-testid="of-conectar"
-        className="h-[16px] rounded-full border border-blue-200 bg-blue-50 px-2 text-[10px] leading-[14px] text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">{texto}</button>
+      <button type="button" title={conecta ? titulo : MOTIVO_SO_PROPRIETARIO} disabled={!conecta} onClick={(e) => { parar(e); onConectar(); }} data-testid="of-conectar"
+        className="h-[16px] rounded-full disabled:cursor-not-allowed disabled:opacity-50 border border-blue-200 bg-blue-50 px-2 text-[10px] leading-[14px] text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">{texto}</button>
     </td>);
   if (estado.tipo === 'reconectar') return (
     <td className={TD} data-testid="of-linha" data-estado="reconectar">
-      <button type="button" title={titulo} onClick={(e) => { parar(e); onReconectar(estado.itemId); }} data-testid="of-reconectar"
-        className="text-[10px] font-semibold text-amber-700 hover:underline dark:text-amber-400">{texto}</button>
+      <button type="button" title={conecta ? titulo : MOTIVO_SO_PROPRIETARIO} disabled={!conecta} onClick={(e) => { parar(e); onReconectar(estado.itemId); }} data-testid="of-reconectar"
+        className="disabled:cursor-not-allowed disabled:opacity-50 text-[10px] font-semibold text-amber-700 hover:underline dark:text-amber-400">{texto}</button>
     </td>);
   return (
     <td title={titulo} data-testid="of-linha" data-estado={estado.tipo}

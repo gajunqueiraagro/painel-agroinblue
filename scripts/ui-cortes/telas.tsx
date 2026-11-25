@@ -1047,13 +1047,31 @@ if (tela === 'mesclar') {
       : t === 'openfinance_saldos' ? [{ conta_bancaria_id: 'k1', lido_em: hojeAs(7, 40) }]
       : t === 'openfinance_convites' ? (q.get('of') === 'link' ? [{ expira_em: new Date(Date.now() + 20 * 3600e3).toISOString(), usado_em: null, revogado_em: null }] : [])
       : t === 'bancos_referencia' ? CONTAS_BANC.BANCOS
+      : t === 'openfinance_termo_versoes' ? [{ versao: 1, texto_md5: '0123456789abcdef0123456789abcdef', texto:
+          'Você autoriza o AGROinBLUE a LER, pelo Open Finance regulado, o saldo e o extrato das contas que forem escolhidas. '
+          + 'O AGROinBLUE não paga, não transfere e não movimenta nada. Não pedimos nem vemos sua senha: você confirma no app do seu banco. '
+          + 'Os dados servem só para a conciliação e o financeiro deste cliente, e ficam visíveis a quem tem acesso a ele no AGROinBLUE. '
+          + 'Você pode revogar quando quiser, no app do banco ou em "Desconectar"; o extrato já importado continua no sistema. '
+          + 'Tratamos os dados conforme a LGPD, como operadores do cliente.' }]
       : t === 'financeiro_saldos_bancarios_v2' ? [{ saldo_final: 30943.91, saldo_data: '2026-08-31' }] : [],
     rpc: (fn: string, a: any) => fn === 'fn_conta_bancaria_painel' ? CONTAS_BANC.PAINEL
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Usuário Exemplo', email: null, situacao: 'membro ativo' }]
       : fn === 'fn_conciliacao_status_ano' ? CONTAS_BANC.reguaDoAno(Number(a.p_ano))
       : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 12, ultimo: '2026-10-10' }] : null,
+    /* OPENFINANCE-PRONTO-NJ-01 — `&of=lista`: "Bancos conectados" como a Pluggy vê, no pior caso (nome comprido, Empresa, os 4 estados, a
+       frase mais longa) */
+    funcao: (nome: string, op: any) => (nome === 'openfinance-contas' && op?.body?.acao === 'conexoes' ? { data: { ok: true, conexoes: [
+      { item_id: 'it-itau', banco: 'Itaú Unibanco Personnalité Sintético', empresa: false, situacao: 'conectado', frase: null, criado_em: '2026-11-16T20:10:37Z' },
+      { item_id: 'it-sic', banco: 'Sicredi', empresa: true, situacao: 'lendo', frase: 'A Pluggy está lendo as contas do banco; fica pronta em alguns minutos.', criado_em: '2026-11-25T13:47:35Z' },
+      { item_id: 'it-bb', banco: 'Banco do Brasil', empresa: false, situacao: 'erro',
+        frase: 'O titular não autorizou no app do banco. Nada foi lido; tente de novo se foi engano.', criado_em: '2026-11-25T13:38:11Z' },
+      { item_id: 'it-bb2', banco: 'Banco do Brasil', empresa: true, situacao: 'esperando', frase: 'Esperando o titular aprovar no app do banco (o prazo é de 20 minutos).', criado_em: null },
+      { item_id: 'it-bb3', banco: 'Banco do Brasil', empresa: false, situacao: 'erro',
+        frase: 'O banco esperou a confirmação no app e o tempo acabou. Tente de novo com o celular em mãos.', criado_em: '2026-11-25T13:41:50Z' },
+    ] }, error: null } : { data: null, error: { message: 'sem função na bancada' } }),
   };
   montar(<div className="h-full"><FinV2ContasTab /></div>);
+  if (q.get('of') === 'lista') setTimeout(() => { const b = document.querySelector('[data-testid="openfinance-selo"]'); if (b instanceof HTMLElement) b.click(); }, 600);
   if (q.get('of') === 'conectar') setTimeout(() => { const b = document.querySelector('[data-testid="of-conectar"]'); if (b instanceof HTMLElement) b.click(); }, 600);
   const abre = q.get('v');
   if (abre) setTimeout(() => {
@@ -1917,24 +1935,25 @@ if (tela === 'mesclar') {
   /* import DENTRO do ramo: o trecho comum da bancada não muda (UI-GATE-RAPIDO-01) */
   void import('@/pages/AprovarPagamentosPage').then(({ default: AprovarPagamentosPage }) => montar(<AprovarPagamentosPage />));
 } else if (tela === 'escolher-contas') {
-  /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Contas bancárias › Bancos conectados › Escolher contas, com o bloco "Lança na
-     conta": a conta corrente do banco, a conta do sistema com o nome no pior caso e a frase da prévia ("Liga … em …") depois do clique.
-     SINTÉTICO; nada fala com a Pluggy. */
-  const NOME = 'Itaú Personalite 7225';
+  /* OF-ESCOLHER-CONTAS-LAYOUT-01 + OPENFINANCE-PRONTO-NJ-01 (1) — Escolher contas NUM PASSO: as contas da Pluggy com a coluna "Lança na conta"
+     (a conta do sistema SUGERIDA pela agência e conta, nome no pior caso), o cartão ("fatura: pela fonte da fatura") e a prévia depois do
+     clique. `&v=lendo`: a Pluggy ainda lendo o banco ("Ler de novo"). SINTÉTICO; nada fala com a Pluggy. */
+  const NOME = 'Sicredi Lavoura Pecuária Conta Movimento Sintética';
+  const lendo = q.get('v') === 'lendo';
   g.__bancoBancada = {
-    from: (t: string) => t === 'openfinance_contas_permitidas'
-      ? [{ id: 'perm-1', rotulo: 'Itaú · Conta corrente · 7225', final4: '7225', conta_bancaria_id: null }]
+    from: (t: string) => t === 'openfinance_contas_permitidas' ? []
       : t === 'financeiro_contas_bancarias'
-        ? [{ id: 'itau', nome_conta: NOME, nome_exibicao: null, tipo_conta: 'cc', numero_conta: '3722', conta_digito: '5', ativa: true }] : [],
+        ? [{ id: 'lav', nome_conta: NOME, nome_exibicao: null, tipo_conta: 'cc', agencia: '0748', numero_conta: '95982', conta_digito: '3', ativa: true },
+          { id: 'pes', nome_conta: 'Sicredi Pessoal Sintética', nome_exibicao: null, tipo_conta: 'cc', agencia: '0748', numero_conta: '14495', conta_digito: '6', ativa: true }] : [],
     funcao: (nome: string, op: any) => {
       const acao = op?.body?.acao;
       if (nome !== 'openfinance-contas') return { data: null, error: { message: 'sem função na bancada' } };
-      if (acao === 'listar') return { data: { ok: true, contas: [
-        { account_id: 'acc-cc', tipo_legivel: 'Conta corrente', banco: 'Itaú', final4: '7225', titular: 'Titular Sintético da Conta', documento: '***.000.000-**', permitida: true },
-        { account_id: 'acc-cartao', tipo_legivel: 'Cartão de crédito', banco: 'Itaú', final4: '2222', titular: 'Titular Sintético da Conta', documento: '***.000.000-**', permitida: false },
+      if (acao === 'listar') return { data: lendo ? { ok: true, banco: 'Sicredi', lendo: true, contas: [] } : { ok: true, banco: 'Sicredi', lendo: false, contas: [
+        { account_id: 'acc-cc', tipo: 'BANK', tipo_legivel: 'Conta corrente', banco: 'Sicredi', final4: '9823', agencia: '0748', titular: 'Titular Sintético da Conta Comprida', documento: '***.000.000-**', permitida: false },
+        { account_id: 'acc-cc2', tipo: 'BANK', tipo_legivel: 'Conta corrente', banco: 'Sicredi', final4: '4956', agencia: '0748', titular: 'Titular Sintético', documento: '***.000.000-**', permitida: false },
+        { account_id: 'acc-cartao', tipo: 'CREDIT', tipo_legivel: 'Cartão de crédito', banco: 'Sicredi', final4: '2222', agencia: null, titular: 'Titular Sintético da Conta', documento: '**.000.000/****-**', permitida: false },
       ] }, error: null };
-      if (acao === 'ligar') return { data: { ok: true, simulado: true, mudou: true }, error: null };
-      return { data: { ok: true }, error: null };
+      return { data: { ok: true, simulado: true, ligar: 2, manter: 0, desligar: 0 }, error: null };
     },
   };
   montar(<EscolherContasDoBanco clienteId="cli" itemId="item-sintetico" onFechar={() => {}} />);
@@ -2201,6 +2220,12 @@ if (tela === 'mesclar') {
            pelo numero escrito de outro jeito ("NF_000.000.937"). Dados SINTETICOS. */
         /* D — `v=socancelados`: so' cancelados (a nota NAO esta' lancada; o rodape diz quantos) */
         : fn === 'fn_nota_ja_lancada' && v === 'socancelados' ? CANCELADOS_DA_NOTA
+        /* NOTA-ENTREGA-FUTURA-01 (3) — `v=outranota`: o achado do mesmo fornecedor e valor JÁ COM OUTRA NF (o molde Pastoforma: a NF desta nota entra;
+           o lançamento está com a remessa, NF 30.436). Nomes compridos para o pior caso. SINTÉTICOS. */
+        : fn === 'fn_nota_ja_lancada' && v === 'outranota' ? [{ id: 'jl-outra', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
+          descricao: 'Medicamentos Bovinos Sinteticos com descricao bem comprida para o pior caso da remessa', valor_cent: 49164, status: 'programado',
+          conciliado: false, financiamento_id: null, numero_documento: '000.030.436', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',
+          fornecedor_por: 'cnpj', parcelas: [{ n: 1, dif_cent: 0, dif_dias: 0 }], por: ['valor'] }]
         /* P95 — `v=irmas`: 4 parcelas soltas no cartao (a nota sem duplicata, R$ 9.583,00), o numero so' em duas; somam R$ 0,02 a menos
            que a nota. SINTETICAS. */
         : fn === 'fn_nota_ja_lancada' && v === 'irmas' ? [239576, 239573, 239575, 239574].map((valor_cent, i) => ({ id: `jl-irma-${i}`, vencimento: `2026-${String(10 + i).padStart(2, '0')}-10`.replace('2026-13', '2027-01'),
@@ -3477,7 +3502,23 @@ if (tela === 'mesclar') {
     uploaded_por: 'u1', observacao: null, cancelado: false, cancelado_em: null, cancelado_motivo: null, versao: 1, ligado_a_qtd: 1, emitente_id: 'agro',
     emitente_nome: 'COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA', emitente_documento: '11222333000181' };
   /* P121b — `&nota=11`: a parcela 2/5 SEM número próprio e a NF da compra ligada, com 11 dígitos (o pior caso do Resumo: o número inteiro + o selo) */
-  const DOCS_NOTA = q.get('nota') === '11' ? [{ ...docBase, documento_id: 'd-n11', nome: 'NF.pdf', tipo: 'application/pdf', url: 'c/l/n.pdf', especie: 'nf',
+  /* NOTA-ENTREGA-FUTURA-01 (B) — `docs=entregas`: a compra com entrega futura (o molde Pastoforma/milho, SINTÉTICO): a NF da compra (só XML),
+     duas entregas (PDF + XML cada), um boleto; o banco diz os papéis e o saldo (`fn_lancamento_entregas`), emitente de nome longo */
+  const ENT = q.get('docs') === 'entregas';
+  const CH_C = '50261111222333000181550010000301501123456780'; const CH_E1 = '50261111222333000181550010000304361123456781'; const CH_E2 = '50261111222333000181550010000305121123456782';
+  const DOCS_ENT = [
+    { ...docBase, documento_id: 'de-c', nome: 'NF 30150 (XML da Receita)', tipo: 'application/xml', url: null, especie: 'nf', numero: '000.030.150', serie: '1', chave_acesso: CH_C, data_emissao: '2026-11-10', valor_documento: 600000 },
+    { ...docBase, documento_id: 'de-e1p', nome: 'nf 000.030.436 (DANFE)', tipo: 'application/pdf', url: 'c/l/e1.pdf', especie: 'nf', numero: '000.030.436', serie: '1', chave_acesso: CH_E1, data_emissao: '2026-11-18', valor_documento: 18800 },
+    { ...docBase, documento_id: 'de-e1x', nome: 'nf 000.030.436', tipo: 'application/xml', url: 'c/l/e1.xml', especie: 'nf', numero: '000.030.436', serie: '1', chave_acesso: CH_E1, data_emissao: '2026-11-18', valor_documento: 18800 },
+    { ...docBase, documento_id: 'de-e2x', nome: 'nf 000.030.512', tipo: 'application/xml', url: 'c/l/e2.xml', especie: 'nf', numero: '000.030.512', serie: '1', chave_acesso: CH_E2, data_emissao: '2026-11-22', valor_documento: 19200 },
+    { ...docBase, documento_id: 'de-b', nome: 'boleto.pdf', tipo: 'application/pdf', url: 'c/l/b.pdf', especie: 'boleto', numero: null, serie: null, chave_acesso: null, data_emissao: '2026-12-10', valor_documento: 600000 },
+  ];
+  const ENTREGAS_BANCADA = { compra: { chave: CH_C, nf: '30150' }, entregas: 2,
+    papeis: [{ documento_id: 'de-c', papel: 'compra' }, { documento_id: 'de-e1p', papel: 'entrega', n: 1 }, { documento_id: 'de-e1x', papel: 'entrega', n: 1 },
+      { documento_id: 'de-e2x', papel: 'entrega', n: 2 }, { documento_id: 'de-b', papel: 'boleto' }],
+    itens: [{ produto: 'MILHO DEBULHADO A GRANEL SAFRINHA 2026 PADRAO EXPORTACAO UMIDADE 14%', unidade: 'sc', comprado: 10000, entregue: 3588, falta: 6412 },
+      { produto: 'Semente sintética BRS', unidade: 'kg', comprado: 1000, entregue: 1000, falta: 0 }], motivo: null };
+  const DOCS_NOTA = ENT ? DOCS_ENT : q.get('nota') === '11' ? [{ ...docBase, documento_id: 'd-n11', nome: 'NF.pdf', tipo: 'application/pdf', url: 'c/l/n.pdf', especie: 'nf',
     numero: '12.345.678.901', serie: null, chave_acesso: null, data_emissao: '2026-05-08', valor_documento: 1000 }]
     : q.get('docs') !== 'nota' && q.get('div') !== '1' ? [] : [
     { ...docBase, documento_id: 'd-pdf', nome: 'NF 15786.pdf', tipo: 'application/pdf', url: 'c/l/a.pdf', especie: 'nf', numero: '15786', serie: null, chave_acesso: CH, data_emissao: '2026-05-08', valor_documento: 102000 },
@@ -3542,7 +3583,8 @@ if (tela === 'mesclar') {
       : DIV && t === 'nota_fiscal' ? [NOTA_DIV] : DIV && t === 'nota_fiscal_itens' ? ITENS_DIV : [], rpc: (fn: string, a: any) =>
     /* P138 — a safra da competência é do banco: aqui, pelas datas das safras SINTÉTICAS da bancada (a mesma regra) */
     /* NOTA-PAGA-POR-TERCEIRO-01 — a prévia SINTÉTICA (com o aviso do boleto) */
-    fn === 'fn_lancamento_pago_por_terceiro' ? { ok: true, simulado: true, parceiro: 'Construtora Exemplo de Nome Comprido Ltda', data_pagamento: '2026-11-20',
+    ENT && fn === 'fn_lancamento_entregas' ? ENTREGAS_BANCADA
+    : fn === 'fn_lancamento_pago_por_terceiro' ? { ok: true, simulado: true, parceiro: 'Construtora Exemplo de Nome Comprido Ltda', data_pagamento: '2026-11-20',
       antes: { status: 'programado', data_pagamento: null, sem_caixa: false }, depois: { status: 'realizado', data_pagamento: '2026-11-20', sem_caixa: true },
       avisos: ['Tem boleto ligado: confirme que o terceiro pagou esse boleto.'],
       efeitos: ['sai de "a pagar", da aprovação, dos vencidos e da procura no extrato', 'a despesa continua no DRE com a mesma conta', 'Livro Caixa: fora (sem movimento de caixa) até o contador definir'] }

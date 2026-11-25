@@ -7,12 +7,14 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   avisoDoCorpo, CABECALHO_SEGREDO, chaveDaApi, conectar, conectorRegulado, desconectar, iguaisEmTempoConstante, receberAviso,
   registrarWebhook, type Busca, type PecasConectar, type PecasDesconectar,
-  contas, finalDaConta, mascararDocumento, mascararTitular, type PecasContas,
+  contas, finalDaConta, mascararDocumento, mascararTitular, type PecasContas, agenciaDaConta, conexaoDoItem,
 } from '../../../supabase/functions/_shared/pluggy';
 
 const SEGREDO = 'segredo-sintetico-0123456789abcdef';
 const CLIENT_ID = '11111111-2222-3333-4444-555555555555';
 const CLIENTE = '43f32d07-dba8-4670-900c-bf645440c04a';
+/** PRONTO-NJ-01 (8): o termo lido que a conexão nova leva (versão + md5 do texto mostrado) */
+const TERMO = { versao: 1, md5: '0123456789abcdef0123456789abcdef' };
 const resposta = (status: number, corpo: unknown) => ({ ok: status >= 200 && status < 300, status, json: async () => corpo });
 
 /** a Pluggy falsa: responde por método + caminho e guarda os pedidos */
@@ -105,18 +107,19 @@ describe('OPENFINANCE P2 — o connect token (conectar)', () => {
   }) => {
     const falsa = pluggyFalsa(rotas);
     const registrar = vi.fn(async () => true);
+    const aceitarTermo = vi.fn<PecasConectar['aceitarTermo']>(async () => 'ok');
     return {
-      falsa, registrar,
+      falsa, registrar, aceitarTermo,
       pecas: {
         autorDoToken: async (t: string) => (t === 'jwt-bom' ? 'autor-1' : null), podeConectar: async () => true,
-        credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 'secret-sintetico' }), busca: falsa.busca, registrar, ...p,
+        credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 'secret-sintetico' }), busca: falsa.busca, registrar, aceitarTermo, ...p,
       },
     };
   };
 
   it('quem pode: o token de 30 min com o cliente no clientUserId (avoidDuplicates) e a trilha; a API key nunca sai', async () => {
     const { falsa, registrar, pecas: pc } = pecas();
-    const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE }, pc);
+    const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE, termo: TERMO }, pc);
     expect(r).toEqual({ status: 200, corpo: { ok: true, accessToken: 'connect-token-sintetico', connectorIds: [601] } });
     expect(JSON.stringify(r)).not.toContain('api-key-sintetica');
     expect(falsa.pedidos[1]).toMatchObject({ metodo: 'GET', caminho: '/connectors?isOpenFinance=true&countries=BR' });
@@ -126,12 +129,16 @@ describe('OPENFINANCE P2 — o connect token (conectar)', () => {
   });
 
   it('sem login 401 · cliente inválido 400 · sem permissão 403 · sem secrets 503 — e a Pluggy nem é chamada', async () => {
-    const casos: Array<[{ token: string | null; clienteId: string }, Partial<PecasConectar>, number]> = [
-      [{ token: null, clienteId: CLIENTE }, {}, 401],
-      [{ token: 'jwt-ruim', clienteId: CLIENTE }, {}, 401],
-      [{ token: 'jwt-bom', clienteId: 'nao-e-uuid' }, {}, 400],
-      [{ token: 'jwt-bom', clienteId: CLIENTE }, { podeConectar: async () => false }, 403],
-      [{ token: 'jwt-bom', clienteId: CLIENTE }, { credenciais: () => null }, 503],
+    const casos: Array<[{ token: string | null; clienteId: string; termo?: unknown }, Partial<PecasConectar>, number]> = [
+      [{ token: null, clienteId: CLIENTE, termo: TERMO }, {}, 401],
+      [{ token: 'jwt-ruim', clienteId: CLIENTE, termo: TERMO }, {}, 401],
+      [{ token: 'jwt-bom', clienteId: 'nao-e-uuid', termo: TERMO }, {}, 400],
+      [{ token: 'jwt-bom', clienteId: CLIENTE, termo: TERMO }, { podeConectar: async () => false }, 403],
+      [{ token: 'jwt-bom', clienteId: CLIENTE, termo: TERMO }, { credenciais: () => null }, 503],
+      /* PRONTO-NJ-01 (8): a conexão NOVA sem o termo lido (ou com md5 que não é md5) = 400, antes de falar com a Pluggy */
+      [{ token: 'jwt-bom', clienteId: CLIENTE }, {}, 400],
+      [{ token: 'jwt-bom', clienteId: CLIENTE, termo: { versao: 1, md5: 'x' } }, {}, 400],
+      [{ token: 'jwt-bom', clienteId: CLIENTE, termo: { versao: 0, md5: TERMO.md5 } }, {}, 400],
     ];
     for (const [pedido, extra, status] of casos) {
       const { falsa, pecas: pc } = pecas(extra);
@@ -142,18 +149,39 @@ describe('OPENFINANCE P2 — o connect token (conectar)', () => {
 
   it('a Pluggy recusa as credenciais ou o token: 502 com frase pronta, sem o corpo dela', async () => {
     const recusa = pecas({}, { 'POST /auth': { status: 401, corpo: { message: 'eco do clientSecret' } }, 'POST /connect_token': { status: 200, corpo: {} } });
-    const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE }, recusa.pecas);
+    const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE, termo: TERMO }, recusa.pecas);
     expect(r.status).toBe(502);
     expect(JSON.stringify(r)).not.toContain('eco');
     const semToken = pecas({}, { 'POST /auth': { status: 200, corpo: { apiKey: 'k' } }, [ROTA_CONECTORES]: { status: 200, corpo: CONECTORES },
       'POST /connect_token': { status: 500, corpo: {} } });
-    expect((await conectar({ token: 'jwt-bom', clienteId: CLIENTE }, semToken.pecas)).status).toBe(502);
+    expect((await conectar({ token: 'jwt-bom', clienteId: CLIENTE, termo: TERMO }, semToken.pecas)).status).toBe(502);
     expect(semToken.registrar).not.toHaveBeenCalled();
+  });
+
+  it('PRONTO-NJ-01 (8): o aceite do termo é gravado ANTES do token, com o autor; termo que mudou = 409 e nada aberto; falhou = 500', async () => {
+    const ok = pecas();
+    expect((await conectar({ token: 'jwt-bom', clienteId: CLIENTE, termo: TERMO }, ok.pecas)).status).toBe(200);
+    expect(ok.aceitarTermo).toHaveBeenCalledWith({ p_cliente: CLIENTE, p_versao: 1, p_md5: TERMO.md5, p_autor: 'autor-1' });
+    const casos: Array<['mudou' | 'erro', number]> = [['mudou', 409], ['erro', 500]];
+    for (const [aceite, status] of casos) {
+      const x = pecas({ aceitarTermo: async () => aceite });
+      const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE, termo: TERMO }, x.pecas);
+      expect(r.status).toBe(status);
+      expect(r.corpo.accessToken).toBeUndefined();
+      expect(x.falsa.pedidos.some((p) => p.caminho === '/connect_token')).toBe(false);
+    }
+  });
+  it('PRONTO-NJ-01 (8): o Reconectar de um item já consentido não pede o termo de novo', async () => {
+    const ITEM_R = 'item-reconectar-1';
+    const x = pecas({}, { 'POST /auth': { status: 200, corpo: { apiKey: 'k' } }, [ROTA_CONECTORES]: { status: 200, corpo: CONECTORES },
+      [`GET /items/${ITEM_R}`]: { status: 200, corpo: { clientUserId: CLIENTE } }, 'POST /connect_token': { status: 200, corpo: { accessToken: 't' } } });
+    expect((await conectar({ token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM_R }, x.pecas)).status).toBe(200);
+    expect(x.aceitarTermo).not.toHaveBeenCalled();
   });
 
   it('a trilha que não grava = 500 e o token NÃO vai à tela', async () => {
     const { pecas: pc } = pecas({ registrar: async () => false });
-    const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE }, pc);
+    const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE, termo: TERMO }, pc);
     expect(r.status).toBe(500);
     expect(r.corpo.accessToken).toBeUndefined();
   });
@@ -193,8 +221,8 @@ describe('OPENFINANCE-SEG-01 (a) — só o Open Finance regulado (nunca senha do
     const falsa = pluggyFalsa({ 'POST /auth': { status: 200, corpo: { apiKey: 'k' } },
       [ROTA_CONECTORES]: { status: 200, corpo: { results: [CONECTORES.results[1]] } }, 'POST /connect_token': { status: 200, corpo: { accessToken: 't' } } });
     const registrar = vi.fn(async () => true);
-    const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE }, { autorDoToken: async () => 'a', podeConectar: async () => true,
-      credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 's' }), busca: falsa.busca, registrar });
+    const r = await conectar({ token: 'jwt-bom', clienteId: CLIENTE, termo: TERMO }, { autorDoToken: async () => 'a', podeConectar: async () => true,
+      credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 's' }), busca: falsa.busca, registrar, aceitarTermo: async () => 'ok' });
     expect(r.status).toBe(502);
     expect(r.corpo.accessToken).toBeUndefined();
     expect(falsa.pedidos.map(p => p.caminho)).not.toContain('/connect_token');
@@ -276,7 +304,8 @@ describe('OPENFINANCE-P3a — as contas da conexão (só as marcadas entram; o r
   const OUTRO = '99999999-8888-7777-6666-555555555555';
   // dados SINTÉTICOS: uma conta corrente, um cartão, uma poupança; saldo/limite vêm na Pluggy e NÃO podem sair
   const CONTAS = { results: [
-    { id: 'acc-cc', type: 'BANK', subtype: 'CHECKING_ACCOUNT', number: '12345-6', owner: 'FULANO DE TAL SILVA', taxNumber: '123.456.789-01', balance: 999.99 },
+    { id: 'acc-cc', type: 'BANK', subtype: 'CHECKING_ACCOUNT', number: '12345-6', owner: 'FULANO DE TAL SILVA', taxNumber: '123.456.789-01', balance: 999.99,
+      bankData: { transferNumber: '0748/12345-6', closingBalance: 999.99 } },
     { id: 'acc-cartao', type: 'CREDIT', subtype: 'CREDIT_CARD', number: 'XXXX XXXX XXXX 9876', owner: 'BELTRANA SOUZA', creditData: { availableCreditLimit: 5000 } },
     { id: 'acc-poup', type: 'BANK', subtype: 'SAVINGS_ACCOUNT', number: '77', owner: '', balance: 1 },
     { id: 'acc-estranha', type: 'INVESTMENT' },
@@ -286,8 +315,9 @@ describe('OPENFINANCE-P3a — as contas da conexão (só as marcadas entram; o r
       [`GET /items/${ITEM}`]: { status: 200, corpo: { id: ITEM, clientUserId: CLIENTE, connector: { name: 'Itaú' } } },
       [`GET /accounts?itemId=${ITEM}`]: { status: 200, corpo: CONTAS }, ...rotas });
     const gravar = vi.fn<PecasContas['gravar']>(async () => ({ ok: true, corpo: { ok: true, simulado: true, ligar: 1, manter: 0, desligar: 0 } }));
-    const pecas: PecasContas = { autorDoToken: async (t) => (t === 'jwt-bom' ? 'admin-1' : null), ehAdmin: async () => true,
-      credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 's' }), busca: falsa.busca, permitidasDoItem: async () => ['acc-cartao'], gravar, ...p };
+    const pecas: PecasContas = { autorDoToken: async (t) => (t === 'jwt-bom' ? 'admin-1' : null), podeConectar: async () => true, podeVer: async () => true,
+      credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 's' }), busca: falsa.busca, permitidasDoItem: async () => ['acc-cartao'],
+      itensDoCliente: async () => [ITEM], gravar, ...p };
     return { falsa, gravar, pecas };
   };
   const base = { token: 'jwt-bom', clienteId: CLIENTE, itemId: ITEM };
@@ -305,17 +335,42 @@ describe('OPENFINANCE-P3a — as contas da conexão (só as marcadas entram; o r
     const { falsa, gravar, pecas } = montar();
     const r = await contas({ ...base, acao: 'listar' }, pecas);
     expect(r.status).toBe(200);
+    expect(r.corpo.banco).toBe('Itaú');
+    expect(r.corpo.lendo).toBe(false);
     expect(r.corpo.contas).toEqual([
       { account_id: 'acc-cc', tipo: 'BANK', subtipo: 'CHECKING_ACCOUNT', tipo_legivel: 'Conta corrente', banco: 'Itaú', final4: '3456',
-        titular: 'Fulano T. S.', documento: '***.456.789-**', permitida: false },
+        titular: 'Fulano T. S.', documento: '***.456.789-**', permitida: false, agencia: '0748' },
       { account_id: 'acc-cartao', tipo: 'CREDIT', subtipo: 'CREDIT_CARD', tipo_legivel: 'Cartão de crédito', banco: 'Itaú', final4: '9876',
-        titular: 'Beltrana S.', documento: null, permitida: true },
+        titular: 'Beltrana S.', documento: null, permitida: true, agencia: null },
       { account_id: 'acc-poup', tipo: 'BANK', subtipo: 'SAVINGS_ACCOUNT', tipo_legivel: 'Poupança', banco: 'Itaú', final4: null,
-        titular: null, documento: null, permitida: false },
+        titular: null, documento: null, permitida: false, agencia: null },
     ]);
     const texto = JSON.stringify(r.corpo);
     expect(texto).not.toMatch(/999|5000|balance|creditData|availableCreditLimit|FULANO|SILVA|123\.456/);
     expect(falsa.pedidos.some(p => p.caminho.includes('transactions'))).toBe(false);
+    expect(gravar).not.toHaveBeenCalled();
+  });
+  it('PRONTO-NJ-01 (1): logo depois do consentimento (item UPDATING) a resposta diz "lendo" — a tela relê, nunca "não há contas"', async () => {
+    const { pecas } = montar({}, { [`GET /items/${ITEM}`]: { status: 200, corpo: { id: ITEM, clientUserId: CLIENTE, status: 'UPDATING', connector: { name: 'Sicredi' } } },
+      [`GET /accounts?itemId=${ITEM}`]: { status: 200, corpo: { results: [] } } });
+    const r = await contas({ ...base, acao: 'listar' }, pecas);
+    expect(r.corpo).toMatchObject({ ok: true, banco: 'Sicredi', lendo: true, contas: [] });
+  });
+  it('PRONTO-NJ-01 (8): VER (listar/conexoes) pergunta o podeVer COM o cliente; ESCOLHER (permitir) pergunta o podeConectar', async () => {
+    const podeConectar = vi.fn(async () => true); const podeVer = vi.fn(async () => true);
+    const { pecas } = montar({ podeConectar, podeVer });
+    await contas({ ...base, acao: 'listar' }, pecas);
+    expect(podeVer).toHaveBeenCalledWith('admin-1', CLIENTE);
+    expect(podeConectar).not.toHaveBeenCalled();
+    await contas({ ...base, acao: 'permitir', accountIds: ['acc-cc'], simular: true }, pecas);
+    expect(podeConectar).toHaveBeenCalledWith('admin-1', CLIENTE);
+  });
+  it('PRONTO-NJ-01 (8, 15:36): o GESTOR (vê, não conecta) lista e vê as conexões, mas o permitir dá 403 e nada é gravado', async () => {
+    const { gravar, pecas } = montar({ podeConectar: async () => false, podeVer: async () => true });
+    expect((await contas({ ...base, acao: 'listar' }, pecas)).status).toBe(200);
+    const r = await contas({ ...base, acao: 'permitir', accountIds: ['acc-cc'] }, pecas);
+    expect(r.status).toBe(403);
+    expect(r.corpo.frase).toBe('Só o proprietário do cliente ou a AGROinBLUE escolhe as contas do banco.');
     expect(gravar).not.toHaveBeenCalled();
   });
   it('item de OUTRO cliente: 409 e as contas NEM são lidas', async () => {
@@ -330,7 +385,8 @@ describe('OPENFINANCE-P3a — as contas da conexão (só as marcadas entram; o r
       [{ ...base, itemId: 'x', acao: 'listar' }, {}, 400],
       [{ ...base, acao: 'permitir', accountIds: ['a', 'a'] }, {}, 400],
       [{ ...base, acao: 'permitir', accountIds: 'acc-cc' }, {}, 400],
-      [{ ...base, acao: 'listar' }, { ehAdmin: async () => false }, 403],
+      [{ ...base, acao: 'listar' }, { podeVer: async () => false }, 403],
+      [{ ...base, acao: 'conexoes' }, { podeVer: async () => false }, 403],
       [{ ...base, acao: 'listar' }, { credenciais: () => null }, 503],
     ];
     for (const [pedido, extra, status] of casos) {
@@ -354,5 +410,64 @@ describe('OPENFINANCE-P3a — as contas da conexão (só as marcadas entram; o r
     const r = await contas({ ...base, acao: 'permitir', accountIds: ['acc-cc'] }, b.pecas);
     expect(r.status).toBe(409);
     expect(r.corpo.frase).toMatch(/outra conexão/);
+  });
+});
+
+describe('OPENFINANCE-PRONTO-NJ-01 (1)+(7) — as conexões como a Pluggy vê (o webhook não traz o conector)', () => {
+  const I1 = 'aaaaaaaa-0000-0000-0000-000000000001';
+  const I2 = 'aaaaaaaa-0000-0000-0000-000000000002';
+  const I3 = 'aaaaaaaa-0000-0000-0000-000000000003';
+  const I4 = 'aaaaaaaa-0000-0000-0000-000000000004';
+  const I5 = 'aaaaaaaa-0000-0000-0000-000000000005';
+  const OUTRO = '99999999-8888-7777-6666-555555555555';
+  const rotas = {
+    'POST /auth': { status: 200, corpo: { apiKey: 'k' } },
+    [`GET /items/${I1}`]: { status: 200, corpo: { id: I1, clientUserId: CLIENTE, status: 'UPDATED', executionStatus: 'SUCCESS', createdAt: '2026-11-25T13:47:35Z',
+      connector: { id: 612, name: 'Sicredi', type: 'PERSONAL_BANK' }, parameter: { cpf: '12345678901' } } },
+    [`GET /items/${I2}`]: { status: 200, corpo: { id: I2, clientUserId: CLIENTE, status: 'OUTDATED', executionStatus: 'USER_INPUT_TIMEOUT',
+      error: { code: 'USER_INPUT_TIMEOUT', message: 'mensagem crua da Pluggy com dado' }, connector: { name: 'Banco do Brasil', type: 'PERSONAL_BANK' } } },
+    [`GET /items/${I3}`]: { status: 200, corpo: { id: I3, clientUserId: CLIENTE, status: 'WAITING_USER_INPUT', connector: { name: 'Sicredi', type: 'BUSINESS_BANK' } } },
+    [`GET /items/${I4}`]: { status: 200, corpo: { id: I4, clientUserId: OUTRO, status: 'UPDATED', connector: { name: 'Banco de outro cliente' } } },
+    // I5: já não existe na Pluggy (404) — fica de fora
+  };
+  const pecasDe = (over: Partial<PecasContas> = {}) => {
+    const falsa = pluggyFalsa(rotas);
+    const pecas: PecasContas = { autorDoToken: async (t) => (t === 'jwt-bom' ? 'gestor-1' : null), podeConectar: async () => false, podeVer: async () => true,
+      credenciais: () => ({ clientId: CLIENT_ID, clientSecret: 's' }), busca: falsa.busca, permitidasDoItem: async () => [],
+      itensDoCliente: async () => [I1, I2, I3, I4, I5], gravar: async () => ({ ok: false, codigo: null }), ...over };
+    return { falsa, pecas };
+  };
+  it('o NOME do banco, Pessoal/Empresa, a situação e a FRASE pronta das que não completaram; outro cliente e o que sumiu ficam de fora', async () => {
+    const { falsa, pecas } = pecasDe();
+    const r = await contas({ token: 'jwt-bom', acao: 'conexoes', clienteId: CLIENTE }, pecas);
+    expect(r.status).toBe(200);
+    expect(r.corpo.conexoes).toEqual([
+      { item_id: I1, banco: 'Sicredi', empresa: false, situacao: 'conectado', codigo: null, frase: null, criado_em: '2026-11-25T13:47:35Z', atualizado_em: null },
+      { item_id: I2, banco: 'Banco do Brasil', empresa: false, situacao: 'erro', codigo: 'USER_INPUT_TIMEOUT',
+        frase: 'O banco esperou a confirmação no app e o tempo acabou. Tente de novo com o celular em mãos.', criado_em: null, atualizado_em: null },
+      { item_id: I3, banco: 'Sicredi', empresa: true, situacao: 'esperando', codigo: null,
+        frase: 'Esperando o titular aprovar no app do banco (o prazo é de 20 minutos).', criado_em: null, atualizado_em: null },
+    ]);
+    const texto = JSON.stringify(r.corpo);
+    expect(texto).not.toMatch(/mensagem crua|12345678901|outro cliente/);   // nunca o corpo da Pluggy nem dado do titular
+    expect(falsa.pedidos.every((p) => p.metodo === 'GET' || p.caminho === '/auth')).toBe(true);
+    expect(falsa.pedidos.some((p) => p.caminho.startsWith('/accounts') || p.caminho.includes('transactions'))).toBe(false);
+  });
+  it('a trilha que não lê = 500; a Pluggy que falha = 502 (nunca "nenhum banco")', async () => {
+    expect((await contas({ token: 'jwt-bom', acao: 'conexoes', clienteId: CLIENTE }, pecasDe({ itensDoCliente: async () => null }).pecas)).status).toBe(500);
+    const falha = pluggyFalsa({ 'POST /auth': { status: 200, corpo: { apiKey: 'k' } }, [`GET /items/${I1}`]: { status: 500, corpo: {} } });
+    const r = await contas({ token: 'jwt-bom', acao: 'conexoes', clienteId: CLIENTE }, pecasDe({ busca: falha.busca }).pecas);
+    expect(r.status).toBe(502);
+    expect(r.corpo.conexoes).toBeUndefined();
+  });
+  it('as regras puras: o item sem id é nulo; código sem frase cai na frase da situação; a agência do transferNumber', () => {
+    expect(conexaoDoItem({ status: 'UPDATED' })).toBeNull();
+    expect(conexaoDoItem({ id: 'x', status: 'LOGIN_ERROR', error: { code: 'ALGO_NOVO' } })).toMatchObject({ situacao: 'erro', codigo: 'ALGO_NOVO',
+      frase: 'A conexão não terminou. Tente de novo.', banco: 'Banco' });
+    expect(conexaoDoItem({ id: 'x', status: 'UPDATING' })).toMatchObject({ situacao: 'lendo', frase: expect.stringMatching(/lendo as contas/) });
+    expect(agenciaDaConta({ transferNumber: '0748/95982-3' })).toBe('0748');
+    expect(agenciaDaConta({ transferNumber: '748/0748/95982-3' })).toBe('0748');
+    expect(agenciaDaConta({ transferNumber: '95982-3' })).toBeNull();
+    expect(agenciaDaConta(null)).toBeNull();
   });
 });

@@ -61,23 +61,23 @@ const N = false;
  *   Fechamento nao consulta esta capacidade.
  */
 export const CAPACIDADES_OC: Record<CapacidadeOC, Record<PerfilCliente, boolean>> = {
-  abrir:                   { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
-  criar:                   { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
-  negociar_preco:          { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
-  negociar_combinado:      { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
-  negociar_apos_movimento: { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
-  negociar_abate_boitel:   { gestor_cliente: S, financeiro: N, campo: N, leitura: N },
-  movimentar_gado:         { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
-  concluir_negociacao:     { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
-  reabrir_apos_movimento:  { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
-  lancar_realizado_boitel: { gestor_cliente: S, financeiro: N, campo: N, leitura: N },
-  atualizar_entregas:      { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
-  reabrir_mes:             { gestor_cliente: S, financeiro: N, campo: N, leitura: N },
-  excluir_definitivo:      { gestor_cliente: N, financeiro: N, campo: N, leitura: N },
+  abrir:                   { proprietario: S, gestor_cliente: S, financeiro: S, campo: N, leitura: N },
+  criar:                   { proprietario: S, gestor_cliente: S, financeiro: S, campo: N, leitura: N },
+  negociar_preco:          { proprietario: S, gestor_cliente: S, financeiro: S, campo: N, leitura: N },
+  negociar_combinado:      { proprietario: S, gestor_cliente: S, financeiro: S, campo: N, leitura: N },
+  negociar_apos_movimento: { proprietario: S, gestor_cliente: S, financeiro: S, campo: N, leitura: N },
+  negociar_abate_boitel:   { proprietario: S, gestor_cliente: S, financeiro: N, campo: N, leitura: N },
+  movimentar_gado:         { proprietario: S, gestor_cliente: S, financeiro: S, campo: N, leitura: N },
+  concluir_negociacao:     { proprietario: S, gestor_cliente: S, financeiro: S, campo: N, leitura: N },
+  reabrir_apos_movimento:  { proprietario: S, gestor_cliente: S, financeiro: S, campo: N, leitura: N },
+  lancar_realizado_boitel: { proprietario: S, gestor_cliente: S, financeiro: N, campo: N, leitura: N },
+  atualizar_entregas:      { proprietario: S, gestor_cliente: S, financeiro: S, campo: N, leitura: N },
+  reabrir_mes:             { proprietario: S, gestor_cliente: S, financeiro: N, campo: N, leitura: N },
+  excluir_definitivo:      { proprietario: N, gestor_cliente: N, financeiro: N, campo: N, leitura: N },
 };
 
 function ehPerfilCliente(perfil: string): perfil is PerfilCliente {
-  return perfil === 'gestor_cliente' || perfil === 'financeiro' || perfil === 'campo' || perfil === 'leitura';
+  return perfil === 'proprietario' || perfil === 'gestor_cliente' || perfil === 'financeiro' || perfil === 'campo' || perfil === 'leitura';
 }
 
 /** A pessoa pode ISTO dentro da operacao comercial? Admin: tudo. Perfil desconhecido ou nulo: nada. */

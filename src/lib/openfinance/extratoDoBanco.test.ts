@@ -142,5 +142,16 @@ describe('a sugestão da conta do sistema pelo final', () => {
     expect(contaSugerida('7225', [c('velha', '3722', '5', 'cc', false)])).toBeNull();
     expect(contaSugerida(null, [c('itau', '3722', '5')])).toBeNull();
   });
+  it('PRONTO-NJ-01 (1): o nº SEM o dígito também casa; com a agência dos dois lados ela decide o empate (sem os zeros da frente); a presa a outra conta do banco não se sugere', () => {
+    const ca = (id: string, numero: string, digito: string | null, agencia: string | null) => ({ ...c(id, numero, digito), agencia });
+    expect(contaSugerida('5982', [ca('lavoura', '95982', '3', '748')])).toBe('lavoura');               // a Pluggy contou sem o dígito
+    const duas = [ca('lavoura', '95982', '3', '748'), ca('outra', '19823', null, '0911')];
+    expect(contaSugerida('9823', duas)).toBeNull();                                                      // sem agência: empate
+    expect(contaSugerida('9823', duas, '0748')).toBe('lavoura');                                          // 748 = 0748
+    expect(contaSugerida('9823', duas, '0911')).toBe('outra');
+    expect(contaSugerida('9823', [ca('sem-ag', '95982', '3', null)], '0748')).toBe('sem-ag');            // cadastro sem agência: não barra
+    expect(contaSugerida('9823', duas, '0748', new Set(['lavoura']))).toBeNull();                         // já recebe de outra conta do banco
+    expect(contaSugerida('0002', [ca('placeholder', 'cc-002', null, null)])).toBeNull();                  // "cc-002" não é número de conta
+  });
 });
 
