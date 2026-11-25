@@ -15,7 +15,8 @@ export const FRASE_ALVO_ADMIN = "Administrador do AGROinBLUE não é gerenciado 
 export const FRASE_ALVO_E_O_PROPRIO = "Ninguém altera o próprio acesso por esta tela.";
 
 /** Os perfis que esta via cria. Admin do AGROinBLUE NAO e' criavel por aqui. */
-export const PERFIS_CRIAVEIS: readonly string[] = ["gestor_cliente", "financeiro", "campo", "leitura"];
+/* PERFIL-PROPRIETARIO (118790): "proprietario" entra; um por cliente quem garante é o banco (índice `cliente_membros_um_proprietario`). */
+export const PERFIS_CRIAVEIS: readonly string[] = ["proprietario", "gestor_cliente", "financeiro", "campo", "leitura"];
 
 export type Veredito = { ok: true } | { ok: false; status: 403; erro: string };
 

@@ -911,6 +911,14 @@ const CENARIOS = [
     ['etapa Itens da nota', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens da nota")')],
     /* D-a — o "Criar novo (duplica)" troca de modo (volta para as 3 abas da nova): não se mede aqui; o ⋯ dele fica no lugar (teste no vitest) */
   ] },
+  /* NOTA-ENTREGA-FUTURA-01 (3) — o achado com OUTRA NF: trocar ↔ criar e ir às etapas não movem a barra das etapas, as opções nem o rodapé */
+  { nome: 'nota-outra-nf', url: 'tela=nota-pdf&v=outranota', antes: async (p) => { await p.locator('[data-testid="nota-outra-nf"]').waitFor({ timeout: 8000 }); await espera(p, 300); },
+    estados: [
+    ['escolher criar', noLugar('[data-testid="nota-outra-nf-criar"]')],
+    ['escolher trocar', noLugar('[data-testid="nota-outra-nf-trocar"]')],
+    ['etapa Confirmar', clicar('[data-testid="nota-abas-ja"] button:has-text("Confirmar")')],
+    ['etapa Como vai ficar', clicar('[data-testid="nota-abas-ja"] button:has-text("Como vai ficar")')],
+  ] },
   /* P102 — o Editar obrigação da compra parcelada: trocar de aba não move a barra de abas nem o rodapé (o "Voltar para à vista" e o Salvar) */
   { nome: 'obrigacao-editar', url: 'tela=contrato&v=parcelamento&np=18&docs=1', antes: async (p) => {
     await p.locator('[data-testid="botoes-do-contrato"] button', { hasText: 'Editar' }).first().click(); await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900);

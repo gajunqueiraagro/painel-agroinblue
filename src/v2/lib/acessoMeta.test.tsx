@@ -26,12 +26,12 @@ const fonte = (arq: string) => readFileSync(arq, 'utf8').replace(/\{\/\*[\s\S]*?
 
 describe('o dono: quem vê meta', () => {
   it('VER — a linha inteira: gestor e financeiro veem (ACESSOS-FIN-03); campo e leitura, não', () => {
-    expect(VE_META).toEqual({ gestor_cliente: true, financeiro: true, campo: false, leitura: false });
+    expect(VE_META).toEqual({ proprietario: true, gestor_cliente: true, financeiro: true, campo: false, leitura: false });
     for (const p of ['gestor_cliente', 'financeiro']) expect(`${p}:${podeVerMeta(p, false)}`).toBe(`${p}:true`);
     for (const p of ['campo', 'leitura']) expect(`${p}:${podeVerMeta(p, false)}`).toBe(`${p}:false`);
   });
   it('EDITAR — só o admin: nenhum perfil de cliente edita meta, nem o dono (gestor), nem o financeiro', () => {
-    expect(EDITA_META).toEqual({ gestor_cliente: false, financeiro: false, campo: false, leitura: false });
+    expect(EDITA_META).toEqual({ proprietario: false, gestor_cliente: false, financeiro: false, campo: false, leitura: false });
     for (const p of ['gestor_cliente', 'financeiro', 'campo', 'leitura', null, undefined, '', 'dono', 'admin_agroinblue']) {
       expect(`${p}:${podeEditarMeta(p, false)}`).toBe(`${p}:false`);
     }
@@ -221,5 +221,13 @@ describe('nenhum `if` de perfil nos pontos de uso', () => {
       'src/pages/PlanejamentoFinanceiroTab.tsx', 'src/components/LancamentoDetalhe.tsx']) {
       expect(`${a}:${PERFIL.test(fonte(a))}`).toBe(`${a}:false`);
     }
+  });
+});
+
+describe('PERFIL-PROPRIETARIO (118790) — o Proprietário tem tudo o que o Gestor tem', () => {
+  it('vê a meta como o gestor e não a edita (só o admin edita)', () => {
+    expect(podeVerMeta('proprietario', false)).toBe(podeVerMeta('gestor_cliente', false));
+    expect(podeVerMeta('proprietario', false)).toBe(true);
+    expect(podeEditarMeta('proprietario', false)).toBe(false);
   });
 });

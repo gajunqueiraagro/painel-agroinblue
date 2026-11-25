@@ -58,7 +58,14 @@ export function definicoesExpostas(sql: string): { nome: string; guardada: boole
          usuario, 42501) e da `fn_documentos_motivo` (tenant_ok + 42501): so' devolve o motivo da NF e nasce fechada a
          public/anon/authenticated (proto 22/11: so' postgres e service_role executam) — presa abaixo */
       || (nome === 'public._fn_doc_motivo_nao_financeira' && /returns\s+text/i.test(p)
-        && /revoke all on function public\._fn_doc_motivo_nao_financeira\(uuid, text\) from public, anon, authenticated;/i.test(p));
+        && /revoke all on function public\._fn_doc_motivo_nao_financeira\(uuid, text\) from public, anon, authenticated;/i.test(p))
+      /* NOTA-ENTREGA-FUTURA-01 (113560): `_fn_itens_da_nota_fiscal(cliente, chave)` e `_fn_nota_eh_faturamento(cliente, chave)` sao INTERNAS da
+         `fn_lancamento_entregas` (que resolve o cliente pelo lancamento + tenant_ok + 42501): so' leem os itens / o CFOP da nota e nascem
+         fechadas a public/anon/authenticated — presas abaixo */
+      || (nome === 'public._fn_itens_da_nota_fiscal' && /returns\s+table/i.test(p)
+        && /revoke all on function public\._fn_itens_da_nota_fiscal\(uuid, text\) from public, anon, authenticated;/i.test(p))
+      || (nome === 'public._fn_nota_eh_faturamento' && /returns\s+boolean/i.test(p)
+        && /revoke all on function public\._fn_nota_eh_faturamento\(uuid, text\) from public, anon, authenticated;/i.test(p));
     /* IMPORTAR-ABATE-01: corpo `AS %L` = o texto do PROPRIO BANCO (pg_get_functiondef/prosrc patchado por md5), que o arquivo nao
        mostra — a guarda dele e' a da definicao anterior (ver `ultimasSemGuarda`) */
     return [{ nome, guardada, ...(/\bAS\s+%L/i.test(p) ? { doBanco: true } : {}) }];
@@ -158,6 +165,16 @@ describe('guarda de cliente nas migrations novas', () => {
     expect(chamador).toMatch(/if not tenant_ok\(p_cliente\) then raise exception .* errcode = '42501'/);
   });
 
+  it('as internas das entregas (113560) so\' passam FECHADAS, e quem as chama tem tenant_ok + 42501 (NOTA-ENTREGA-FUTURA-01)', () => {
+    const sql = readFileSync(join(DIR, '20261028113560_lancamento_entregas_01.sql'), 'utf8');
+    expect(semGuarda(sql)).toEqual([]);
+    for (const f of ['_fn_itens_da_nota_fiscal', '_fn_nota_eh_faturamento']) {
+      const aberta = sql.replace(new RegExp(`revoke all on function public\\.${f}\\(uuid, text\\) from public, anon, authenticated;`, 'i'), '');
+      expect(semGuarda(aberta), f).toEqual([`public.${f}`]);
+    }
+    const chamador = sql.slice(sql.search(/create or replace function public\.fn_lancamento_entregas/i));
+    expect(chamador).toMatch(/tenant_ok\(v_cliente\)[\s\S]*42501/i);
+  });
   it('a interna do motivo da NF (113450) so\' passa FECHADA, e quem a chama tem guarda pelo cliente (LOTE 30)', () => {
     const sql = readFileSync(join(DIR, '20261028113450_doc_soma_so_nota_que_paga.sql'), 'utf8');
     expect(semGuarda(sql)).toEqual([]);

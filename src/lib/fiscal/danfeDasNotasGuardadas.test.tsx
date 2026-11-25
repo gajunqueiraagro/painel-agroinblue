@@ -20,14 +20,17 @@ describe('G1 — as candidatas', () => {
       doc('x1', 98390, 'NFe-98390.xml'),
       doc('x2', 8702, 'NFe-8702.xml', { data_emissao: '2026-08-12' }),
       doc('x3', 518, 'nf 518.xml'), doc('p3', 518, 'nf 518.pdf'),        /* já tem o PDF: fora */
-      doc('x4', 7, 'sem arquivo.xml', { url: null }),                     /* sem arquivo: fora */
+      doc('x4', 7, 'sem arquivo.xml', { url: null }),                     /* NOTA-ENTREGA-FUTURA-01 (Gabriel 25/11): sem arquivo ENTRA (o XML da caixa) */
       doc('b5', 9, 'boleto.pdf', { chave_acesso: null }),                  /* sem chave: fora */
       doc('x6', 98390, 'NFe-98390 (2).xml'),                               /* a mesma chave: uma só */
     ];
     const vinc = [{ documento_id: 'x2', lancamento_id: 'l-x2' }, { documento_id: 'x2', lancamento_id: 'p2' }, { documento_id: 'x2', lancamento_id: 'p3' },
       { documento_id: 'x2', lancamento_id: 'p2' }];
     const c = candidatasSemPdf(docs, vinc);
-    expect(c.map((x) => [x.doc.id, x.ligados])).toEqual([['x2', ['p2', 'p3']], ['x1', []]]);
+    expect(c.map((x) => [x.doc.id, x.ligados])).toEqual(expect.arrayContaining([['x2', ['p2', 'p3']], ['x1', []], ['x4', []]]));
+    expect(c).toHaveLength(3);
+    /* a com arquivo vem primeiro na mesma chave (a sem arquivo só quando não há outra) */
+    expect(candidatasSemPdf([doc('y1', 5, 'a.xml', { url: null }), doc('y2', 5, 'b.xml')], []).map((x) => x.doc.id)).toEqual(['y2']);
   });
 });
 
