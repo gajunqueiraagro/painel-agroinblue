@@ -22,7 +22,7 @@ vi.mock('@/contexts/ClienteContext', () => ({
   useCliente: () => ({ isAdmin: quem.isAdmin, clienteAtual: quem.perfil === null ? null : { id: 'c1', nome: 'Cliente', perfil: quem.perfil } }),
 }));
 vi.mock('@/components/AlterarSenhaDialog', () => ({ AlterarSenhaDialog: () => null }));
-vi.mock('@/assets/logo.png', () => ({ default: 'logo.png' }));
+/* MARCA-PADRAO-01: o logo antigo saiu; o menu usa `LogoAgroinblue` (SVG do kit, resolvido pelo próprio Vite). */
 
 const como = (perfil: string | null, isAdmin = false) => { quem.perfil = perfil; quem.isAdmin = isAdmin; };
 beforeEach(() => como('financeiro'));

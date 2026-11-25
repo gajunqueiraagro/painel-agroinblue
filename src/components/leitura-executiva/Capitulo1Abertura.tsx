@@ -16,6 +16,8 @@
  */
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
 import { useCliente } from '@/contexts/ClienteContext';
+import { LogoAgroinblue } from '@/components/marca/LogoAgroinblue';
+import { NOME_DA_MARCA } from '@/lib/marca/marca';
 
 interface Props {
   ano: number;
@@ -163,7 +165,7 @@ export default function Capitulo1Abertura({ ano, mes }: Props) {
       <article className="cap1-leitura__page">
         <div className="cap1-leitura__topbar">
           <span className="cap1-leitura__brand">
-            <span className="cap1-leitura__brand-firm">Agroinblue</span>
+            <span className="cap1-leitura__brand-firm"><LogoAgroinblue variante="compacto" fundo="claro" alturaPx={14} /></span>
             <span className="cap1-leitura__brand-dot">·</span>
             <span className="cap1-leitura__brand-name">Leitura Executiva</span>
           </span>
@@ -244,7 +246,7 @@ export default function Capitulo1Abertura({ ano, mes }: Props) {
         </blockquote>
 
         <footer className="cap1-leitura__footer">
-          <span>Agroinblue · Leitura Executiva</span>
+          <span>{NOME_DA_MARCA} · Leitura Executiva</span>
           <span>Cap I — Abertura</span>
         </footer>
       </article>

@@ -20,6 +20,23 @@ export default {
         background: "hsl(var(--background))",
         corpo: "hsl(var(--corpo))",
         navy: "hsl(var(--navy))",
+        /* MARCA-PADRAO-01 — os tokens da marca (src/index.css, `--marca-*`), sem repintar nada. */
+        marca: {
+          "azul-marinho": "var(--marca-azul-marinho)",
+          "azul-profundo": "var(--marca-azul-profundo)",
+          "azul-faixa": "var(--marca-azul-faixa)",
+          "azul-sistema": "var(--marca-azul-sistema)",
+          azul: "var(--marca-azul)",
+          "azul-sobre-claro": "var(--marca-azul-sobre-claro)",
+          dourado: "var(--marca-dourado)",
+          "dourado-sobre-claro": "var(--marca-dourado-sobre-claro)",
+          papel: "var(--marca-papel)",
+          linha: "var(--marca-linha)",
+          "texto-2-escuro": "var(--marca-texto-2-escuro)",
+          "texto-2-claro": "var(--marca-texto-2-claro)",
+          verde: "var(--marca-verde)",
+          vermelho: "var(--marca-vermelho)",
+        },
         "mes-aberto": "hsl(var(--mes-aberto))",
         foreground: "hsl(var(--foreground))",
         primary: {

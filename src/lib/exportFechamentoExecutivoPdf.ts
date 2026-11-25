@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import type { FechamentoExecutivo } from '@/hooks/useFechamentoExecutivo';
 import { formatMoeda, formatNum, formatCabecas, formatArroba } from '@/lib/calculos/formatters';
+import { NOME_DA_MARCA } from '@/lib/marca/marca';
 
 const fmt = formatMoeda;
 function fmtN(v: number | undefined | null, dec = 0): string {
@@ -156,7 +157,7 @@ export function exportFechamentoExecutivoPdf(fechamento: FechamentoExecutivo) {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(150);
     doc.text(`Página ${i}/${totalPages}`, w - margin, 290, { align: 'right' });
-    doc.text('AgroInBlue • Fechamento Executivo', margin, 290);
+    doc.text(`${NOME_DA_MARCA} · Fechamento Executivo`, margin, 290);
     doc.setTextColor(0);
   }
 

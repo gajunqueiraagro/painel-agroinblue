@@ -4,6 +4,7 @@
  */
 import { View, Text, Image } from '@react-pdf/renderer';
 import { estilos, COR } from '@/lib/pdf/analise/estilos';
+import { RODAPE_DA_MARCA } from '@/lib/marca/marca';
 
 export function PdfHeader({ clienteNome, fazenda, contaNome, periodoLabel, logoData, titulo = 'Análise Financeira Executiva', linha2 }: {
   clienteNome: string;
@@ -20,7 +21,7 @@ export function PdfHeader({ clienteNome, fazenda, contaNome, periodoLabel, logoD
   return (
     <View style={estilos.header} fixed>
       {logoData ? <Image src={logoData} style={estilos.headerLogo} /> : null}
-      <View>
+      <View style={estilos.headerTexto}>
         <Text style={estilos.headerTitulo}>{titulo}</Text>
         <Text style={estilos.headerCtx}>{ctx}</Text>
         {linha2 ? <Text style={estilos.headerCtx}>{linha2}</Text> : null}
@@ -32,7 +33,7 @@ export function PdfHeader({ clienteNome, fazenda, contaNome, periodoLabel, logoD
 export function PdfRodape() {
   return (
     <View style={estilos.rodape} fixed>
-      <Text>AGROinBLUE • Gestão Rural Inteligente</Text>
+      <Text>{RODAPE_DA_MARCA}</Text>
       <Text render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
     </View>
   );

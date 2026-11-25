@@ -13,7 +13,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { RowInput, UserOptions, CellHookData } from 'jspdf-autotable';
-import logoUrl from '@/assets/logo.png';
+import { carregarLogoParaPdf, medidaDoLogoPdf, RODAPE_DA_MARCA } from '@/lib/marca/marca';
 
 // ── Geometria A4 retrato ──
 const PAGE_W = 210;
@@ -62,8 +62,11 @@ export function garantirEspaco(doc: jsPDF, y: number, alturaNecessaria: number):
   doc.addPage();
   return 20;
 }
-const LOGO_W = 32;          // ~32mm, proporção 2:1 (mesma do FM)
-const LOGO_H = 16;
+/* MARCA-PADRAO-01 — o logo horizontal de fundo claro a 45mm (≈ 170px do `cabecalho-pdf.html` na largura útil de 190mm); a altura sai
+   da proporção do arquivo (5,1:1), nunca do "2:1" do logo antigo. */
+const { w: LOGO_W, h: LOGO_H } = medidaDoLogoPdf(45);
+/** As cores do cabeçalho da marca (`marca-tokens.css`): azul-marinho, texto secundário sobre claro e o dourado sobre claro da régua. */
+const MARCA_RGB = { AZUL_MARINHO: [15, 31, 58] as RGB, TEXTO_2: [90, 106, 128] as RGB, DOURADO: [176, 138, 58] as RGB };
 
 type RGB = [number, number, number];
 
@@ -89,20 +92,8 @@ export const PALETA = {
 //    loadLogoBase64 do FM. Carregar UMA vez e passar o logoData aos helpers
 //    (addHeader) que fazem addImage síncrono — mesmo padrão do FM. ──
 export async function carregarLogoBase64(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = reject;
-    img.src = logoUrl;
-  });
+  /* MARCA-PADRAO-01: o carregador é o da marca (o PNG do kit); este nome fica porque 15 geradores o importam. */
+  return carregarLogoParaPdf('horizontal');
 }
 
 /**
@@ -116,8 +107,8 @@ export async function carregarLogoBase64(): Promise<string> {
  * As medidas 12mm de altura e 2:1 de proporção são as do original, byte a byte.
  */
 export function addLogoToDoc(doc: jsPDF, logoData: string, y: number, centerX: number): number {
-  const logoH = 12;
-  const logoW = logoH * 2;
+  /* MARCA-PADRAO-01: 40mm de largura, a altura pela proporção do arquivo (era 24×12, o "2:1" do logo antigo). */
+  const { w: logoW, h: logoH } = medidaDoLogoPdf(40);
   doc.addImage(logoData, 'PNG', centerX - logoW / 2, y, logoW, logoH);
   return y + logoH + 3;
 }
@@ -141,32 +132,34 @@ export function addHeader(
 ): number {
   const { titulo, subtitulo, infoLinha, logoData } = opts;
 
+  /* MARCA-PADRAO-01 — o cabeçalho do `cabecalho-pdf.html`: logo à ESQUERDA, título e contexto à DIREITA, régua dourada embaixo. A régua
+     fica onde a linha cinza ficava (y = 31) e o retorno segue 36: o conteúdo de quem chama não se move. Fonte: Helvetica (a do jsPDF). */
   if (logoData) {
-    doc.addImage(logoData, 'PNG', MARGEM, 9, LOGO_W, LOGO_H);
+    doc.addImage(logoData, 'PNG', MARGEM, 14, LOGO_W, LOGO_H);
   }
 
-  const xTexto = MARGEM + LOGO_W + 6;
-  doc.setFontSize(16);
+  const xDireita = PAGE_W - MARGEM;
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...PALETA.AZUL_PRIMARIO);
-  doc.text(titulo, xTexto, 16);
+  doc.setTextColor(...MARCA_RGB.AZUL_MARINHO);
+  doc.text(titulo, xDireita, 16, { align: 'right' });
 
   if (subtitulo) {
-    doc.setFontSize(11);
+    doc.setFontSize(9.5);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...PALETA.CINZA_TEXTO);
-    doc.text(subtitulo, xTexto, 22);
+    doc.setTextColor(...MARCA_RGB.TEXTO_2);
+    doc.text(subtitulo, xDireita, 22, { align: 'right' });
   }
   if (infoLinha) {
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...PALETA.CINZA_MEDIO);
-    doc.text(infoLinha, xTexto, 27);
+    doc.setTextColor(...MARCA_RGB.TEXTO_2);
+    doc.text(infoLinha, xDireita, 27, { align: 'right' });
   }
 
-  // Linha separadora abaixo do header (largura útil).
-  doc.setDrawColor(...PALETA.LINHA_SEPARADORA);
-  doc.setLineWidth(0.2);
+  // A régua da marca: 1,5px ≈ 0,4mm, dourado sobre claro, na largura útil.
+  doc.setDrawColor(...MARCA_RGB.DOURADO);
+  doc.setLineWidth(0.4);
   doc.line(MARGEM, 31, PAGE_W - MARGEM, 31);
 
   doc.setTextColor(...PALETA.PRETO);
@@ -189,7 +182,7 @@ export function addFooterComPaginacao(doc: jsPDF): void {
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...PALETA.CINZA_RODAPE);
-    doc.text('AGROinBLUE • Gestão Rural Inteligente', MARGEM, footerY);
+    doc.text(RODAPE_DA_MARCA, MARGEM, footerY);
     doc.text('Versão PDF v2', PAGE_W / 2, footerY, { align: 'center' });
     doc.text(`Página ${p} de ${total}`, PAGE_W - MARGEM, footerY, { align: 'right' });
     doc.setTextColor(...PALETA.PRETO);
@@ -209,16 +202,17 @@ export function addHeaderGlobalTodasPaginas(
   const from = ctx.from ?? 2;
   for (let p = from; p <= total; p++) {
     doc.setPage(p);
-    if (ctx.logoData) doc.addImage(ctx.logoData, 'PNG', MARGEM, 6, 20, 10);
+    /* MARCA-PADRAO-01: 30mm de largura pela proporção do arquivo (era 20×10, o "2:1" do logo antigo); o texto anda 10mm. */
+    if (ctx.logoData) { const m = medidaDoLogoPdf(30); doc.addImage(ctx.logoData, 'PNG', MARGEM, 7, m.w, m.h); }
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...PALETA.AZUL_PRIMARIO);
-    doc.text('Análise Financeira Executiva', MARGEM + 24, 10.5);
+    doc.text('Análise Financeira Executiva', MARGEM + 34, 10.5);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...PALETA.CINZA_TEXTO);
     const linha = [ctx.clienteNome, ctx.fazenda, `Conta: ${ctx.contaNome}`, ctx.periodoLabel].filter(Boolean).join('   ·   ');
-    doc.text(linha, MARGEM + 24, 15);
+    doc.text(linha, MARGEM + 34, 15);
     doc.setDrawColor(...PALETA.LINHA_SEPARADORA);
     doc.setLineWidth(0.2);
     doc.line(MARGEM, 18.5, PAGE_W - MARGEM, 18.5);

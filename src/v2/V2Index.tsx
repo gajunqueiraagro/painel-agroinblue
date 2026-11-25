@@ -113,6 +113,7 @@ import { buscarOperacaoDoLancamento } from '@/hooks/useOperacaoDoLancamento';
    camera ja diz que a entrada e' por foto, e o brilho ao lado do rotulo era enfase
    sobre enfase. */
 import { Camera, Loader2 } from 'lucide-react';
+import { LogoAgroinblue } from '@/components/marca/LogoAgroinblue';
 import { mesCurto } from '@/lib/pecuaria/fechamentoGlobal';
 import type { EtapaDoFechamento } from '@/lib/fechamento/faixaDoFechamento';
 
@@ -1872,9 +1873,9 @@ export default function V2Index() {
       {/* MAIN COLUMN — chrome superior + conteúdo único + drawer overlay */}
       <div className="flex-1 min-w-0 flex flex-col relative">
 
-        {/* HEADER MOBILE — Agroinblue + seletores (oculto em desktop) */}
+        {/* HEADER MOBILE — o logo AGROinBLUE (MARCA-PADRAO-01) + seletores (oculto em desktop) */}
         <div className="md:hidden flex items-center justify-between px-3 py-2 bg-primary text-primary-foreground shrink-0 shadow-sm no-print">
-          <span className="text-sm font-bold">Agroinblue</span>
+          <LogoAgroinblue variante="compacto" fundo="escuro" alturaPx={18} className="shrink-0" />
           <div className="flex items-center gap-1">
             {clientes.length > 0 && (
               <div className="[&_button]:text-xs [&_button]:h-7 [&_button]:bg-primary-foreground/10 [&_button]:text-primary-foreground [&_button]:border-0">
