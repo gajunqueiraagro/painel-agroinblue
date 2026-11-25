@@ -66,10 +66,10 @@ export function ResumoDoConfirmar({ cartoes, checagens, compacto = false }: {
   return (
     <div className="flex shrink-0 flex-col" data-testid="nota-confirmar-resumo">
       {/* compacto (com o formulário das parcelas embaixo): uma linha só, como os cartões de antes — a frase sai (o rodapé já diz "nada é gravado antes") */}
-      {!compacto && <p className="px-3 pt-2 text-[11px] text-muted-foreground">Ao clicar em <b className="text-foreground">Aplicar</b>, o sistema faz isto. Nada é gravado antes.</p>}
-      <ul className={cn(compacto ? 'grid grid-cols-4 gap-1.5 p-2' : 'flex max-w-[900px] flex-col gap-1 px-3 py-2')}>
+      {!compacto && <p className="px-3 pt-1.5 text-[11px] text-muted-foreground">Ao clicar em <b className="text-foreground">Aplicar</b>, o sistema faz isto. Nada é gravado antes.</p>}
+      <ul className={cn(compacto ? 'grid grid-cols-4 gap-1.5 p-2' : 'flex max-w-[900px] flex-col gap-1 px-3 py-1.5')}>
         {cartoes.map((c) => (
-          <li key={c.chave} className="flex h-[28px] min-w-0 items-center gap-2.5 rounded-md border px-2.5" data-testid={`nota-confirmar-${c.chave}`}>
+          <li key={c.chave} className="flex h-[26px] min-w-0 items-center gap-2.5 rounded-md border px-2.5" data-testid={`nota-confirmar-${c.chave}`}>
             <span aria-hidden className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px]', ICONE[c.icone].classe)}>{ICONE[c.icone].sinal}</span>
             {/* uma linha: o que acontece em negrito e o detalhe ao lado (corta com "…", o inteiro no title) */}
             <span className="flex min-w-0 items-baseline gap-2">
@@ -81,7 +81,7 @@ export function ResumoDoConfirmar({ cartoes, checagens, compacto = false }: {
       </ul>
       <ul className={cn(compacto ? 'grid grid-cols-2 gap-x-4 px-2 pb-1' : 'px-3 pb-3')} data-testid="nota-confirmar-checagens">
         {checagens.map((x, k) => (
-          <li key={k} className="flex h-[24px] min-w-0 items-center gap-2 border-t border-border/50 text-[11px] first:border-t-0" data-testid="nota-confirmar-checagem" data-tipo={x.tipo}>
+          <li key={k} className="flex h-[22px] min-w-0 items-center gap-2 border-t border-border/50 text-[11px] first:border-t-0" data-testid="nota-confirmar-checagem" data-tipo={x.tipo}>
             <em className={cn('w-4 shrink-0 text-center font-bold not-italic', x.tipo === 'ok' ? 'text-emerald-600' : x.tipo === 'aviso' ? 'text-amber-600' : 'text-destructive')}>
               {x.tipo === 'ok' ? '✓' : '!'}</em>
             <span className="min-w-0 truncate" title={x.texto} data-reticencias-com-title="">{x.texto}</span>
