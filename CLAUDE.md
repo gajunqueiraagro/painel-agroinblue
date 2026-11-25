@@ -333,6 +333,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P155: trava que ESCREVE um campo (o `FazendaSelect` forçando Administrativo) só age com a classificação do lançamento ABERTO
   (`classificacaoDe`): o render de transição da abertura tem o estado do reset ("última atividade") e gravava a fazenda errada no Salvar.
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
+- BOLETO-FATOR-VENC-01: o FATOR do boleto vira data por UMA regra (tela `vencimentoDoFator`, banco `_fn_boleto_vencimento_do_fator`, casos em
+  `fatorDeVencimento.casos.json`): o ciclo (base 07/10/1997 ou 22/02/2025) cuja data cai em [data da LEITURA − 3000, + 5500]; nenhuma = vazio.
 - P95 (DANFE-CHAVE-EM-GRUPOS-01): DANFE com a chave/rótulos picados em itens se lê pela linha (`chaveEmGrupos` SÓ com DV certo; `aoLado`);
   sem chave legível, DIGITAR A CHAVE (`chaveDigitada.ts`: DV, modelo 55; avulsa 890 não usa o CNPJ; o resto em branco, âmbar na prévia);
   nota no cartão em parcelas soltas acha as IRMÃS da fração k/N (`fn_nota_ja_lancada` 'fracao') e mostra soma × nota, nunca faz bater.
