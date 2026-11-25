@@ -2511,6 +2511,22 @@ const CENARIOS = [
       await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor();
       if (grupo) await p.locator(`[data-testid="fatura-grupo-${grupo}"]`).click();
       await p.waitForTimeout(400); } })),
+  /* CARTAO-FATURA-GRAVAR (25/11, lote 118540) — o "Gravar N prontas" na prévia, NO TETO (soma 9.999.999,99; a fazenda mais comprida):
+     `-escolha` a linha a lançar aberta na faixa (conta + fazenda, seletores da casa); `-confirmar` a prévia do banco ("Confirmar gravação");
+     `-recusa` (`&v=fatura-recusa`) a frase do banco NA LINHA do mover; `-desfazer-motivo` / `-desfazer-previa` (`&v=fatura-gravada`) */
+  ...[['-escolha', 'fatura', 'escolha'], ['-confirmar', 'fatura', 'confirmar'], ['-recusa', 'fatura-recusa', 'recusa'],
+    ['-desfazer-motivo', 'fatura-gravada', 'motivo'], ['-desfazer-previa', 'fatura-gravada', 'previa']].map(([n, v, passo]) => ({
+    nome: `conciliacao-painel-cartao-fatura${n}`, url: `tela=conciliacao&admin=1&v=${v}`, tamanhos: [[1000, 600], [1126, 579], [1280, 720], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="car"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arrastar"] input[type="file"]').setInputFiles({ name: 'fatura-bancada-out.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+      await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor();
+      if (passo === 'escolha') { await p.locator('[data-testid="fatura-grupo-nova_sugestao"]').click(); await p.locator('[data-testid="fatura-linha"][data-estado="falta"]').first().click(); }
+      if (passo === 'confirmar' || passo === 'recusa') { await p.locator('[data-testid="fatura-gravar"]').click(); await p.locator('[data-testid="fatura-confirmar"]').waitFor(); }
+      if (passo === 'recusa') await p.locator('[data-testid="fatura-grupo-mover"]').click();
+      if (passo === 'motivo' || passo === 'previa') { await p.locator('[data-testid="fatura-desfazer"]').click(); await p.locator('[data-testid="fatura-motivo-desfazer"]').fill('fatura lida com o cartão errado'); }
+      if (passo === 'previa') { await p.locator('[data-testid="fatura-prever-desfazer"]').click(); await p.locator('[data-testid="fatura-confirmar-desfazer"]').waitFor(); }
+      await p.waitForTimeout(400); } })),
   { nome: 'conciliacao-painel-conta-ver-importacao', url: 'tela=conciliacao&admin=1', tamanhos: [[1000, 600], [1280, 720], [1920, 1080]],
     antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
       await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();

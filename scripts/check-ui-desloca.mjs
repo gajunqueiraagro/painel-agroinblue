@@ -1064,6 +1064,24 @@ const CENARIOS = [
       await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor(); await espera(p); },
     estados: [['Nova · sugestão (5 linhas)', clicar('[data-testid="fatura-grupo-nova_sugestao"]')], ['Pagamento (1 linha)', clicar('[data-testid="fatura-grupo-pagamento"]')],
       ['Já lançado', clicar('[data-testid="fatura-grupo-ja_lancado"]')]] },
+  /* CARTAO-FATURA-GRAVAR — abrir a linha na faixa de escolha (altura reservada), o Gravar → a prévia do banco → a recusa na linha, e o
+     Desfazer (motivo → prévia): a faixa, o quadro, o cabeçalho das colunas, a barra de baixo e os botões não andam */
+  ...[['fatura', [['linha aberta na faixa de escolha', async (p) => { await p.locator('[data-testid="fatura-grupo-nova_sugestao"]').click();
+      await p.locator('[data-testid="fatura-linha"][data-estado="falta"]').first().click(); await espera(p); }],
+    ['Gravar → a prévia do banco', async (p) => { await p.locator('[data-testid="fatura-gravar"]').click(); await p.locator('[data-testid="fatura-confirmar"]').waitFor(); await espera(p); }]]],
+    ['fatura-recusa', [['Gravar → a recusa na linha', async (p) => { await p.locator('[data-testid="fatura-gravar"]').click(); await p.locator('[data-testid="fatura-confirmar"]').waitFor();
+      await p.locator('[data-testid="fatura-grupo-mover"]').click(); await espera(p); }]]],
+    ['fatura-gravada', [['Desfazer: o motivo', async (p) => { await p.locator('[data-testid="fatura-desfazer"]').click(); await p.locator('[data-testid="fatura-motivo-desfazer"]').fill('motivo');
+      await espera(p); }], ['Desfazer: a prévia', async (p) => { await p.locator('[data-testid="fatura-desfazer"]').click();
+      await p.locator('[data-testid="fatura-motivo-desfazer"]').fill('motivo'); await p.locator('[data-testid="fatura-prever-desfazer"]').click();
+      await p.locator('[data-testid="fatura-confirmar-desfazer"]').waitFor(); await espera(p); }]]]].map(([v, estados]) => ({
+    nome: `conciliacao-painel-cartao-${v}-gravar`, url: `tela=conciliacao&admin=1&v=${v}`, tamanhos: [[1000, 600], [1126, 579], [1280, 720]],
+    presos: '[data-testid="fatura-cabecalho"], [data-testid^="fatura-grupo-"], [data-testid="fatura-escolha"], [data-testid="fatura-tabela"] thead th, [data-testid="fatura-quadro"], [data-testid="fatura-barra"]',
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="car"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arrastar"] input[type="file"]').setInputFiles({ name: 'fatura-bancada-out.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+      await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor(); await espera(p); },
+    estados })),
   /* P159a (CONC-TELAS-01) — a Conferência: trocar o chip (Sem par, Casados, Vencidos, Todos) não mexe no cabeçalho do modal, nos chips,
      na faixa nem no cabeçalho das colunas (régua fixa); o Casar lançamentos: trocar de sub-aba não mexe na barra, e o mês curto não mexe
      nas colunas do Extrato. */

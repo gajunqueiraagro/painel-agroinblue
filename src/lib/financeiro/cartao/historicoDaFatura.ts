@@ -6,7 +6,8 @@
  *  · as PALAVRAS para buscar o histórico (`termosDoHistorico`: as do estabelecimento das linhas a lançar, sem repetir, no máx. 40);
  *  · a SUGESTÃO de classificação (`sugestaoPeloHistorico`): nos últimos 12 meses, os lançamentos com a 1ª PALAVRA do estabelecimento (a
  *    palavra comum — cidade, "exemplo", "comercio" — sozinha não basta); entre eles, os que dividem MAIS palavras; a conta do plano com a
- *    MAIORIA ESTRITA desses; histórico misto (o "Mercado Livre" do NJ) = sem sugestão ("Nova · classificar"). Nada grava.
+ *    MAIORIA ESTRITA desses; histórico misto (o "Mercado Livre" do NJ) = sem sugestão ("Nova · classificar"); a FAZENDA da sugestão é a
+ *    maioria estrita dos mesmos casos com essa conta (D1, CARTAO-FATURA-GRAVAR), misto = sem fazenda. Nada grava.
  */
 import { palavrasDoEstabelecimento, parcelaDaDescricao, type LancamentoNoCartao } from './linhasDaFatura';
 import type { FaturaLida, LinhaDaFatura } from './lerFaturaOurocard';
@@ -30,6 +31,8 @@ export interface LinhaDoBanco {
   id: string; conta_bancaria_id: string | null; data_vencimento: string | null; data_competencia: string | null; valor: number | string | null;
   descricao: string | null; favorecido_id: string | null; status_transacao: string | null; tipo_operacao: string | null; plano_conta_id?: string | null;
   financiamento_id?: string | null;
+  /** CARTAO-FATURA-GRAVAR: a hora da última mudança (o `lido_em` do gravar) e a fazenda (a sugestão do D1) */
+  updated_at?: string | null; fazenda_id?: string | null;
 }
 
 /** só SAÍDA vira candidato (a fatura lista compras); o valor em centavos inteiros (positivo) */
@@ -41,6 +44,7 @@ export function lancamentoDoBanco(r: LinhaDoBanco, nomeDoFornecedor: (id: string
     id: r.id, contaId: r.conta_bancaria_id, vencimento: r.data_vencimento, competencia: r.data_competencia, valorCent: Math.round(Math.abs(v) * 100),
     descricao: r.descricao ?? '', fornecedor: r.favorecido_id ? nomeDoFornecedor(r.favorecido_id) : null,
     parcela: r.financiamento_id ? parcelaDaDescricao(r.descricao ?? '') : null, status: r.status_transacao ?? '',
+    atualizadoEm: r.updated_at ?? null,
   };
 }
 
@@ -57,7 +61,7 @@ export function termosDoHistorico(linhas: readonly LinhaDaFatura[]): string[] {
   return out;
 }
 
-export interface CasoDoHistorico { descricao: string; fornecedor: string | null; planoContaId: string }
+export interface CasoDoHistorico { descricao: string; fornecedor: string | null; planoContaId: string; fazendaId?: string | null }
 
 /** a palavra casa: igual, ou as 5 primeiras letras (a mesma régua do `mesmoEstabelecimento`) */
 const casaPalavra = (p: string, q: string) => p === q || (p.length >= 5 && q.startsWith(p.slice(0, 5)));
@@ -83,6 +87,13 @@ export function sugestaoPeloHistorico(historico: readonly CasoDoHistorico[], rot
     for (const par of conta) if (!melhor || par[1] > melhor[1]) melhor = par;
     if (!melhor || melhor[1] * 2 <= iguais.length) return null;
     const rotulo = rotuloDe(melhor[0]);
-    return rotulo ? { planoContaId: melhor[0], rotulo } : null;
+    if (!rotulo) return null;
+    /* D1 (CARTAO-FATURA-GRAVAR): a fazenda = a MAIORIA ESTRITA dos mesmos casos com esta conta; misto = sem fazenda (escolhe na tabela) */
+    const daConta = iguais.filter((i) => historico[i].planoContaId === melhor[0]);
+    const faz = new Map<string, number>();
+    for (const i of daConta) { const f = historico[i].fazendaId; if (f) faz.set(f, (faz.get(f) ?? 0) + 1); }
+    let fazenda: string | null = null;
+    for (const [f, n] of faz) if (n * 2 > daConta.length) fazenda = f;
+    return { planoContaId: melhor[0], rotulo, fazendaId: fazenda };
   };
 }

@@ -336,6 +336,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P95 (DANFE-CHAVE-EM-GRUPOS-01): DANFE com a chave/rótulos picados em itens se lê pela linha (`chaveEmGrupos` SÓ com DV certo; `aoLado`);
   sem chave legível, DIGITAR A CHAVE (`chaveDigitada.ts`: DV, modelo 55; avulsa 890 não usa o CNPJ; o resto em branco, âmbar na prévia);
   nota no cartão em parcelas soltas acha as IRMÃS da fração k/N (`fn_nota_ja_lancada` 'fracao') e mostra soma × nota, nunca faz bater.
+- CARTAO-FATURA-GRAVAR: a fatura do cartão se lê por UMA porta (`lerFaturaDoCartao`: Ourocard e Sicredi → a mesma `FaturaLida`) e grava SÓ pela
+  `fn_fatura_cartao_gravar` (prévia `p_simular`, recusa POR LINHA, tudo ou nada, `lido_em` = o `updated_at` lido) / `_desfazer` (motivo); a compra
+  que sobra casa em 2ª passada com o que já está NESTA fatura (cartão + vencimento + valor): a recorrência prevista não duplica.
 - OC-ABRIR-LENTO-01: erro do banco nunca vai cru ao toast (frase pronta, o texto no console); leitura de tela que termina depois de
   a tela sair nao escreve nem avisa; leituras independentes da abertura saem juntas (`Promise.all`), nunca em serie.
 - Documentos da OC (OC-DOC-VENDA-01): abate E venda usam o MESMO componente (`AbaDocumentosOC`/`DocumentoFormAbate`, pelo tipo); na
