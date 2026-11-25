@@ -1,5 +1,6 @@
 /**
- * OPENFINANCE-P3a — as CONTAS de uma conexão (só o admin AGROinBLUE): 'listar' (tipo · banco · 4 dígitos · titular mascarado; nunca
+ * OPENFINANCE-P3a — as CONTAS de uma conexão (admin AGROinBLUE ou gestor do cliente, PRONTO-NJ-01): 'conexoes' (as conexões como a Pluggy
+ * as vê: banco, situação, frase), 'listar' (tipo · banco · 4 dígitos · titular mascarado; nunca
  * saldo nem transação) e 'permitir' (grava SÓ as marcadas em openfinance_contas_permitidas, 118130). Só liga as peças; a ordem mora em
  * `_shared/pluggy.ts` (`contas`, provada no vitest).
  * ⚠ Não loga corpo, cabeçalho, chave nem token. Secrets: PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET.
@@ -26,11 +27,28 @@ Deno.serve(async (req) => {
   try { const c = await req.json(); if (c && typeof c === "object") corpo = c; } catch { corpo = {}; }
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim() || null;
 
-  /* P3b: 'ligar' = a conta permitida → a conta do sistema (não fala com a Pluggy; a interna da 118140 confere) */
+  /* OPENFINANCE-PRONTO-NJ-01 (8, Gabriel 15:36): CONECTA/ESCOLHE/LIGA = o admin AGROinBLUE ou o PROPRIETÁRIO (a mesma regra do
+     openfinance-conectar); VÊ = também o gestor do cliente */
+  const perfilDe = async (autor: string, clienteId: string): Promise<string | null> => {
+    const { data: ehAdmin } = await admin.rpc("is_admin_agroinblue", { _user_id: autor });
+    if (ehAdmin === true) return "admin";
+    const { data: perfil } = await admin.rpc("get_user_perfil", { _user_id: autor, _cliente_id: clienteId });
+    return typeof perfil === "string" ? perfil : null;
+  };
+  const podeConectar = async (autor: string, clienteId: string) => {
+    const p = await perfilDe(autor, clienteId);
+    return p === "admin" || p === "proprietario";
+  };
+  const podeVer = async (autor: string, clienteId: string) => {
+    const p = await perfilDe(autor, clienteId);
+    return p === "admin" || p === "proprietario" || p === "gestor_cliente";
+  };
+
+  /* P3b: 'ligar = a conta permitida → a conta do sistema (não fala com a Pluggy; a interna da 118140 confere) */
   if (corpo.acao === "ligar") {
     const l = await ligarConta({ token, clienteId: corpo.cliente_id, permitidaId: corpo.permitida_id, contaBancariaId: corpo.conta_bancaria_id, simular: corpo.simular }, {
       autorDoToken: async (t) => (await admin.auth.getUser(t)).data.user?.id ?? null,
-      ehAdmin: async (autor) => (await admin.rpc("is_admin_agroinblue", { _user_id: autor })).data === true,
+      podeConectar,
       ligar: async (p) => {
         const { data, error } = await admin.rpc("_fn_openfinance_conta_ligar_sistema", p);
         if (error || !data || typeof data !== "object") return { ok: false, codigo: error?.code ?? null };
@@ -42,7 +60,8 @@ Deno.serve(async (req) => {
 
   const r = await contas({ token, acao: corpo.acao, clienteId: corpo.cliente_id, itemId: corpo.item_id, accountIds: corpo.account_ids, simular: corpo.simular }, {
     autorDoToken: async (t) => (await admin.auth.getUser(t)).data.user?.id ?? null,
-    ehAdmin: async (autor) => (await admin.rpc("is_admin_agroinblue", { _user_id: autor })).data === true,
+    podeConectar,
+    podeVer,
     credenciais: () => {
       const clientId = Deno.env.get("PLUGGY_CLIENT_ID");
       const clientSecret = Deno.env.get("PLUGGY_CLIENT_SECRET");
@@ -52,6 +71,17 @@ Deno.serve(async (req) => {
     permitidasDoItem: async (itemId) => {
       const { data, error } = await admin.from("openfinance_contas_permitidas").select("account_id").eq("item_id", itemId).eq("ativo", true);
       return error ? null : (data ?? []).map((l: { account_id: string }) => l.account_id);
+    },
+    /* (1)+(7): os itens que a Pluggy avisou com o clientUserId deste cliente (a tentativa que não completou entra), sem os desconectados */
+    itensDoCliente: async (clienteId) => {
+      const { data, error } = await admin.from("openfinance_eventos").select("evento, item_id, recebido_em")
+        .eq("cliente_id", clienteId).not("item_id", "is", null).order("recebido_em", { ascending: false }).limit(2000);
+      if (error) return null;
+      const linhas: Array<{ evento: string; item_id: string }> = data ?? [];
+      const fora = new Set(linhas.filter((l) => l.evento === "agroinblue/item_desconectado").map((l) => l.item_id));
+      const ids: string[] = [];
+      for (const l of linhas) if (l.evento.startsWith("item/") && !fora.has(l.item_id) && !ids.includes(l.item_id)) ids.push(l.item_id);
+      return ids;
     },
     gravar: async (p) => {
       const { data, error } = await admin.rpc("_fn_openfinance_contas_gravar", p);

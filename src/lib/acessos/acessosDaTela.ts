@@ -19,6 +19,8 @@ export interface PerfilDaTela {
  * (01F): hoje `tenant_ok` nao distingue leitura de escrita, e um login de leitura GRAVARIA. Admin do AGROinBLUE nao e' criavel.
  */
 export const PERFIS_DA_TELA: readonly PerfilDaTela[] = [
+  /* PERFIL-PROPRIETARIO (118790): um por cliente (o banco recusa o segundo com a frase pronta); só o admin dá o perfil */
+  { valor: 'proprietario', rotulo: 'Proprietário', motivo: null },
   { valor: 'gestor_cliente', rotulo: 'Gestor do Cliente', motivo: null },
   { valor: 'financeiro', rotulo: 'Financeiro', motivo: null },
   { valor: 'campo', rotulo: 'Campo', motivo: MOTIVO_PERFIL_AGUARDA },
@@ -27,7 +29,7 @@ export const PERFIS_DA_TELA: readonly PerfilDaTela[] = [
 export const PERFIL_INICIAL = 'financeiro';
 
 export const ROTULO_PERFIL: Record<string, string> = {
-  admin_agroinblue: 'Administrador', gestor_cliente: 'Gestor do Cliente', financeiro: 'Financeiro', campo: 'Campo', leitura: 'Leitura',
+  admin_agroinblue: 'Administrador', proprietario: 'Proprietário', gestor_cliente: 'Gestor do Cliente', financeiro: 'Financeiro', campo: 'Campo', leitura: 'Leitura',
 };
 export const ehAdminAgroinblue = (perfil: string | null | undefined) => perfil === 'admin_agroinblue';
 export const MOTIVO_LINHA_ADMIN = 'administrador · gerenciado fora desta tela';

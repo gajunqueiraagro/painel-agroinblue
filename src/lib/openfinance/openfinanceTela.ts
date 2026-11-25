@@ -136,6 +136,8 @@ export function fraseDoDesconectar(corpo: Record<string, unknown>): string {
  */
 export interface ContaDaConexao {
   accountId: string; tipoLegivel: string; banco: string; final4: string | null; titular: string | null; documento: string | null; permitida: boolean;
+  /** PRONTO-NJ-01: 'BANK' (conta corrente/poupança: lança numa conta do sistema) ou 'CREDIT' (cartão); a agência, para a sugestão */
+  tipo: 'BANK' | 'CREDIT' | null; agencia: string | null;
 }
 export function contasDaResposta(corpo: Record<string, unknown>): ContaDaConexao[] {
   const v = corpo.contas;
@@ -144,7 +146,8 @@ export function contasDaResposta(corpo: Record<string, unknown>): ContaDaConexao
     const id = textoDe(c, 'account_id');
     if (!id || !ehObjeto(c)) return [];
     return [{ accountId: id, tipoLegivel: textoDe(c, 'tipo_legivel') ?? 'Conta', banco: textoDe(c, 'banco') ?? 'Banco',
-      final4: textoDe(c, 'final4'), titular: textoDe(c, 'titular'), documento: textoDe(c, 'documento'), permitida: c.permitida === true }];
+      final4: textoDe(c, 'final4'), titular: textoDe(c, 'titular'), documento: textoDe(c, 'documento'), permitida: c.permitida === true,
+      tipo: c.tipo === 'BANK' || c.tipo === 'CREDIT' ? c.tipo : null, agencia: textoDe(c, 'agencia') }];
   });
 }
 /** o conjunto marcado de partida: SÓ o que já está permitido (nada novo vem marcado) */
@@ -169,3 +172,68 @@ export function itemDoSucesso(dados: unknown): string | null {
 }
 export const FRASE_CONTAS_FALHOU = 'Não consegui ler as contas deste banco agora. Tente de novo.';
 export const FRASE_PERMITIR_FALHOU = 'Não consegui gravar a escolha agora. Nada foi gravado; tente de novo.';
+
+/**
+ * OPENFINANCE-PRONTO-NJ-01 (8) — quem usa o Open Finance do cliente na tela (Gabriel 12:17 e 15:36; a mesma regra da borda):
+ *   · VÊ (a coluna, o selo, "Bancos conectados" e a situação): o admin AGROinBLUE, o PROPRIETÁRIO e o GESTOR do cliente;
+ *   · CONECTA, ESCOLHE AS CONTAS e RECONECTA: só o admin e o PROPRIETÁRIO (o gestor vê os botões desabilitados, com o motivo).
+ * O financeiro não vê nem conecta (D3 do 118150). Desconectar e buscar o extrato seguem só o admin.
+ */
+export const podeVerOpenFinance = (isAdmin: boolean, perfil: string | null | undefined): boolean =>
+  isAdmin || perfil === 'proprietario' || perfil === 'gestor_cliente';
+export const podeConectarOpenFinance = (isAdmin: boolean, perfil: string | null | undefined): boolean => isAdmin || perfil === 'proprietario';
+export const MOTIVO_SO_PROPRIETARIO = 'Só o proprietário conecta os bancos.';
+
+/** (1)+(7) — a lista de "Bancos conectados" como a Pluggy a vê (`openfinance-contas` 'conexoes'), com as tentativas que não completaram */
+export type SituacaoDaConexao = 'conectado' | 'lendo' | 'esperando' | 'erro';
+export interface ConexaoDaJanela {
+  itemId: string; banco: string; empresa: boolean; situacao: SituacaoDaConexao; frase: string | null; criadoEm: string | null;
+}
+const SITUACOES: readonly SituacaoDaConexao[] = ['conectado', 'lendo', 'esperando', 'erro'];
+const ehSituacao = (v: unknown): v is SituacaoDaConexao => typeof v === 'string' && SITUACOES.some((x) => x === v);
+export function conexoesDaResposta(corpo: Record<string, unknown>): ConexaoDaJanela[] {
+  const v = corpo.conexoes;
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((c): ConexaoDaJanela[] => {
+    const id = textoDe(c, 'item_id');
+    if (!id || !ehObjeto(c) || !ehSituacao(c.situacao)) return [];
+    return [{ itemId: id, banco: textoDe(c, 'banco') ?? 'Banco', empresa: c.empresa === true, situacao: c.situacao,
+      frase: textoDe(c, 'frase'), criadoEm: textoDe(c, 'criado_em') }];
+  });
+}
+export const ROTULO_DA_SITUACAO: Record<SituacaoDaConexao, string> = {
+  conectado: 'Conectado', lendo: 'Lendo o banco', esperando: 'Esperando o titular', erro: 'Não completou',
+};
+export const FRASE_CONEXOES_FALHOU = 'Não consegui ler as conexões deste cliente. Tente de novo.';
+
+/** (1) — a Pluggy ainda lendo o banco logo depois do consentimento (a lista de contas pode vir vazia): a tela relê sozinha */
+export const lendoDaResposta = (corpo: Record<string, unknown>): boolean => corpo.lendo === true;
+export const bancoDaResposta = (corpo: Record<string, unknown>): string | null => textoDe(corpo, 'banco');
+export const FRASE_AINDA_LENDO = 'A Pluggy ainda está lendo as contas deste banco. Espere um pouco e clique em "Ler de novo".';
+
+/**
+ * (1) — "Escolher contas" num passo só: o que marcar entra (permitir) e cada conta corrente marcada lança na conta do sistema escolhida
+ * (ligar). `ligadaHoje` = a conta do sistema que cada conta do banco JÁ recebe. A mesma conta do sistema para duas contas do banco = bloqueia
+ * (o banco recusaria a 2ª). O cartão não lança em conta corrente: a fatura entra pela regra da fonte da fatura (Code 5, 118730).
+ */
+export interface LigacaoPlanejada { accountId: string; contaId: string | null }
+export interface PlanoDaGravacao { accountIds: string[]; ligacoes: LigacaoPlanejada[]; repetida: string | null }
+export function planoDaGravacao(contas: readonly ContaDaConexao[], marcadas: ReadonlySet<string>,
+  escolha: Readonly<Record<string, string>>, ligadaHoje: Readonly<Record<string, string | null>>): PlanoDaGravacao {
+  const ligacoes: LigacaoPlanejada[] = [];
+  const usadas = new Map<string, number>();
+  for (const c of contas) {
+    if (!marcadas.has(c.accountId) || c.tipo !== 'BANK') continue;
+    const quer = escolha[c.accountId] || null;
+    if (quer) usadas.set(quer, (usadas.get(quer) ?? 0) + 1);
+    if (quer !== (ligadaHoje[c.accountId] ?? null)) ligacoes.push({ accountId: c.accountId, contaId: quer });
+  }
+  const repetida = [...usadas.entries()].find(([, n]) => n > 1)?.[0] ?? null;
+  return { accountIds: contas.filter((c) => marcadas.has(c.accountId)).map((c) => c.accountId), ligacoes, repetida };
+}
+/** a frase das ligações na prévia, CURTA (o destino de cada conta já está na linha dela): "Liga 2 contas correntes às contas escolhidas." */
+export function fraseDasLigacoes(plano: PlanoDaGravacao): string {
+  const n = plano.ligacoes.length;
+  return n === 0 ? '' : n === 1 ? 'Liga 1 conta corrente à conta escolhida.' : `Liga ${n} contas correntes às contas escolhidas.`;
+}
+export const FRASE_REPETIDA = 'Duas contas do banco estão indo para a mesma conta do sistema. Troque uma antes de gravar.';

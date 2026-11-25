@@ -241,9 +241,14 @@ describe('OPENFINANCE-P3b — ligar a conta do banco à conta do sistema', () =>
   const pedido = (extra: Record<string, unknown> = {}) => ({ token: 'tok-admin', clienteId: CLIENTE, permitidaId: PERMITIDA, contaBancariaId: CONTA, ...extra });
   const pecasLigar = (over: Partial<PecasLigar> = {}): PecasLigar => ({
     autorDoToken: async (t) => (t === 'tok-admin' ? 'autor-1' : null),
-    ehAdmin: async () => true,
+    podeConectar: async () => true,
     ligar: async () => ({ ok: true, corpo: { mudou: true, simulado: false } }),
     ...over,
+  });
+  it('PRONTO-NJ-01 (8): quem pode ligar é perguntado COM o cliente (o admin ou o gestor DESTE cliente)', async () => {
+    const podeConectar = vi.fn(async () => true);
+    expect((await ligarConta(pedido(), pecasLigar({ podeConectar }))).status).toBe(200);
+    expect(podeConectar).toHaveBeenCalledWith('autor-1', CLIENTE);
   });
   it('liga com o autor do token e repassa a prévia', async () => {
     const ligar = vi.fn(async () => ({ ok: true as const, corpo: { mudou: true, simulado: true } }));
@@ -261,7 +266,7 @@ describe('OPENFINANCE-P3b — ligar a conta do banco à conta do sistema', () =>
   it('401 / 403 antes de gravar; as recusas do banco viram frase', async () => {
     const ligar = vi.fn(async () => ({ ok: true as const, corpo: {} }));
     expect((await ligarConta(pedido({ token: null }), pecasLigar({ ligar }))).status).toBe(401);
-    expect((await ligarConta(pedido(), pecasLigar({ ligar, ehAdmin: async () => false }))).status).toBe(403);
+    expect((await ligarConta(pedido(), pecasLigar({ ligar, podeConectar: async () => false }))).status).toBe(403);
     expect(ligar).not.toHaveBeenCalled();
     for (const [codigo, status] of [['42501', 409], ['23505', 409], ['22023', 400], [null, 500]] as const) {
       const r = await ligarConta(pedido(), pecasLigar({ ligar: async () => ({ ok: false, codigo }) }));

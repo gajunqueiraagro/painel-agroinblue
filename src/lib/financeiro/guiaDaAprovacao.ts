@@ -48,7 +48,7 @@ export function marcarGuiaVisto(userId: string | null | undefined): void {
 }
 
 /* ── o passo 6: quem pode aprovar (membro ATIVO gestor ou financeiro do cliente — a mesma regra da `fn_bpo_aprovador_gravar`) ── */
-export interface CandidatoAAprovador { userId: string; rotulo: string; perfil: 'gestor_cliente' | 'financeiro'; jaAprova: boolean }
+export interface CandidatoAAprovador { userId: string; rotulo: string; perfil: 'proprietario' | 'gestor_cliente' | 'financeiro'; jaAprova: boolean }
 
 const ehRegistro = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
@@ -62,7 +62,7 @@ export function candidatosAAprovador(membros: unknown, nomes: ReadonlyMap<string
   for (const m of Array.isArray(membros) ? membros : []) {
     if (!ehRegistro(m) || m.ativo !== true) continue;
     const id = texto(m.user_id);
-    const perfil = m.perfil === 'gestor_cliente' || m.perfil === 'financeiro' ? m.perfil : null;
+    const perfil = m.perfil === 'proprietario' || m.perfil === 'gestor_cliente' || m.perfil === 'financeiro' ? m.perfil : null;
     if (!id || !perfil) continue;
     out.push({ userId: id, rotulo: rotuloDaPessoa(nomes.get(id)), perfil, jaAprova: ja.has(id) });
   }
