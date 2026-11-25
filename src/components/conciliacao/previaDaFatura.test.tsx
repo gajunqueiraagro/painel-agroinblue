@@ -114,7 +114,7 @@ describe('a prévia da fatura no painel do cartão', () => {
     const b = await screen.findByTestId('fatura-gravar');
     expect(b.textContent).toBe('Gravar 2 prontas');
     expect(b).toBeEnabled();
-    expect(screen.getByTestId('fatura-motivo').textContent).toBe('2 prontas · 1 incompleta ficam para depois');
+    expect(screen.getByTestId('fatura-motivo').textContent).toBe('2 prontas · ficam 1 incompleta');
     expect(banco.escritas).toBe(0);
     expect(api.gravar).not.toHaveBeenCalled();
   });
@@ -170,8 +170,8 @@ describe('CARTAO-FATURA-GRAVAR — gravar e desfazer pela prévia', () => {
       { ordem: 2, gesto: 'lancar', data_compra: '2031-09-04', descricao: 'POSTO TREVO CAMPO GRANDE', valor: 156, tipo: 'saida', plano_conta_id: 'p-comb', fazenda_id: 'faz-a' },
       { ordem: 3, gesto: 'mover', lancamento_id: 'l1', lido_em: LIDO },
     ]);
-    expect(screen.getByTestId('fatura-rodape').textContent).toBe('Prévia do banco: lança 1 · move 1 · R$ 246,00');
-    expect(screen.getByTestId('fatura-motivo').textContent).toBe('1 incompleta ficam para depois · confira e confirme');
+    expect(screen.getByTestId('fatura-rodape').textContent).toBe('lança 1 · move 1 · R$ 246,00');
+    expect(screen.getByTestId('fatura-motivo').textContent).toBe('prévia do banco · ficam 1 incompleta');
     fireEvent.click(screen.getByTestId('fatura-confirmar'));
     await waitFor(() => expect(screen.getByTestId('fatura-rodape').textContent).toBe('Gravada: lança 1 · move 1 · R$ 246,00'));
     expect(pedidoDa(1)[4]).toBe(false);
@@ -189,7 +189,7 @@ describe('CARTAO-FATURA-GRAVAR — gravar e desfazer pela prévia', () => {
     fireEvent.click(await screen.findByTestId('fatura-gravar'));
     await screen.findByTestId('fatura-confirmar');
     expect(pedidoDa(1)[3]).toEqual([expect.objectContaining({ ordem: 2 })]);
-    expect(screen.getByTestId('fatura-motivo').textContent).toBe('1 incompleta · 1 recusada ficam para depois · confira e confirme');
+    expect(screen.getByTestId('fatura-motivo').textContent).toBe('prévia do banco · ficam 1 incompleta · 1 recusada');
     fireEvent.click(screen.getByTestId('fatura-grupo-mover'));
     const faz = screen.getByTestId('fatura-linha-faz');
     expect(faz.textContent).toBe('Já está realizado: resolva no Editar.');

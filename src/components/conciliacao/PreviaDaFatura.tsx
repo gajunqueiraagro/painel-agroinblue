@@ -53,7 +53,7 @@ const BOTAO = cn(CONTROLE, 'whitespace-nowrap rounded border px-2.5 disabled:cur
 const AZUL = 'border-[#1f56b8] bg-[#1f56b8] text-white';
 const CLARO = 'border-[#cfd8e3] bg-white text-[#1E3A5F]';
 /** a caixa dos botões do rodapé: largura FIXA (o rótulo muda com a fase; nada se desloca) */
-const LARGURA_BOTOES = 236;
+const LARGURA_BOTOES = 200;
 
 /** o que a coluna "Conta · fazenda" diz: a escolhida; na linha a lançar sem uma das duas, o que falta (vermelho) */
 function contaEFazenda(x: LinhaDoGrupo, e: Escolha, s: EstadoDaLinha, nomeDaConta: (id: string) => string | null, nomeDaFazenda: (id: string) => string | null) {
@@ -76,7 +76,7 @@ function Rodape({ fase, prontas, incompletas, rodape, recusadas, aoGravar, aoCon
   const [motivo, setMotivo] = useState('');
   const ficam = [incompletas ? `${incompletas} incompleta${incompletas > 1 ? 's' : ''}` : null, recusadas ? `${recusadas} recusada${recusadas > 1 ? 's' : ''}` : null]
     .filter(Boolean).join(' · ');
-  const idle = `${prontas} pronta${prontas === 1 ? '' : 's'}${ficam ? ` · ${ficam} ficam para depois` : ''}`;
+  const idle = `${prontas} pronta${prontas === 1 ? '' : 's'}${ficam ? ` · ficam ${ficam}` : ''}`;
   let l1 = rodape; let l2 = prontas ? idle : MOTIVO_NENHUMA_PRONTA; let tom2 = 'text-[#6b7a8f]';
   let botoes: JSX.Element = (
     <button type="button" className={cn(BOTAO, AZUL)} disabled={prontas === 0 || fase.k === 'conferindo'} onClick={aoGravar}
@@ -84,20 +84,20 @@ function Rodape({ fase, prontas, incompletas, rodape, recusadas, aoGravar, aoCon
       {fase.k === 'conferindo' ? 'Conferindo…' : `Gravar ${prontas} pronta${prontas === 1 ? '' : 's'}`}</button>
   );
   if (fase.k === 'confirmar' || fase.k === 'gravando') {
-    l1 = fase.k === 'confirmar' ? `Prévia do banco: ${fraseDoGravar(fase.resposta)}` : 'Gravando…';
-    l2 = ficam ? `${ficam} ficam para depois · confira e confirme` : 'confira e confirme';
+    l1 = fase.k === 'confirmar' ? fraseDoGravar(fase.resposta) : 'Gravando…';
+    l2 = ficam ? `prévia do banco · ficam ${ficam}` : 'prévia do banco · confira e confirme';
     botoes = (<>
       <button type="button" className={cn(BOTAO, CLARO)} onClick={aoVoltar} disabled={fase.k === 'gravando'} data-testid="fatura-voltar-gravar">voltar</button>
       <button type="button" className={cn(BOTAO, AZUL)} onClick={aoConfirmar} disabled={fase.k === 'gravando'} data-testid="fatura-confirmar">Confirmar gravação</button>
     </>);
   } else if (fase.k === 'gravada') {
-    l1 = `Gravada: ${fraseDoGravar(fase.resposta)}`; tom2 = 'text-[#1e8449]'; l2 = 'a fatura foi relida; o que ficou aparece como está';
+    l1 = `Gravada: ${fraseDoGravar(fase.resposta)}`; tom2 = 'text-[#1e8449]'; l2 = 'a fatura foi relida';
   } else if (fase.k === 'erro') {
     l2 = fase.frase; tom2 = 'text-destructive';
   } else if (fase.k === 'motivo' || fase.k === 'desfazer_conferindo') {
     return (
       <>
-        <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo para desfazer a gravação (obrigatório)"
+        <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo para desfazer (obrigatório)"
           className={cn(CONTROLE, 'w-full min-w-0 rounded border border-[#cfd8e3] px-2')} data-testid="fatura-motivo-desfazer" />
         <span className="flex justify-end gap-1" style={{ width: LARGURA_BOTOES }}>
           <button type="button" className={cn(BOTAO, CLARO)} onClick={aoVoltar} data-testid="fatura-voltar-gravar">voltar</button>
@@ -162,14 +162,19 @@ export function PreviaDaFaturaVista({ estado, aoVoltar, aoTentarDeNovo, clienteI
   });
   const ocupado = ['conferindo', 'gravando', 'desfazer_conferindo', 'desfazendo'].includes(g.fase.k);
   const tipoDaAberta = aberta && aberta.linha.valorCent < 0 ? '1-Entradas' : '2-Saídas';
-  const largConta = Math.min(larguraDoSeletor(classificacoes.filter((c) => c.tipo_operacao.startsWith(tipoDaAberta[0])).map((c) => c.subcentro)), 250);
-  const largFaz = Math.min(larguraDoSeletor(fazOper.map((f) => f.nome)), 150);
+  /* o seletor mostra o nome INTEIRO (régua): a largura do maior nome da lista */
+  const largConta = larguraDoSeletor(classificacoes.filter((c) => c.tipo_operacao.startsWith(tipoDaAberta[0])).map((c) => c.subcentro));
+  const largFaz = larguraDoSeletor(fazOper.map((f) => f.nome));
 
   return (
     <>
       <div className="flex items-center justify-between gap-2 border-b border-[#e3e8ef] px-4" data-testid="fatura-previa">
         <span className={cn('min-w-0 whitespace-nowrap', TITULO_MODAL)}>Compras da fatura · prévia
-          <small className={cn('ml-1.5 font-normal text-[#6b7a8f]', TEXTO_ROTULO)}>nada é gravado sem o seu OK</small></span>
+          {pronta?.gravacao ? (
+            <small className={cn('ml-1.5 font-normal text-[#6b7a8f]', TEXTO_ROTULO)} data-testid="fatura-gravada">gravada em {dma(pronta.gravacao.feitaEm.slice(0, 10))} ·{' '}
+              <button type="button" className="text-[#c0392b] hover:underline disabled:opacity-50" disabled={ocupado} onClick={g.abrirDesfazer}
+                data-testid="fatura-desfazer">Desfazer gravação</button></small>
+          ) : <small className={cn('ml-1.5 font-normal text-[#6b7a8f]', TEXTO_ROTULO)}>nada é gravado sem o seu OK</small>}</span>
         <button type="button" className="whitespace-nowrap text-[11px] text-[#1f5fbf] hover:underline" onClick={aoVoltar} data-testid="fatura-voltar">cancelar</button>
       </div>
 
@@ -182,14 +187,7 @@ export function PreviaDaFaturaVista({ estado, aoVoltar, aoTentarDeNovo, clienteI
         )}
         {pronta && grupo && (
           <>
-            <div className="grid h-[16px] shrink-0 items-center gap-2" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
-              <p className={cn('truncate text-[#55657a] tabular-nums', TEXTO_ROTULO)} data-testid="fatura-cabecalho">{cabecalhoDaFatura(pronta.fatura)}</p>
-              {pronta.gravacao ? (
-                <span className={cn('whitespace-nowrap text-[#6b7a8f]', TEXTO_ROTULO)} data-testid="fatura-gravada">gravada em {dma(pronta.gravacao.feitaEm.slice(0, 10))} ·{' '}
-                  <button type="button" className="text-[#c0392b] hover:underline disabled:opacity-50" disabled={ocupado} onClick={g.abrirDesfazer}
-                    data-testid="fatura-desfazer">Desfazer gravação</button></span>
-              ) : <span />}
-            </div>
+            <p className={cn('h-[16px] shrink-0 truncate text-[#55657a] tabular-nums', TEXTO_ROTULO)} data-testid="fatura-cabecalho">{cabecalhoDaFatura(pronta.fatura)}</p>
             <p className={cn('h-[14px] shrink-0 truncate text-amber-700', TEXTO_ROTULO)} data-testid="fatura-avisos"
               title={pronta.avisos.join(' ')}>{pronta.avisos[0] ?? ''}</p>
             {/* os grupos: altura FIXA de 2 linhas (nada se desloca ao escolher) */}
@@ -207,13 +205,11 @@ export function PreviaDaFaturaVista({ estado, aoVoltar, aoTentarDeNovo, clienteI
             <div className="flex h-[32px] shrink-0 items-center gap-1.5" data-testid="fatura-escolha">
               {aberta && escolhaAberta ? (
                 <>
-                  <span className={cn('shrink-0 text-[#55657a]', TEXTO_ROTULO)}>Conta</span>
-                  <span className="shrink-0" style={{ width: largConta }} data-testid="fatura-escolha-conta">
+                  <span className="shrink-0" style={{ width: largConta }} title="Conta do plano" data-testid="fatura-escolha-conta">
                     <EscolherConta valor={escolhaAberta.planoContaId ?? ''} classificacoes={classificacoes} tipoOperacao={tipoDaAberta}
-                      onEscolher={(c) => muda(aberta.linha.ordem, { planoContaId: c.id })} triggerClassName={CONTROLE} disabled={ocupado} />
+                      onEscolher={(c) => muda(aberta.linha.ordem, { planoContaId: c.id })} triggerClassName={cn(CONTROLE, 'px-2')} disabled={ocupado} />
                   </span>
-                  <span className={cn('shrink-0 text-[#55657a]', TEXTO_ROTULO)}>Fazenda</span>
-                  <span className="shrink-0" style={{ width: largFaz }} data-testid="fatura-escolha-fazenda">
+                  <span className="shrink-0" style={{ width: largFaz }} title="Fazenda" data-testid="fatura-escolha-fazenda">
                     <FazendaSelect value={escolhaAberta.fazendaId ?? ''} onChange={(id) => muda(aberta.linha.ordem, { fazendaId: id || null })} fazendas={fazOper}
                       forcaAdministrativo={!!escolhaAberta.planoContaId && forca(escolhaAberta.planoContaId)} hideAviso triggerClassName={CONTROLE} disabled={ocupado} />
                   </span>
