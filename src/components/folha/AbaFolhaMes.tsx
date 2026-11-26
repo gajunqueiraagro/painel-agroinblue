@@ -146,7 +146,9 @@ export function AbaFolhaMes({ clienteId, onFicha }: { clienteId: string; onFicha
           <Segmentado altura={26} fonte={11} valor={tipo} onEscolher={setTipo}
             opcoes={TIPOS_DA_FOLHA.map(o => ({ valor: o.valor, rotulo: <span className="inline-block w-[96px] text-center">{o.rotulo}</span> }))} />
         </div>
-        <div className="flex h-[26px] items-center gap-1.5">
+        {/* a 2ª linha cabe numa só de 1126px para cima; mais estreita, Arrastar e Confirmar descem para uma linha própria (antes passavam
+            da borda e a página rolava de lado ao abrir a prévia — gate de deslocamento a 750/814/1000) */}
+        <div className="flex min-h-[26px] flex-wrap items-center gap-1.5">
           {(docs ?? lugaresVazios).map(d => (
             <span key={d.chave} data-testid={`folha-mes-doc-${d.chave}`} title={`${d.rotulo}: ${d.detalhe}`}
               className={cn('inline-flex h-[26px] w-[132px] shrink-0 items-center gap-1.5 rounded-md border px-2', TEXTO_ROTULO,
@@ -156,16 +158,18 @@ export function AbaFolhaMes({ clienteId, onFicha }: { clienteId: string; onFicha
               <span className="ml-auto shrink-0 tabular-nums">{d.chegou ? (d.chave === 'recibos' ? d.detalhe : '✓') : '—'}</span>
             </span>
           ))}
-          <span className="min-w-0 flex-1" />
-          <AreaDeArquivo regra={REGRA_RECIBO} onArquivos={a => void receber(a)} convite={lendo ? 'Lendo o recibo…' : 'Arrastar recibos do contador'} detalhe=""
-            desabilitado={lendo} motivoExterno={recusaDoArquivo} className={cn(CONTROLE, 'w-[220px] shrink-0')} testId="folha-mes-arrastar" />
-          {confirmada ? (
-            <Button type="button" size="sm" variant="outline" className={cn(CONTROLE, 'w-[120px] shrink-0')} title={motivo ?? undefined}
-              onClick={() => setPrevia({ acao: 'reabrir', motivo: '' })} data-testid="folha-mes-reabrir">Reabrir folha</Button>
-          ) : (
-            <Button type="button" size="sm" disabled={!!motivo} title={motivo ?? 'tudo confere: confirmar a folha do mês'} className={cn(CONTROLE, 'w-[120px] shrink-0')}
-              onClick={() => void preverConfirmar()} data-testid="folha-mes-confirmar">Confirmar folha</Button>
-          )}
+          {/* Arrastar e Confirmar andam JUNTOS (descem juntos quando a linha não cabe) */}
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <AreaDeArquivo regra={REGRA_RECIBO} onArquivos={a => void receber(a)} convite={lendo ? 'Lendo o recibo…' : 'Arrastar recibos do contador'} detalhe=""
+              desabilitado={lendo} motivoExterno={recusaDoArquivo} className={cn(CONTROLE, 'w-[220px] shrink-0')} testId="folha-mes-arrastar" />
+            {confirmada ? (
+              <Button type="button" size="sm" variant="outline" className={cn(CONTROLE, 'w-[120px] shrink-0')} title={motivo ?? undefined}
+                onClick={() => setPrevia({ acao: 'reabrir', motivo: '' })} data-testid="folha-mes-reabrir">Reabrir folha</Button>
+            ) : (
+              <Button type="button" size="sm" disabled={!!motivo} title={motivo ?? 'tudo confere: confirmar a folha do mês'} className={cn(CONTROLE, 'w-[120px] shrink-0')}
+                onClick={() => void preverConfirmar()} data-testid="folha-mes-confirmar">Confirmar folha</Button>
+            )}
+          </div>
         </div>
         {/* a 3ª linha tem 26px SEMPRE (a frase, a prévia com os botões, o motivo do reabrir): nada se desloca ao abrir a prévia */}
         <div className={cn('flex h-[26px] items-center gap-2', TEXTO_ROTULO)}>
@@ -232,11 +236,14 @@ export function AbaFolhaMes({ clienteId, onFicha }: { clienteId: string; onFicha
                       <td className={TD_FONTES} title={s.texto}>
                         <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><span className={cn('h-1.5 w-1.5 rounded-full', PONTO[s.tom])} />{s.texto}</span>
                       </td>
-                      <td className={cn(TD_FONTES_TEXTO, !l.falta_frase && 'text-muted-foreground')} title={l.falta_frase ?? undefined}>
-                        {l.falta.includes('ligar') && (
-                          <button type="button" className="mr-1 font-semibold text-primary hover:underline" onClick={() => void pedirLigar(l)} data-testid="folha-mes-ligar">ligar</button>
-                        )}
-                        {l.falta_frase ?? '—'}
+                      {/* o "ligar" fica no lugar dele (não corta); só a frase corta, com ela inteira no `title` (REGRA DE CORTE) */}
+                      <td className={cn(TD_FONTES, !l.falta_frase && 'text-muted-foreground')}>
+                        <div className="flex min-w-0 items-center">
+                          {l.falta.includes('ligar') && (
+                            <button type="button" className="mr-1 flex-none font-semibold text-primary hover:underline" onClick={() => void pedirLigar(l)} data-testid="folha-mes-ligar">ligar</button>
+                          )}
+                          <span className="min-w-0 truncate" title={l.falta_frase ?? undefined}>{l.falta_frase ?? '—'}</span>
+                        </div>
                       </td>
                       <td className={TD_FONTES}>
                         {l.recibos.length === 0 ? <span className="text-muted-foreground">—</span> : (

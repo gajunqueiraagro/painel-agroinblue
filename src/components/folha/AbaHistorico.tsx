@@ -10,7 +10,7 @@
  * ⚠ FOLHA-TELAS-03: RÉGUA DE FONTES NOVA (UI-FONTES-REGUA-01) — seletor, tipos e botão 11px/26px; o seletor de pessoa na largura do MAIOR
  *   nome da lista (`larguraDoSeletor`); cabeçalho e datas 10px; linha 11px/24px.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -84,9 +84,21 @@ export function AbaHistorico({ clienteId, funcionarioId, onEscolher, onFicha }: 
     ? [rotuloSituacao(pessoa), pessoa.admissao ? `admitido ${dataBR(pessoa.admissao)}` : 'admissão a confirmar', atuacaoDoResumo].filter(Boolean).join(' · ')
     : '';
   const TH = cn(TH_FONTES, 'sticky top-0 z-10 bg-primary transition-[filter] hover:brightness-110');
-  const opcoesPessoa = (lista?.funcionarios ?? []).map(f => ({ value: f.id, label: f.situacao === 'desligado' ? `${f.nome} (desligado)` : f.nome }));
+  const opcoesPessoa = useMemo(() => (lista?.funcionarios ?? []).map(f => ({ value: f.id, label: f.situacao === 'desligado' ? `${f.nome} (desligado)` : f.nome })), [lista]);
+  /* a medida do nome depende da fonte da página: medida antes de ela carregar, a largura mudava 1px no 1º filtro (gate de deslocamento).
+     Mede de novo UMA vez quando as fontes ficam prontas, e depois só se a lista mudar. */
+  const [fontesProntas, setFontesProntas] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    void document.fonts?.ready.then(() => { if (vivo) setFontesProntas(true); });
+    return () => { vivo = false; };
+  }, []);
   /* o seletor mostra o nome INTEIRO: largura fixa pelo maior nome da lista (UI-FONTES-REGUA-01); enquanto lê, o lugar de 280px */
-  const larguraPessoa = opcoesPessoa.length ? Math.max(200, larguraDoSeletor(opcoesPessoa.map(o => o.label))) : 280;
+  const larguraPessoa = useMemo(
+    () => (opcoesPessoa.length ? Math.max(200, larguraDoSeletor(opcoesPessoa.map(o => o.label))) : 280),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `fontesProntas` só pede a medida de novo
+    [opcoesPessoa, fontesProntas],
+  );
   const anoAtual = new Date().getFullYear();
 
   return (
@@ -100,7 +112,7 @@ export function AbaHistorico({ clienteId, funcionarioId, onEscolher, onFicha }: 
           </div>
           <Segmentado altura={26} fonte={11} valor={filtro} onEscolher={setFiltro} opcoes={FILTROS.map(f => ({
             valor: f.valor,
-            rotulo: <span className="inline-flex w-[88px] items-center justify-center gap-1">{f.rotulo}
+            rotulo: <span className="inline-flex w-[80px] items-center justify-center gap-1">{f.rotulo}
               <TextoReservado texto={hist ? String(contagemDoFiltroTipo(hist.por_tipo, f.valor)) : ''} reserva="999" className="text-[10px] opacity-80" /></span>,
           }))} />
           <span className={cn('max-h-[26px] min-w-[160px] flex-1 overflow-hidden whitespace-normal leading-[13px] text-muted-foreground', TEXTO_ROTULO)}

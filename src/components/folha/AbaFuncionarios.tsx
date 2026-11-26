@@ -119,8 +119,10 @@ export function AbaFuncionarios({ clienteId, funcionarioId, onEscolher, onHistor
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      {/* OS FILTROS — um card branco de 36px: o Segmentado de 4 × 116px, a busca de 220px, o "+ Funcionário" à direita (régua 11/26) */}
-      <div className="flex h-[36px] shrink-0 items-center gap-2 rounded-lg border bg-card px-2" data-testid="folha-filtros">
+      {/* OS FILTROS — um card branco de 36px: o Segmentado de 4 × 108px, a busca de 220px, o "+ Funcionário" à direita (régua 11/26).
+          De 1126px para cima é UMA linha; mais estreita, a busca, a frase e o botão descem para a 2ª (antes passavam da borda e a página
+          rolava de lado ao digitar na busca — gate de deslocamento a 750). A frase tem base 0: nunca é ela que faz quebrar. */}
+      <div className="flex min-h-[36px] shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-card px-2 py-[4px]" data-testid="folha-filtros">
         <Segmentado altura={26} fonte={11} valor={filtro} onEscolher={setFiltro} opcoes={opcoes.map(o => ({
           valor: o.valor,
           rotulo: <span className="inline-flex w-[108px] items-center justify-center gap-1">{o.rotulo}
@@ -131,9 +133,9 @@ export function AbaFuncionarios({ clienteId, funcionarioId, onEscolher, onHistor
           <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar pelo nome ou CPF…" className={cn(CONTROLE, 'pl-6')} data-testid="folha-busca" />
         </div>
         {/* frase fora de tabela: nunca "…" nem rolar (P104) — DUAS linhas reservadas a 10px na altura da barra; a lista inteira no `title` */}
-        <span className={cn('max-h-[26px] min-w-0 flex-1 overflow-hidden whitespace-normal leading-[13px] text-muted-foreground', TEXTO_ROTULO)}
+        <span className={cn('max-h-[26px] min-w-0 flex-1 basis-0 overflow-hidden whitespace-normal leading-[13px] text-muted-foreground', TEXTO_ROTULO)}
           title="a confirmar: salário, admissão, cargo, CPF ou desligamento que o contador ainda não mandou">
-          em âmbar = dado a confirmar com o contador
+          em âmbar: a confirmar com o contador
         </span>
         <Button size="sm" className={cn(CONTROLE, 'shrink-0 gap-1 bg-cta px-2.5 font-semibold text-cta-foreground hover:bg-cta-hover')}
           onClick={() => setEditando({ id: null })} data-testid="folha-novo">
