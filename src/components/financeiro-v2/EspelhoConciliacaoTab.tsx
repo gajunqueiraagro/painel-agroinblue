@@ -58,6 +58,11 @@ import { sugerirCasamentos, type Sugestao } from '@/lib/conciliacao/sugestoesCas
 import { fornecedorDoMovimento, termosDosMovimentos } from '@/lib/conciliacao/fornecedoresDoHistorico';
 import { useFornecedoresDoHistorico } from '@/hooks/useFornecedoresDoHistorico';
 import { SugestoesCasarModal, type Marcado } from '@/components/financeiro-v2/SugestoesCasarModal';
+import type { CandidatoConciliacao } from '@/hooks/useConciliacaoDoMes';
+import { useMotorAmpliadoDaMesa } from '@/hooks/useMotorAmpliadoDaMesa';
+import { estadoDaLinhaSemPar, type EstadoDaLinhaSemPar, type RespostaDoAmpliado } from '@/lib/conciliacao/motorAmpliado';
+import { EstadoDoSemPar } from '@/components/conciliacao/EstadoDoSemPar';
+import { nomeDoHistorico, documentoDoHistorico } from '@/lib/conciliacao/nomeDoHistorico';
 import type { AchadoDoHistorico, ModeloDoHistorico } from '@/lib/conciliacao/procurarNoHistorico';
 /* ⚠ A MESA DO DIA MUDOU DE CASA — PR-CONC-CONFERENCIA-FECHAMENTO-DIA: tipos do Espelho, `montarMesa`, `totaisDoEspelho`,
    `sinalDoAplicado` e `ordenar` foram para a lib pura (movidos byte a byte); a tela importa de lá e REEXPORTA, para quem
@@ -689,8 +694,10 @@ function CelulasDoSistema({ marcar, pedacos, detalhe, fornecedor, subcentro, sel
  * podem ser chamados dentro de um `.map()` — a regra dos hooks proíbe, e o React quebraria ao
  * mudar a contagem de linhas entre renders. Extrair não foi estética: era a única forma.
  */
-function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar, nSugestoes, onSugestoes, onCriarTransferencia, transf }: {
+function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar, nSugestoes, onSugestoes, onCriarTransferencia, transf, estado, onCasarExata }: {
   e: EspOfx; marcado: boolean; onMarcar: () => void; onCriar: () => void; onIgnorar: () => void;
+  /** CONC-SUGESTOES-V2 B — o que a linha tem (exata · possíveis · nenhuma), pelo motor ampliado; sem ele, os botões de antes */
+  estado?: EstadoDaLinhaSemPar; onCasarExata?: () => void;
   /** P139 — "Criar transferência" direto do "⋯" (sem os três cliques do Criar → diferença → tipo) */
   onCriarTransferencia?: () => void;
   /** P139 — a sugestão do banco (`fn_extrato_transferencias_provaveis`): o selo "transf.?" no lugar do "○", com o porquê no `title` */
@@ -717,9 +724,13 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar, nSugesto
         : <td className={cn(TDC_MEIO, 'text-muted-foreground')} title="sem correspondência">○</td>}
       <td className={cn(TDC, SEP)} />
       <td colSpan={2} className={cn(TDC, 'text-[#d97706]')} data-testid="conf-sem-lancamento">
-        <span className="inline-flex items-center gap-1">sem lançamento ·
-          <BotoesDoSemPar e={e} semPar={{ nSugestoes: () => nSugestoes, aoSugestoes: () => onSugestoes(), aoCriar: () => onCriar() }} />
-        </span>
+        {estado
+          ? <EstadoDoSemPar estado={estado} onSugestoes={onSugestoes} onCriar={onCriar} onCasar={() => onCasarExata?.()} />
+          : (
+            <span className="inline-flex items-center gap-1">sem lançamento ·
+              <BotoesDoSemPar e={e} semPar={{ nSugestoes: () => nSugestoes, aoSugestoes: () => onSugestoes(), aoCriar: () => onCriar() }} />
+            </span>
+          )}
       </td>
       <td className={TDC} />
       {/* ⚠ "Criar" ABRE O MODAL COM A LISTA VAZIA, e não um formulário à parte: o caminho é o
@@ -940,12 +951,26 @@ export function levadosDaSugestao(s: Sugestao): LevadoInicial[] {
  * banco abre com o valor do banco ("era R$ X", o caminho de hoje); o de OUTRA conta vai com `trocarConta` (a `fn_espelho_casar` troca a
  * conta na mesma transação do casar — D3).
  */
-function levadoDoAchado(a: AchadoDoHistorico, extrato: ExtratoAlvo, trocarConta: boolean, nomeConta: string | undefined): LevadoInicial {
+export function levadoDoAchado(a: AchadoDoHistorico, extrato: ExtratoAlvo, trocarConta: boolean, nomeConta: string | undefined): LevadoInicial {
   return {
     lancamento_id: a.lancamentoId, descricao: a.descricao, fornecedor: a.fornecedor, valor_assinado: a.valor,
     usarValorDoBanco: Math.abs(Math.abs(a.valor) - Math.abs(extrato.valor)) > 0.005,
     data_vencimento: a.dataVencimento, status_transacao: a.status,
     trocarConta: trocarConta ? { de: a.conta, para: nomeConta ?? null } : undefined,
+  };
+}
+
+/**
+ * CONC-SUGESTOES-V2 — "Casar" num candidato do MOTOR AMPLIADO (exata ou possível): o MESMO `CasarComBancoModal`; o em aberto de OUTRO banco
+ * vai com `trocarConta` (a `fn_espelho_casar` troca a conta para a do extrato na mesma transação, com trilha e desfazer — o caminho do P153b).
+ */
+export function levadoDoMotor(c: CandidatoConciliacao, extrato: ExtratoAlvo, nomeConta: string | undefined, um = true): LevadoInicial {
+  const sinal = extrato.valor < 0 ? -1 : 1;
+  return {
+    lancamento_id: c.id, descricao: c.descricao, fornecedor: c.favorecido, valor_assinado: sinal * Math.abs(c.valor),
+    usarValorDoBanco: um && Math.abs(Math.abs(c.valor) - Math.abs(extrato.valor)) > 0.005,
+    data_vencimento: c.vencimento ?? null, status_transacao: c.status, numero_documento: c.numeroDocumento ?? null,
+    trocarConta: c.outraConta ? { de: c.contaNome ?? null, para: nomeConta ?? null } : undefined,
   };
 }
 
@@ -961,6 +986,7 @@ export function levadosDosMarcados(marcados: readonly Marcado[], extrato: Extrat
       const l = levadoDoAchado(m.a, extrato, m.trocar, nomeConta);
       return um ? l : { ...l, usarValorDoBanco: false };
     }
+    if (m.de === 'motor') return levadoDoMotor(m.c, extrato, nomeConta, um);
     const c = m.c;
     return {
       lancamento_id: c.lancamento_id, descricao: c.descricao, fornecedor: c.fornecedor, valor_assinado: c.valor_assinado,
@@ -999,7 +1025,9 @@ function ExtratoComAcoes({ data, inicial, internas, sugestoesPorLinha, clienteId
       clienteId={clienteId} contaBancariaId={contaId}
       onCriarIgual={(m) => { if (!sugerir) return; setCasar({ extrato: sugerir, iniciais: [], modelo: m }); setSugerir(null); }}
       onCasarDoHistorico={(a, trocar) => { if (!sugerir) return; setCasar({ extrato: sugerir, iniciais: [levadoDoAchado(a, sugerir, trocar, nomeConta)] }); setSugerir(null); }}
-      onCasarSelecionados={(ms) => { if (!sugerir) return; setCasar({ extrato: sugerir, iniciais: levadosDosMarcados(ms, sugerir, nomeConta) }); setSugerir(null); }} />
+      onCasarSelecionados={(ms) => { if (!sugerir) return; setCasar({ extrato: sugerir, iniciais: levadosDosMarcados(ms, sugerir, nomeConta) }); setSugerir(null); }}
+      extratoId={sugerir?.extrato_id ?? null}
+      onCasarDoMotor={(c) => { if (!sugerir) return; setCasar({ extrato: sugerir, iniciais: [levadoDoMotor(c, sugerir, nomeConta)] }); setSugerir(null); }} />
     <CasarComBancoModal open={!!casar} onClose={() => setCasar(null)} extrato={casar?.extrato ?? null} iniciais={casar?.iniciais ?? []}
       modelo={casar?.modelo ?? null}
       nomeConta={nomeConta} contaBancariaId={contaId} clienteId={clienteId} onConciliado={() => onMudou()} />
@@ -1007,7 +1035,7 @@ function ExtratoComAcoes({ data, inicial, internas, sugestoesPorLinha, clienteId
 }
 
 function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onAbrir, onMudou, mostrarCandidatos = true, filtro = 'todos',
-  mostrarVencidos = false, saldoDoBancoNoDia, sugestoesPorLinha, diaFoco = null, onDiaFocado }: {
+  mostrarVencidos = false, saldoDoBancoNoDia, sugestoesPorLinha, diaFoco = null, onDiaFocado, motorPorLinha }: {
   data: EspelhadosReais;
   /** P159a — a mesa (`montarMesa`) vem de quem monta: os chips do cabeçalho do modal contam a MESMA mesa que a tabela desenha. */
   dias: readonly DiaConf[];
@@ -1023,6 +1051,8 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
   saldoDoBancoNoDia: ReadonlyMap<string, number>;
   /** As sugestões de cada movimento sem par (`sugestoesDaMesa`), as MESMAS do Extrato (banco). */
   sugestoesPorLinha: ReadonlyMap<string, Sugestao[]>;
+  /** CONC-SUGESTOES-V2 B — o motor ampliado de cada sem par (a linha diz exata · possíveis · nenhuma); sem ele, os botões de antes */
+  motorPorLinha?: ReadonlyMap<string, RespostaDoAmpliado>;
   /** Rola até o cabeçalho deste dia ao abrir (o link do Status da Conciliação) e avisa quem pediu. */
   diaFoco?: string | null;
   onDiaFocado?: () => void;
@@ -1589,6 +1619,10 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
     );
   };
 
+  /* CONC-SUGESTOES-V2 B — o estado da linha sem par: o motor ampliado + a lista de hoje (as possíveis) + o que o banco escreveu */
+  const estadoDoSemPar = (e: EspOfx): EstadoDaLinhaSemPar => estadoDaLinhaSemPar(motorPorLinha?.get(e.extrato_id),
+    (sugestoesPorLinha.get(e.extrato_id) ?? []).flatMap((x) => x.lancamentos.map((c) => c.lancamento_id)),
+    { temNome: !!nomeDoHistorico(e.historico, e.data), temDocumento: !!documentoDoHistorico(e.historico) });
   const renderItem = (it: ItemConferencia) => {
     switch (it.tipo) {
       case 'pareado': return renderPareado(it.p);
@@ -1606,7 +1640,14 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
             onCriarTransferencia={contaId ? () => setTransf(paraTransferencia(e)) : undefined}
             transf={transfPorLinha.get(e.extrato_id)}
             nSugestoes={sugestoesPorLinha.get(e.extrato_id)?.length ?? 0}
-            onSugestoes={() => setSugerir({ extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor })} />
+            onSugestoes={() => setSugerir({ extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor })}
+            estado={motorPorLinha ? estadoDoSemPar(e) : undefined}
+            onCasarExata={() => {
+              const est = motorPorLinha ? estadoDoSemPar(e) : undefined;
+              if (est?.tipo !== 'exata') return;
+              const alvoE = { extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor };
+              setCasar({ extrato: alvoE, iniciais: [levadoDoMotor(est.candidato, alvoE, nomeConta)] });
+            }} />
         );
       }
       case 'interna': {
@@ -1737,6 +1778,9 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
                       <span className="font-normal text-muted-foreground">
                         {' · '}{conta.movimentos} movimento{conta.movimentos === 1 ? '' : 's'}{conta.semPar > 0 ? ` · ${conta.semPar} sem par` : ''}
                       </span>
+                      {/* CONC-SUGESTOES-V2 B: quantas sem par do dia têm exata (o motor ampliado) */}
+                      {(() => { const n = motorPorLinha ? d.extratosSemPar.filter((e) => estadoDoSemPar(e).tipo === 'exata').length : 0;
+                        return n > 0 ? <span className="font-normal text-emerald-700" data-testid="dia-exatas">{` · ${n} exata${n === 1 ? '' : 's'}`}</span> : null; })()}
                     </td>
                   </tr>
                   {itens.map(renderItem)}
@@ -1952,6 +1996,13 @@ function AbaConferencia({ data, dias, anoMes, nomeConta, clienteId, contaId, onA
         onCasarSelecionados={(ms) => {
           if (!sugerir) return;
           setCasar({ extrato: sugerir, iniciais: levadosDosMarcados(ms, sugerir, nomeConta) });
+          setSugerir(null);
+        }}
+        /* CONC-SUGESTOES-V2 — o motor ampliado (exatas, outro banco, CNPJ, nota) e o casar dele */
+        extratoId={sugerir?.extrato_id ?? null}
+        onCasarDoMotor={(c) => {
+          if (!sugerir) return;
+          setCasar({ extrato: sugerir, iniciais: [levadoDoMotor(c, sugerir, nomeConta)] });
           setSugerir(null);
         }}
       />
@@ -2174,6 +2225,11 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
     () => sugestoesDaMesa(diasDaMesa, mostrarCandidatos ? (data?.sistema_candidatos ?? []) : [], doHistorico.ids,
       mostrarCandidatos ? (data?.sistema_candidatos_adiantados ?? []) : [], doHistorico.nomes),
     [diasDaMesa, data, mostrarCandidatos, doHistorico]);
+  /* CONC-SUGESTOES-V2 B — o motor ampliado de cada sem par da mesa (só leitura; 4 por vez) */
+  const idsSemPar = useMemo(() => (mostrarCandidatos ? diasDaMesa.flatMap((d) => d.extratosSemPar.map((e) => e.extrato_id)) : []),
+    [diasDaMesa, mostrarCandidatos]);
+  const motorDaMesa = useMotorAmpliadoDaMesa(clienteId, idsSemPar, mostrarCandidatos);
+  const nExatas = [...motorDaMesa.porLinha.values()].filter((r) => r.ok && r.candidatos.some((c) => c.exata && !c.indisponivel && c.origem !== 'nota')).length;
   const ehParcialDaMesa = (p: Pareado) => faltaDoExtrato(p.diferenca) != null;
   const chips = contagensDaMesa(diasDaMesa, ehParcialDaMesa);
   const nVencidos = mostrarCandidatos ? (data?.sistema_candidatos ?? []).filter((c) => c.vencido).length : 0;
@@ -2223,7 +2279,7 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
       clienteId={clienteId} contaId={contaId}
       onAbrir={onAbrirLancamento} onMudou={aoMudarConferencia}
       mostrarCandidatos={mostrarCandidatos} filtro={filtroConf} mostrarVencidos={mostrarVencidos} saldoDoBancoNoDia={saldoDoBancoNoDia}
-      sugestoesPorLinha={sugestoesPorLinha}
+      sugestoesPorLinha={sugestoesPorLinha} motorPorLinha={mostrarCandidatos ? motorDaMesa.porLinha : undefined}
       diaFoco={aba === 'conferencia' ? diaFoco : null} onDiaFocado={onDiaFocado} />
   );
 
@@ -2310,6 +2366,13 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
                     {rotulo} {chips[k === 'sem_par' ? 'semPar' : k]}
                   </button>
                 ))}
+                {/* CONC-SUGESTOES-V2 B: o contador das exatas (valor + CNPJ) — lugar reservado: "…" enquanto o motor responde */}
+                {mostrarCandidatos && (
+                  <span className="inline-flex h-[17px] w-[78px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-emerald-400/70 px-2 text-[10px] font-medium leading-[15px] text-emerald-200 tabular-nums"
+                    data-testid="chip-exatas" title="Movimentos sem par com sugestão exata (valor + CNPJ). Casar é sempre o seu clique.">
+                    ✓ Exatas {motorDaMesa.buscando && nExatas === 0 ? '…' : nExatas}
+                  </span>
+                )}
                 {mostrarCandidatos && (
                   <button type="button" onClick={() => setMostrarVencidos((v) => !v)} data-testid="chip-vencidos" aria-pressed={mostrarVencidos}
                     disabled={nVencidos === 0} title={nVencidos === 0 ? 'nenhum lançamento vencido de meses anteriores em aberto' : 'em aberto de meses anteriores, no topo da lista'}

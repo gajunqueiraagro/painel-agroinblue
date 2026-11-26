@@ -83,11 +83,11 @@ describe('o componente', () => {
     /* CONC-SUGESTOES-TABELA-01 (Gabriel 04/11 06:36): as colunas da lista do Financeiro, as mesmas das sugestões */
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent?.replace(/[↑↓⇅]/g, ''))).toEqual(
       /* UI-FONTE-GATE-01 (escolha A, Chat 17:05): no histórico Faz. e NF sempre reservadas — mesmo sem NF nos achados, a coluna fica */
-      ['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Faz.', 'NF', 'Valor', 'Δ valor', 'Δ dias', 'Status', 'Motivo', '']);
+      ['', 'Comp.', 'Venc.', 'Pgto.', 'Δ dias', 'Descrição', 'Fornecedor', 'Faz.', 'NF', 'Valor', 'Δ valor', 'Status', 'Motivo', '']);
     /* o campo cresce até os filtros (sem teto de largura): o termo inteiro à vista */
     expect(screen.getByTestId('procurar-historico-termo').className).not.toMatch(/max-w-/);
     expect(screen.getByTestId('procurar-historico-termo').className).toContain('flex-1');
-    expect(M.rpc.mock.calls[0][1]).toMatchObject({ p_ate: '2031-11-30', p_de: '2031-01-01' });
+    expect(M.rpc.mock.calls[0][1]).toMatchObject({ p_ate: null, p_de: '2031-01-01' }); /* CONC-SUGESTOES-V2 A: inclusive futuros */
     /* a ordem padrão diz ↓ em lugar nenhum (é a data de referência), e a coluna clicada mostra a seta (UI-FONTE-GATE-01: no Valor, à direita, a seta fica ANTES do rótulo — depois dele vazava o recuo) */
     fireEvent.click(screen.getByTestId('procurar-ordenar-valor'));
     expect(screen.getByTestId('procurar-ordenar-valor').textContent).toBe('↓Valor');
@@ -106,6 +106,17 @@ describe('o componente', () => {
     expect(within(linhas[1]).getByTitle('Administrativo').textContent).toBe('ADM');
     expect(within(linhas[2]).getByText('Conciliado')).toBeInTheDocument();
     expect(within(linhas[2]).getByText('08/09/2031')).toBeInTheDocument();
+  });
+
+  it('CONC-SUGESTOES-V2 A: com quem case, EM ABERTO (inclusive futuros) primeiro e os PAGOS (modelo) depois, cada um com a sua faixa', async () => {
+    montar();
+    const linhas = await screen.findAllByTestId('procurar-historico-achado');
+    const acoes = linhas.map((l) => l.getAttribute('data-acao'));
+    const primeiroPago = acoes.indexOf('criar_igual');
+    expect(primeiroPago).toBeGreaterThan(0);
+    expect(acoes.slice(primeiroPago).every((x) => x === 'criar_igual')).toBe(true);
+    expect(screen.getByTestId('procurar-faixa-abertos').textContent).toBe(`Em aberto (inclusive futuros) · ${primeiroPago}`);
+    expect(screen.getByTestId('procurar-faixa-pagos').textContent).toBe(`Pagos — modelo para criar igual · ${acoes.length - primeiroPago}`);
   });
 
   it('"Casar" e "Casar e trocar conta" entregam o achado e se é para trocar a conta', async () => {

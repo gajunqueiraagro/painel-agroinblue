@@ -111,7 +111,7 @@ describe('a fonte do modal no padrão (PADROES-UI A18, a escala de modal)', () =
     const titulo = await screen.findByText('Casar com o banco');
     expect(titulo.className).toContain('text-[12px] font-medium');
     expect(titulo.parentElement?.className).toContain('h-9');
-    expect(screen.getByTestId('levados-tabela').className).toContain('text-[9px]');
+    expect(screen.getByTestId('levados-tabela').className).toContain('text-[11px]'); /* CONC-SUGESTOES-V2 C: a régua (linha 11px) */
     expect(screen.getByTestId('casar-rodape').className).toMatch(/\bh-8\b/);
     expect(screen.getByTestId('criar-pela-diferenca').className).toContain('h-[22px]');
     expect(screen.getByTestId('conciliar-casar').className).toContain('h-[22px]');

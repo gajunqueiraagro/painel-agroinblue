@@ -66,9 +66,11 @@ export function ThDaLista({ recuo, ordenar, fixa, semTexto = false, separador = 
 }
 
 /** A linha: clicável (abre) ou não, e marcada pela caixinha. `testid`/`dadoAcao`: só as listas da Conciliação (o Financeiro não os passa). */
-export function LinhaDaLista({ marcada, abrir, testid, dadoAcao, children }: { marcada: boolean; abrir?: () => void; testid?: string; dadoAcao?: string; children: ReactNode }) {
+export function LinhaDaLista({ marcada, abrir, testid, dadoAcao, classe, children }: { marcada: boolean; abrir?: () => void; testid?: string; dadoAcao?: string;
+  /** CONC-SUGESTOES-V2: o destaque da linha (a exata das Sugestões) — classes a mais no `tr` */
+  classe?: string; children: ReactNode }) {
   return (
-    <tr className={`linha-da-lista border-b hover:bg-muted/50 transition-colors${abrir ? ' cursor-pointer' : ''} ${marcada ? 'bg-primary/5' : ''}`}
+    <tr className={`linha-da-lista border-b hover:bg-muted/50 transition-colors${abrir ? ' cursor-pointer' : ''} ${marcada ? 'bg-primary/5' : ''}${classe ? ` ${classe}` : ''}`}
       onClick={abrir} data-testid={testid} data-acao={dadoAcao}>
       {children}
     </tr>

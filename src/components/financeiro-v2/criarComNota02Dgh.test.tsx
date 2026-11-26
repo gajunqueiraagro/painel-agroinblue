@@ -51,13 +51,16 @@ describe('D-h — a faixa do pagamento contra o vencimento', () => {
         data_vencimento: '2026-11-10', status_transacao: 'programado', numero_documento: '000077066' }]}
       onConciliado={() => {}} />);
     const ext = [...screen.getByTestId('levados-extrato').querySelectorAll('td')].map((td) => td.textContent);
-    expect(ext).toEqual(['Extrato', '13/10/2026', 'PIX AGENDAMENTO 10/10 · AZULAO PARAFUSOS E FERRAM', 'Banco do Brasil', '-2.903,00']);
+    /* CONC-SUGESTOES-V2 C: o extrato é a 1ª linha DA MESMA grade — "Banco" · Pgto. · nome sem caixa alta (o cru no title) · Valor sob Valor */
+    expect(ext).toHaveLength(13);
+    expect([ext[0], ext[1], ext[3], ext[10]]).toEqual(['Banco', '13/10/2026', 'Azulao Parafusos e Ferram', '-2.903,00']);
     expect(screen.getByTestId('levados-extrato-historico').getAttribute('title')).toBe('PIX AGENDAMENTO 10/10 · AZULAO PARAFUSOS E FERRAM');
     const linha = screen.getByTestId('levado-linha');
     expect(linha.querySelectorAll('td')[0].textContent).toBe('10/11/2026');
     expect(screen.getByTestId('levado-linha-nf').textContent).toBe('000.077.066');
-    expect(screen.getByTestId('casar-faixa-pagamento').textContent).toBe('Pago 28 dias ANTES do vencimento (venc. 10/11 · banco 13/10)');
-    expect(screen.getByTestId('casar-faixa-pagamento').className).toContain('h-[20px]');
+    /* CONC-SUGESTOES-V2 C (mock): a frase é uma linha pequena com ⓘ */
+    expect(screen.getByTestId('casar-faixa-pagamento-texto').textContent).toBe('Pago 28 dias ANTES do vencimento (venc. 10/11 · banco 13/10)');
+    expect(screen.getByTestId('casar-faixa-pagamento').className).toContain('h-[18px]');
     /* NF de saída no 1:1: o aplicado é o valor da NF, travado (R2) */
     const aplicado = screen.getByTestId('levado-linha-aplicado');
     expect(aplicado.getAttribute('data-travado')).toBe('nf');

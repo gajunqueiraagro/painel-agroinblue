@@ -2402,6 +2402,14 @@ const CENARIOS = [
       if (x === '-taxa') await p.locator('[data-testid="destino-taxa"]').click();
       await p.waitForTimeout(400);
     } })),
+  /* CONC-SUGESTOES-V2 (mock aprovado 25/11) — os 3 casos (sintéticos): a exata + outro banco + vencimento estimado (T R Santana), as possíveis do
+     mesmo CNPJ + nota sem lançamento (Prudentão), "nenhuma · achado pelo CNPJ" (Matão); o Procurar já preenchido e procurado (abertos · pagos) */
+  ...['trsantana', 'prudentao', 'matao'].map((x) => ({ nome: `casar-sugestoes-v2-${x}`, url: `tela=sugestoes-casar&v=${x}`, tamanhos: [...TAMANHOS_DO_P92, [1280, 720]],
+    regiao: '[data-testid="sugestoes-casar"]',
+    antes: async (p) => { await p.locator('[data-testid="linha-do-banco"]').waitFor(); await p.locator('[data-testid="procurar-historico-contagem"]', { hasText: /achado/ }).waitFor({ timeout: 15000 });
+      await p.waitForTimeout(300); } })),
+  { nome: 'casar-1x1-v2-trsantana', url: 'tela=casar-1x1&v=trsantana', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720]],
+    antes: async (p) => { await p.locator('[data-testid="levados-extrato"]').waitFor(); await p.locator('[data-testid="casar-faixa-pagamento"][data-estimado]').waitFor({ timeout: 15000 }); } },
   { nome: 'casar-sugestoes-edson', url: 'tela=sugestoes-casar&v=edson', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]' },
   /* D3 (homologação Edson 11:40): a tabela ordenada pela NF (a seta no cabeçalho; todas as colunas ordenam) */
   { nome: 'casar-sugestoes-edson-por-nf', url: 'tela=sugestoes-casar&v=edson', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
@@ -2609,10 +2617,12 @@ const CENARIOS = [
     tamanhos: TAMANHOS_DA_CONCILIACAO, antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
       await clicarRotulo(/^Casar lançamentos$/)(p); await p.locator('[data-testid="extrato-saldo-final"]').waitFor(); await p.waitForTimeout(500); } })),
   /* BAIXA-DESCONTO-BANCO-01: `conferencia-desconto` = a NF paga com desconto (dia 03) com a sub-linha cinza "↳ desconto · não sai do banco" */
+  /* CONC-SUGESTOES-V2 B: `conferencia-v2` = cada sem par diz o que tem (exata · possíveis · nenhuma) e o contador "✓ Exatas" no cabeçalho */
   ...[['conferencia', null], ['conferencia-vencidos', 'chip-vencidos'], ['conferencia-sem-par', 'chip-sem_par'], ['conferencia-poucos', null],
-    ['conferencia-desconto', null]].map(([nome, chip]) => ({
-    nome, url: nome === 'conferencia-poucos' ? 'tela=conciliacao&v=poucos' : nome === 'conferencia-desconto' ? 'tela=conciliacao&v=desconto-depois' : 'tela=conciliacao',
-    tamanhos: [...TAMANHOS_DO_P92, [1366, 768]],
+    ['conferencia-desconto', null], ['conferencia-v2', 'chip-sem_par']].map(([nome, chip]) => ({
+    nome, url: nome === 'conferencia-poucos' ? 'tela=conciliacao&v=poucos' : nome === 'conferencia-desconto' ? 'tela=conciliacao&v=desconto-depois'
+      : nome === 'conferencia-v2' ? 'tela=conciliacao&v=sugv2' : 'tela=conciliacao',
+    tamanhos: nome === 'conferencia-v2' ? [...TAMANHOS_DO_P92, [1280, 720], [1366, 768]] : [...TAMANHOS_DO_P92, [1366, 768]],
     regiao: '[data-testid="modal-conferencia"]',
     /* P159e (Gabriel 29/10): o nome do extrato INTEIRO de 1366px para cima; abaixo, "…" + o title (a regra de corte de sempre) */
     inteiroDe: { sel: '[data-testid="modal-conferencia"] [data-testid="conf-historico"]', de: 1366 },

@@ -26,7 +26,8 @@ export const ALTURA_DO_CABECALHO_PARA_CASAR = 18;
    a lista tem o movimento do banco de referência (`colunas.deltas`) */
 /* 12:02 (a seta ⇅ sempre visível): Faz. 30 → 36 e a reserva de Descrição/Fornecedor 60 → 62 (o rótulo + a seta); o Motivo 120 → 110 paga (o selo
    tem "…" e o inteiro no title) — o piso segue 848 */
-export const COLUNAS_PARA_CASAR: readonly (number | null)[] = [28, 46, 46, 46, null, null, 36, 78, 94, 80, 38, 60, 110, 62];
+/* CONC-SUGESTOES-V2 (mock aprovado 25/11): Δ dias LOGO DEPOIS de Venc./Pgto. (a mesma largura, 38) — o piso não muda */
+export const COLUNAS_PARA_CASAR: readonly (number | null)[] = [28, 46, 46, 46, 38, null, null, 36, 78, 94, 80, 60, 110, 62];
 export const N_COLUNAS_PARA_CASAR = COLUNAS_PARA_CASAR.length;
 /** O piso das duas listas: as fixas + 2 × 110 para Descrição e Fornecedor (830px: cabe no modal a 1024 e a 135% de 1240, ~848 úteis — sem
  *  rolagem de lado). Só abaixo dele (janela < ~900px) a lista rola de lado DENTRO da caixa dela. */
@@ -38,10 +39,10 @@ export const PISO_PARA_CASAR = COLUNAS_PARA_CASAR.reduce<number>((t, w) => t + (
  *  para Descrição e Fornecedor (as duas `null`). A ordem das colunas não muda. */
 export interface ColunasParaCasar { faz: boolean; nf: boolean; deltas?: boolean }
 export const TODAS_AS_COLUNAS_PARA_CASAR: ColunasParaCasar = { faz: true, nf: true };
-const I_FAZ = 6;
-const I_NF = 7;
-const I_DV = 9;
-const I_DD = 10;
+const I_DD = 4;
+const I_FAZ = 7;
+const I_NF = 8;
+const I_DV = 10;
 export function colunasParaCasar(linhas: readonly Pick<LinhaParaCasar, 'fazendaCodigo' | 'fazendaNome' | 'numeroDocumento'>[]): ColunasParaCasar {
   return { faz: linhas.some((l) => !!(l.fazendaCodigo || l.fazendaNome)), nf: linhas.some((l) => !!l.numeroDocumento) };
 }
@@ -109,13 +110,13 @@ export function CabecalhoParaCasar({ ordenar, seta, prefixo, colunas = TODAS_AS_
     {th('comp', 'Comp.', 'px-0.5')}
     {th('venc', 'Venc.', 'px-0.5')}
     {th('pgto', 'Pgto.', 'px-0.5')}
+    {colunas.deltas && th('ddias', 'Δ dias', 'px-1', undefined, 'dias entre o pagamento no banco e o vencimento (− = antes do vencimento; ~ = vencimento estimado)', 'right')}
     {th('descricao', 'Descrição', 'px-1', undefined, undefined, 'left')}
     {th('fornecedor', 'Fornecedor', 'px-1', undefined, undefined, 'left')}
     {colunas.faz && th('fazenda', 'Faz.', 'px-1', undefined, 'Fazenda')}
     {colunas.nf && th('nf', 'NF', 'px-1', undefined, undefined, 'right')}
     {th('valor', 'Valor', 'px-1', undefined, undefined, 'right')}
     {colunas.deltas && th('dvalor', 'Δ valor', 'px-1', undefined, 'valor do banco − valor do lançamento', 'right')}
-    {colunas.deltas && th('ddias', 'Δ dias', 'px-1', undefined, 'dias entre o pagamento no banco e o vencimento (− = antes do vencimento)', 'right')}
     {th('status', 'Status', 'px-1')}
     {th('motivo', 'Motivo', 'px-1', undefined, undefined, 'left')}
     <ThDaLista recuo="px-1" aria-label="Ações" />
@@ -129,6 +130,51 @@ export interface LinhaParaCasar {
   valor: number; status: string | null; conciliado: boolean;
   /** D-g — com o movimento de referência: banco − lançamento (em módulo, R$) e pgto. no banco − vencimento (dias; − = antes) */
   deltaValor?: number | null; deltaDias?: number | null;
+  /** CONC-SUGESTOES-V2 C (D-5a): vencimento ESTIMADO (nenhum boleto, duplicata nem contrato o declara) — "~" cinza itálico, Δ dias neutro */
+  vencEstimado?: boolean;
+}
+
+/** CONC-SUGESTOES-V2: o vencimento estimado — "~dd/mm/aaaa", cinza e itálico; o inteiro diz por quê. Nunca "vencido" nem "pago antes". */
+export const TITULO_DO_ESTIMADO = 'Vencimento estimado: nenhum boleto, duplicata da NF ou contrato o declara (foi digitado ou sugerido).';
+function CelulaVencEstimado({ iso }: { iso: string | null }) {
+  const t = iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—';
+  return (
+    <td className="celula-data tabular-nums px-[1px] py-1 align-middle leading-tight bg-background text-center italic text-muted-foreground/80"
+      title={TITULO_DO_ESTIMADO} data-testid="venc-estimado">~{t}</td>
+  );
+}
+
+/** CONC-SUGESTOES-V2 A — a faixa de seção dentro da tabela ("✓ Exata · 1", "Possíveis — conferir · 3"). */
+export function FaixaParaCasar({ n, children, testid, tom = 'neutro' }: { n: number; children: ReactNode; testid?: string; tom?: 'exata' | 'neutro' }) {
+  return (
+    <tr style={{ height: ALTURA_DA_LINHA_PARA_CASAR - 1 }} data-testid={testid}>
+      <td colSpan={n} className={`truncate px-1 text-[9px] font-semibold ${tom === 'exata' ? 'bg-emerald-50 text-emerald-800' : 'bg-muted/60 text-muted-foreground'}`}>{children}</td>
+    </tr>
+  );
+}
+
+/** CONC-SUGESTOES-V2 A (ALINHAMENTO SOBERANO): o movimento do banco é a 1ª linha DA MESMA TABELA — "Banco" · Pgto. · o nome sem caixa alta (o
+ *  texto cru no `title`) · o CNPJ na coluna Fornecedor · o Valor sob o Valor. */
+export function LinhaDoBancoParaCasar({ data, nome, textoCru, documento, valor, colunas = TODAS_AS_COLUNAS_PARA_CASAR }: {
+  data: string | null; nome: string; textoCru: string; documento: string | null; valor: number; colunas?: ColunasParaCasar;
+}) {
+  const v = valorAssinadoDaLinha(valor);
+  const vazio = <td className="px-1 py-1" />;
+  return (
+    <tr className="border-b-2 border-primary bg-[#eaf0fa] font-semibold" style={{ height: ALTURA_DA_LINHA_PARA_CASAR + 3 }} data-testid="linha-do-banco">
+      <td colSpan={2} className="px-1 py-1 align-middle"><span className="rounded-[3px] bg-primary px-1 text-[8px] font-bold leading-[12px] text-primary-foreground">Banco</span></td>
+      {vazio}
+      <CelulaData iso={data} coluna="pgto" solta />
+      {colunas.deltas && vazio}
+      <td className="truncate px-1 py-1 align-middle text-[12px] leading-tight" title={textoCru} data-testid="linha-do-banco-nome">{nome || '—'}</td>
+      <td className="whitespace-nowrap px-1 py-1 align-middle text-[9px] tabular-nums leading-tight" data-testid="linha-do-banco-documento">{documento ?? ''}</td>
+      {colunas.faz && vazio}
+      {colunas.nf && vazio}
+      <CelulaValor classe={v.classe}>{v.texto}</CelulaValor>
+      {colunas.deltas && vazio}
+      {vazio}{vazio}{vazio}
+    </tr>
+  );
 }
 
 /** D-g — os dois Δ de um lançamento contra o movimento do banco: valor (|banco| − |lançamento|) e dias (pgto. no banco − vencimento) */
@@ -151,33 +197,46 @@ export function textoDoDelta(tipo: 'valor' | 'dias', d: number | null | undefine
 
 /** Uma linha das duas listas: as células da lista do Financeiro + Motivo + a ação. */
 export function LinhaParaCasarNaTabela({ l, marcada, alternar, podeMarcar, motivoMarcar, motivo, acao, testid, testidDaLinha, dadoAcao,
-  colunas = TODAS_AS_COLUNAS_PARA_CASAR }: {
+  colunas = TODAS_AS_COLUNAS_PARA_CASAR, exata = false, onAbrir }: {
   l: LinhaParaCasar; colunas?: ColunasParaCasar; marcada: boolean; alternar: () => void; podeMarcar: boolean; motivoMarcar?: string;
   motivo: ReactNode; acao: ReactNode; testid: string; testidDaLinha?: string; dadoAcao?: string;
+  /** CONC-SUGESTOES-V2 A — a exata (valor + CNPJ): fundo verde, faixa à esquerda, negrito */
+  exata?: boolean;
+  /** CONC-SUGESTOES-V2 ajuste (1) 07:45 — o clique na Descrição abre o mini-modal SÓ LEITURA (o inteiro segue no `title`) */
+  onAbrir?: () => void;
 }) {
   const v = valorAssinadoDaLinha(l.valor);
   const doc = docDaLinha({ tipo_documento: l.tipoDocumento, numero_documento: l.numeroDocumento }, null);
   const st = statusDaLinha(l.status, l.conciliado);
-  const vencido = !!l.venc && !l.pgto && l.venc < hojeLocal();
+  const vencido = !l.vencEstimado && !!l.venc && !l.pgto && l.venc < hojeLocal();
+  const deltaDias = () => {
+    if (l.vencEstimado) return (
+      <td className="whitespace-nowrap px-1 py-1 text-right align-middle text-[9px] tabular-nums leading-tight text-muted-foreground" title={`contra vencimento estimado — ${TITULO_DO_ESTIMADO}`}
+        data-testid={`${testid}-delta-dias`}>{l.deltaDias == null ? '—' : `${l.deltaDias > 0 ? '+' : l.deltaDias < 0 ? '−' : ''}${Math.abs(l.deltaDias)}`}</td>);
+    const d = textoDoDelta('dias', l.deltaDias);
+    return <td className={`whitespace-nowrap px-1 py-1 text-right align-middle text-[9px] tabular-nums leading-tight ${d.classe}`} data-testid={`${testid}-delta-dias`}>{d.texto}</td>;
+  };
   return (
-    <LinhaDaLista marcada={marcada} testid={testidDaLinha} dadoAcao={dadoAcao}>
+    <LinhaDaLista marcada={marcada} testid={testidDaLinha} dadoAcao={dadoAcao}
+      classe={exata ? 'bg-emerald-50 font-semibold [&>td:first-child]:shadow-[inset_4px_0_0_#1f8a3e] [&>td]:bg-emerald-50' : undefined}>
       {podeMarcar
         ? <CelulaCaixinha marcada={marcada} alternar={alternar} solta />
         : <td className="px-1 py-1 align-middle text-center bg-background" title={motivoMarcar} data-testid="caixinha-fora" />}
       <CelulaData iso={l.comp} coluna="comp" solta />
-      <CelulaData iso={l.venc} coluna="venc" vencido={vencido} solta />
+      {l.vencEstimado ? <CelulaVencEstimado iso={l.venc} /> : <CelulaData iso={l.venc} coluna="venc" vencido={vencido} solta />}
       <CelulaData iso={l.pgto} coluna="pgto" solta />
+      {colunas.deltas && deltaDias()}
       {/* CONC-CRIAR-COM-NOTA-02 D-g (Gabriel 18/11, substitui a quebra do UI-FONTE-GATE-01): LINHA ÚNICA — Descrição e Fornecedor com "…" e o
           inteiro no `title` */}
-      <CelulaProduto title={l.tituloDescricao ?? (l.descricao || '')}>{l.descricao || '-'}</CelulaProduto>
+      <CelulaProduto title={l.tituloDescricao ?? (l.descricao || '')}>{onAbrir
+        ? <button type="button" onClick={onAbrir} className="block w-full truncate text-left hover:underline" data-testid={`${testid}-abrir`}>{l.descricao || '-'}</button>
+        : (l.descricao || '-')}</CelulaProduto>
       <CelulaFornecedor title={l.fornecedor ?? ''}>{l.fornecedor || '-'}</CelulaFornecedor>
       {colunas.faz && <CelulaFaz codigo={l.fazendaCodigo} nome={l.fazendaNome} />}
       {colunas.nf && <CelulaDoc rotulo={doc.rotulo} titulo={doc.titulo} />}
       <CelulaValor classe={v.classe}>{v.texto}</CelulaValor>
       {colunas.deltas && (() => { const d = textoDoDelta('valor', l.deltaValor); return (
         <td className={`whitespace-nowrap px-1 py-1 text-right align-middle text-[9px] tabular-nums leading-tight ${d.classe}`} data-testid={`${testid}-delta-valor`}>{d.texto}</td>); })()}
-      {colunas.deltas && (() => { const d = textoDoDelta('dias', l.deltaDias); return (
-        <td className={`whitespace-nowrap px-1 py-1 text-right align-middle text-[9px] tabular-nums leading-tight ${d.classe}`} data-testid={`${testid}-delta-dias`}>{d.texto}</td>); })()}
       <CelulaStatus title={st.stPilula || st.stEstagio ? undefined : st.stLabel}><RotuloDoStatus st={st} /></CelulaStatus>
       <td className="truncate px-1 py-1 align-middle leading-tight" data-testid={`${testid}-coluna-motivo`}>{motivo}</td>
       <td className="whitespace-nowrap px-1 py-1 text-right align-middle leading-tight" data-testid={`${testid}-coluna-acao`}>{acao}</td>

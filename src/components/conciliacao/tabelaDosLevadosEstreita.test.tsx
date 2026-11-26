@@ -30,12 +30,14 @@ describe('tabela dos levados — abaixo de 1000px', () => {
       .toBe('Sal mineral · Fornecedor: Casa do Campo · Fazenda: Faz. Pureza · Atividade: Pec. · Plano: Sal e minerais');
     const t = container.querySelector('[data-testid="levados-tabela"]');
     const cols = t?.querySelectorAll('colgroup col').length;
-    expect(cols).toBe(7);
+    expect(cols).toBe(9); /* CONC-SUGESTOES-V2 C: + Pgto. e Δ dias */
+    /* o extrato é a 1ª linha da MESMA grade: as mesmas células */
+    expect(screen.getByTestId('levados-extrato').querySelectorAll('td').length).toBe(cols);
     expect(t?.querySelectorAll('thead th').length).toBe(cols);
     expect(screen.getByTestId('levado-linha').querySelectorAll('td').length).toBe(cols);
   });
 
-  it('a 1000px as 11 colunas de sempre, e o title da Descrição é só a descrição', () => {
+  it('a 1000px as 13 colunas (CONC-SUGESTOES-V2 C: + Pgto. e Δ dias), e o title da Descrição é só a descrição', () => {
     largura(1000);
     const { container } = tabela();
     expect(screen.getByTestId('levado-linha-fornecedor').textContent).toBe('Casa do Campo');
@@ -44,7 +46,8 @@ describe('tabela dos levados — abaixo de 1000px', () => {
     expect(screen.getByTestId('levado-linha-plano').textContent).toBe('Sal e minerais');
     expect(screen.getByTestId('levado-linha-descricao').getAttribute('title')).toBe('Sal mineral');
     const t = container.querySelector('[data-testid="levados-tabela"]');
-    expect(t?.querySelectorAll('colgroup col').length).toBe(11);
-    expect(t?.querySelectorAll('thead th').length).toBe(11);
+    expect(t?.querySelectorAll('colgroup col').length).toBe(13);
+    expect(t?.querySelectorAll('thead th').length).toBe(13);
+    expect(screen.getByTestId('levados-extrato').querySelectorAll('td').length).toBe(13);
   });
 });
