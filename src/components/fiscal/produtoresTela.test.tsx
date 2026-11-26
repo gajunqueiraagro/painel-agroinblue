@@ -215,6 +215,6 @@ describe('Cadastros › Produtores', () => {
     await screen.findAllByTestId('produtores-item');
     expect(screen.getByTestId('produtor-rodape').textContent).toBe('');
     fireEvent.click(screen.getByTestId('produtor-guia-certificado'));
-    await waitFor(() => expect(screen.getByTestId('produtor-rodape').textContent).toBe('o certificado grava ao subir; Salvar e Desfazer são só dos dados da ficha'));
+    await waitFor(() => expect(screen.getByTestId('produtor-rodape').textContent).toBe('o certificado grava ao subir; Salvar e Desfazer valem só para a ficha'));
   });
 });
