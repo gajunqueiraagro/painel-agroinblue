@@ -64,7 +64,9 @@ export function ResumoDaListaV2({ totais, pronto, bpoAtivo, peloExtrato }: {
   const p = aPagarDoResumo(pronto);
   const v = (n: number | undefined) => (n === undefined ? '—' : moedaComSinal(n));
   return (
-    <div className="grid shrink-0 grid-cols-[4fr_2.75fr] gap-1" data-testid="resumo-da-lista">
+    /* de 1100px para cima, os dois blocos numa linha (o mock, a 1126/1280/1366); abaixo, um sobre o outro — 9 dígitos não cabem em
+       4 colunas de 1024 (gate: −R$ 301.361.003,58 passava 7,6px). A largura decide, nunca o dado. */
+    <div className="grid shrink-0 grid-cols-1 gap-1 min-[1100px]:grid-cols-[4fr_2.75fr]" data-testid="resumo-da-lista">
       <Bloco rotulo="Caixa" colunas="18px repeat(4, minmax(0, 1fr))" testid="resumo-caixa">
         <Card rotulo="Entradas" valor={v(c?.entradas)} cor={c ? corDoValor(c.entradas) : undefined} title={c ? moedaComSinal(c.entradas) : undefined} testid="resumo-entradas" />
         <Card rotulo="Saídas" valor={v(c?.saidas)} cor={c ? corDoValor(c.saidas) : undefined} title={c ? moedaComSinal(c.saidas) : undefined} testid="resumo-saidas" />
@@ -82,9 +84,12 @@ export function ResumoDaListaV2({ totais, pronto, bpoAtivo, peloExtrato }: {
             </>}
           </span>
         </Card>
-        <Card rotulo={<span className="flex items-center gap-1">Faltando · {p ? p.faltando.toLocaleString('pt-BR') : '—'} lanç.{peloExtrato}</span>}
+        {/* o "pelo extrato" na 3ª linha, como a barra dos prontos (na linha do rótulo ele passava da caixa: gate 1126/1280) */}
+        <Card rotulo={`Faltando · ${p ? p.faltando.toLocaleString('pt-BR') : '—'} lanç.`}
           valor={p ? moedaComSinal(p.faltandoValor) : '—'} cor={p && p.faltando > 0 ? 'text-[#a86a00]' : 'text-[#8b96aa]'} testid="resumo-faltando"
-          title="Saídas a pagar em que falta algo: a forma, o boleto, a chave PIX ou os dados bancários." />
+          title="Saídas a pagar em que falta algo: a forma, o boleto, a chave PIX ou os dados bancários.">
+          <span className="block h-[13px] text-[10px] leading-[13px]">{peloExtrato}</span>
+        </Card>
         <Card rotulo="Aprovação" cor="text-[#8b96aa]" testid="resumo-aprovacao"
           valor={<>—{!bpoAtivo && <small className="ml-1 text-[10px] font-normal text-[#5b6577]">sem BPO</small>}</>}
           title={bpoAtivo ? 'A contagem da aprovação entra no LANC-FILTROS-02b (a tela Aprovar pagamentos mostra a fila).' : 'Este cliente não usa a aprovação do BPO.'} />

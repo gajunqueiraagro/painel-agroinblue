@@ -2393,7 +2393,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </div>
               </div>
             </>
-            </>
         </CardContent>
       </Card>
       ) : (
@@ -3387,8 +3386,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               <span className="min-w-0 flex-1 truncate text-primary-foreground/80" title={listaV2.erro ?? undefined} data-testid="estado-lancamentos">
                 {listaV2.erro ?? (listaV2.carregando ? 'Carregando…' : '')}
               </span>
-              {/* LANC-FILTROS-02a — o total do recorte no rodapé (o Resultado do Caixa: Entradas − Saídas do banco), lugar reservado */}
-              <span className="flex flex-none items-center gap-1" data-testid="total-do-rodape" title="Resultado do recorte: Entradas − Saídas (as transferências ficam fora)">Total
+              {/* LANC-FILTROS-02a — o total do recorte no rodapé (o Resultado do Caixa: Entradas − Saídas do banco), lugar reservado. Abaixo de
+                 900px ele sai (a paginação não cabe com ele; o Resultado segue no resumo de cima e, no mobile, na faixa de totais) — gate 750/814 */}
+              <span className="flex flex-none items-center gap-1 max-[900px]:hidden" data-testid="total-do-rodape" title="Resultado do recorte: Entradas − Saídas (as transferências ficam fora)">Total
                 <b className="tabular-nums"><TextoReservado reserva={`−${RESERVA_TOTAL}`} alinhar="direita"
                   texto={paginaDaLista ? moedaComSinal(totalEntradas - Math.abs(totalSaidas)) : '—'} /></b>
               </span>
