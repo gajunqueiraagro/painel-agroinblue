@@ -7,15 +7,18 @@
  *   passam pela prévia do banco (`fn_folha_mes_confirmar` / `fn_folha_reabrir`, lote 118740) e só o 2º clique grava; o reabrir pede o motivo.
  * ⚠ RÉGUA DE FONTES NOVA (UI-FONTES-REGUA-01): controles 11px/26px, cabeçalho e datas 10px, linha 11px/24px; tabela de régua fixa
  *   (`colgroup` em px; Funcionário é a elástica), cabeçalho e rodapé presos, um scrollport, altura até o fim da janela.
+ * ⚠ FOLHA-REGUA-01 (Gabriel 26/11 08:13): a régua da Folha (`reguaFolha.ts`: tabela 10,5 · linha 20 · controles 11/24, os 4 documentos,
+ *   Arrastar e Confirmar inclusive; o Confirmar no navy); "Pago em" CENTRADO (o "—" dele não encosta no da Diferença, à direita); "O que
+ *   falta" em palavra curta (`faltaCurta`, a frase inteira no `title`); UMA coluna Recibo (o valor) — ver o recibo e abrir o lançamento
+ *   viraram dois ícones de ação na última coluna, cada um no seu lugar reservado; o rodapé usa o mesmo `colgroup`, total sob total.
  */
 import { useMemo, useState } from 'react';
-import { ExternalLink } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ExternalLink, FileText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Segmentado } from '@/components/ui/segmentado';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { QUADRO_REGUA, RODAPE_REGUA, TextoReservado } from '@/components/ui/regua-tabela';
-import { CONTROLE, TEXTO_ROTULO, TH_FONTES, LINHA_FONTES, TD_FONTES, TD_FONTES_TEXTO, TD_FONTES_NUM, TD_FONTES_DATA } from '@/components/ui/regua-fontes';
+import { CONTROLE_F, ROTULO_F, TH_F, LINHA_F, TD_F, TD_F_TEXTO, TD_F_NUM, TD_F_DATA, LINHA_RODAPE_F, ALTURA_F, FONTE_F, BOTAO_PRINCIPAL_F, BOTAO_CONTORNO_F } from './reguaFolha';
 import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { mesUnico, type Periodo } from '@/v2/lib/periodo';
@@ -27,7 +30,7 @@ import { cn } from '@/lib/utils';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { competenciaBR, dataBR, n2 } from '@/lib/folha/folhaTela';
 import {
-  TIPOS_DA_FOLHA, competenciaDe, estaConfirmada, fraseDoTipo, lugaresDosDocumentos, motivoParaNaoConfirmar, pagoEm, situacaoDaLinha,
+  TIPOS_DA_FOLHA, competenciaDe, estaConfirmada, faltaCurta, fraseDoTipo, lugaresDosDocumentos, motivoParaNaoConfirmar, pagoEm, situacaoDaLinha,
   type LinhaDoMes, type TipoDaFolha, type TomDaSituacao,
 } from '@/lib/folha/folhaMes';
 import { codigosDasFazendas, rotuloDaFazenda, tituloDaFazenda } from '@/lib/folha/fazendaDaAtuacao';
@@ -36,19 +39,19 @@ import { FolhaDaCaixaDialog } from '@/components/financeiro-v2/FolhaDaCaixaDialo
 import { LancamentoDaFolha } from './LancamentoDaFolha';
 import { useVerDocumento } from './useVerDocumento';
 
-type Coluna = 'nome' | 'fazenda' | 'previsto' | 'recibo' | 'diferenca' | 'pago_em' | 'situacao' | 'falta' | 'doc' | 'abrir';
-/** px medidos para a janela de 1126 (≈ 950 de tabela): Funcionário é a elástica (~150px a 1126, o inteiro no `title`) */
-const COLUNAS: ReadonlyArray<{ coluna: Coluna; rotulo: string; largura: number | null; direita?: boolean }> = [
+type Coluna = 'nome' | 'fazenda' | 'previsto' | 'recibo' | 'diferenca' | 'pago_em' | 'situacao' | 'falta' | 'acoes';
+/** px medidos para a janela de 1126 (≈ 950 de tabela): Funcionário é a elástica (o inteiro no `title`) */
+const COLUNAS: ReadonlyArray<{ coluna: Coluna; rotulo: string; largura: number | null; direita?: boolean; centro?: boolean }> = [
   { coluna: 'nome', rotulo: 'Funcionário', largura: null },
   { coluna: 'fazenda', rotulo: 'Fazenda', largura: 72 },
   { coluna: 'previsto', rotulo: 'Previsto', largura: 92, direita: true },
   { coluna: 'recibo', rotulo: 'Recibo', largura: 92, direita: true },
   { coluna: 'diferenca', rotulo: 'Diferença', largura: 84, direita: true },
-  { coluna: 'pago_em', rotulo: 'Pago em', largura: 80 },
+  { coluna: 'pago_em', rotulo: 'Pago em', largura: 80, centro: true },
   { coluna: 'situacao', rotulo: 'Situação', largura: 128 },
   { coluna: 'falta', rotulo: 'O que falta', largura: 160 },
-  { coluna: 'doc', rotulo: 'Recibo', largura: 52 },
-  { coluna: 'abrir', rotulo: '', largura: 36 },
+  /* ver o recibo · abrir o lançamento: dois ícones de 16px, cada um no seu lugar (o que não existe deixa o lugar vazio) */
+  { coluna: 'acoes', rotulo: '', largura: 48 },
 ];
 function Colunas() {
   return <colgroup>{COLUNAS.map(c => <col key={c.coluna} style={c.largura ? { width: c.largura } : undefined} />)}</colgroup>;
@@ -143,15 +146,15 @@ export function AbaFolhaMes({ clienteId, onFicha }: { clienteId: string; onFicha
       <div className="flex shrink-0 flex-col gap-1.5 rounded-lg border bg-card px-2 py-1.5" data-testid="folha-mes-faixa">
         <div className="flex min-h-[30px] items-center gap-2">
           <div className="min-w-0 flex-1"><SeletorPeriodo modo="ano-mes" modoUnico periodo={periodo} onPeriodoChange={setPeriodo} /></div>
-          <Segmentado altura={26} fonte={11} valor={tipo} onEscolher={setTipo}
+          <Segmentado altura={ALTURA_F} fonte={FONTE_F} valor={tipo} onEscolher={setTipo}
             opcoes={TIPOS_DA_FOLHA.map(o => ({ valor: o.valor, rotulo: <span className="inline-block w-[96px] text-center">{o.rotulo}</span> }))} />
         </div>
         {/* a 2ª linha cabe numa só de 1126px para cima; mais estreita, Arrastar e Confirmar descem para uma linha própria (antes passavam
             da borda e a página rolava de lado ao abrir a prévia — gate de deslocamento a 750/814/1000) */}
-        <div className="flex min-h-[26px] flex-wrap items-center gap-1.5">
+        <div className="flex min-h-[24px] flex-wrap items-center gap-1.5">
           {(docs ?? lugaresVazios).map(d => (
             <span key={d.chave} data-testid={`folha-mes-doc-${d.chave}`} title={`${d.rotulo}: ${d.detalhe}`}
-              className={cn('inline-flex h-[26px] w-[132px] shrink-0 items-center gap-1.5 rounded-md border px-2', TEXTO_ROTULO,
+              className={cn('inline-flex h-[24px] w-[132px] shrink-0 items-center gap-1.5 rounded-md border px-2', ROTULO_F,
                 d.chegou ? 'border-border text-foreground' : 'border-dashed border-amber-300 bg-amber-50 text-amber-800')}>
               <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', d.chegou ? 'bg-emerald-600' : 'bg-amber-500')} />
               <span className="truncate">{d.rotulo}</span>
@@ -161,37 +164,37 @@ export function AbaFolhaMes({ clienteId, onFicha }: { clienteId: string; onFicha
           {/* Arrastar e Confirmar andam JUNTOS (descem juntos quando a linha não cabe) */}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             <AreaDeArquivo regra={REGRA_RECIBO} onArquivos={a => void receber(a)} convite={lendo ? 'Lendo o recibo…' : 'Arrastar recibos do contador'} detalhe=""
-              desabilitado={lendo} motivoExterno={recusaDoArquivo} className={cn(CONTROLE, 'w-[220px] shrink-0')} testId="folha-mes-arrastar" />
+              desabilitado={lendo} motivoExterno={recusaDoArquivo} className={cn(CONTROLE_F, 'w-[220px] shrink-0')} testId="folha-mes-arrastar" />
             {confirmada ? (
-              <Button type="button" size="sm" variant="outline" className={cn(CONTROLE, 'w-[120px] shrink-0')} title={motivo ?? undefined}
-                onClick={() => setPrevia({ acao: 'reabrir', motivo: '' })} data-testid="folha-mes-reabrir">Reabrir folha</Button>
+              <button type="button" className={cn(BOTAO_CONTORNO_F, 'w-[120px] shrink-0')} title={motivo ?? undefined}
+                onClick={() => setPrevia({ acao: 'reabrir', motivo: '' })} data-testid="folha-mes-reabrir">Reabrir folha</button>
             ) : (
-              <Button type="button" size="sm" disabled={!!motivo} title={motivo ?? 'tudo confere: confirmar a folha do mês'} className={cn(CONTROLE, 'w-[120px] shrink-0')}
-                onClick={() => void preverConfirmar()} data-testid="folha-mes-confirmar">Confirmar folha</Button>
+              <button type="button" disabled={!!motivo} title={motivo ?? 'tudo confere: confirmar a folha do mês'} className={cn(BOTAO_PRINCIPAL_F, 'w-[120px] shrink-0 disabled:pointer-events-none disabled:opacity-50')}
+                onClick={() => void preverConfirmar()} data-testid="folha-mes-confirmar">Confirmar folha</button>
             )}
           </div>
         </div>
-        {/* a 3ª linha tem 26px SEMPRE (a frase, a prévia com os botões, o motivo do reabrir): nada se desloca ao abrir a prévia */}
-        <div className={cn('flex h-[26px] items-center gap-2', TEXTO_ROTULO)}>
+        {/* a 3ª linha tem 24px SEMPRE (a frase, a prévia com os botões, o motivo do reabrir): nada se desloca ao abrir a prévia */}
+        <div className={cn('flex h-[24px] items-center gap-2', ROTULO_F)}>
           {previa ? (
             <span className="flex min-w-0 flex-1 items-center gap-2" data-testid="folha-mes-previa">
               {previa.acao === 'confirmar' ? <span className="truncate">{previa.frase}</span> : (
                 <>
                   <span className="shrink-0">Reabrir: o motivo</span>
-                  <Input value={previa.motivo} onChange={e => setPrevia({ acao: 'reabrir', motivo: e.target.value })} className={cn(CONTROLE, 'w-[260px]')}
+                  <Input value={previa.motivo} onChange={e => setPrevia({ acao: 'reabrir', motivo: e.target.value })} className={cn(CONTROLE_F, 'w-[260px]')}
                     placeholder="ex.: o contador corrigiu um recibo" data-testid="folha-mes-reabrir-motivo" />
                 </>
               )}
-              <Button type="button" size="sm" className={cn(CONTROLE, 'w-[90px] shrink-0')} onClick={() => void gravarPrevia()}
+              <button type="button" className={cn(BOTAO_PRINCIPAL_F, 'w-[90px] shrink-0 disabled:pointer-events-none disabled:opacity-50')} onClick={() => void gravarPrevia()}
                 disabled={previa.acao === 'reabrir' && !previa.motivo.trim()} title={previa.acao === 'reabrir' && !previa.motivo.trim() ? 'escreva o motivo' : undefined}
-                data-testid="folha-mes-previa-ok">{previa.acao === 'confirmar' ? 'Confirmar' : 'Reabrir'}</Button>
-              <Button type="button" size="sm" variant="outline" className={cn(CONTROLE, 'w-[80px] shrink-0')} onClick={() => setPrevia(null)}>Cancelar</Button>
+                data-testid="folha-mes-previa-ok">{previa.acao === 'confirmar' ? 'Confirmar' : 'Reabrir'}</button>
+              <button type="button" className={cn(BOTAO_CONTORNO_F, 'w-[80px] shrink-0')} onClick={() => setPrevia(null)}>Cancelar</button>
             </span>
           ) : ligando ? (
             <span className="flex min-w-0 flex-1 items-center gap-2" data-testid="folha-mes-ligar-previa">
               <span className="truncate">Ligar {ligando.ids.length} {ligando.ids.length === 1 ? 'lançamento' : 'lançamentos'} a {ligando.linha.nome}?</span>
-              <Button type="button" size="sm" className={cn(CONTROLE, 'w-[90px] shrink-0')} onClick={() => void ligar()} data-testid="folha-mes-ligar-ok">Ligar</Button>
-              <Button type="button" size="sm" variant="outline" className={cn(CONTROLE, 'w-[80px] shrink-0')} onClick={() => setLigando(null)}>Cancelar</Button>
+              <button type="button" className={cn(BOTAO_PRINCIPAL_F, 'w-[90px] shrink-0')} onClick={() => void ligar()} data-testid="folha-mes-ligar-ok">Ligar</button>
+              <button type="button" className={cn(BOTAO_CONTORNO_F, 'w-[80px] shrink-0')} onClick={() => setLigando(null)}>Cancelar</button>
             </span>
           ) : erro ? (
             <span className="min-w-0 flex-1 truncate text-red-700" title={erro} data-testid="folha-mes-erro">{erro}</span>
@@ -212,7 +215,7 @@ export function AbaFolhaMes({ clienteId, onFicha }: { clienteId: string; onFicha
               <Colunas />
               <thead className="text-primary-foreground">
                 <tr className="h-[22px]">
-                  {COLUNAS.map(c => <th key={c.coluna} className={cn(TH_FONTES, 'sticky top-0 z-10 bg-primary', c.direita ? 'text-right' : 'text-left')}>{c.rotulo}</th>)}
+                  {COLUNAS.map(c => <th key={c.coluna} className={cn(TH_F, 'sticky top-0 z-10 bg-primary', c.direita ? 'text-right' : c.centro ? 'text-center' : 'text-left')}>{c.rotulo}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -222,51 +225,56 @@ export function AbaFolhaMes({ clienteId, onFicha }: { clienteId: string; onFicha
                   const pago = pagoEm(l);
                   const lanc = l.lancamentos[0]?.id ?? null;
                   return (
-                    <tr key={l.funcionario_id} className={cn(LINHA_FONTES, 'border-b border-border/40 hover:bg-muted/40')} data-testid="folha-mes-linha">
-                      <td className={TD_FONTES_TEXTO} title={l.vinculo_a_confirmar ? `${l.nome} · vínculo a confirmar` : l.nome}>
+                    <tr key={l.funcionario_id} className={cn(LINHA_F, 'border-b border-border/40 hover:bg-muted/40')} data-testid="folha-mes-linha">
+                      <td className={TD_F_TEXTO} title={l.vinculo_a_confirmar ? `${l.nome} · vínculo a confirmar` : l.nome}>
                         <button type="button" className="max-w-full truncate text-left hover:underline" onClick={() => onFicha(l.funcionario_id)}>{l.nome}</button>
                       </td>
-                      <td className={cn(TD_FONTES_TEXTO, at.length === 0 && 'text-muted-foreground')} title={tituloDaFazenda(at, codigo) || undefined} data-testid="folha-mes-fazenda">{rotuloDaFazenda(at, codigo)}</td>
-                      <td className={cn(TD_FONTES_NUM, l.previsto == null && 'text-muted-foreground')}>{valorOuTraco(l.previsto)}</td>
-                      <td className={cn(TD_FONTES_NUM, l.recibo == null && 'text-muted-foreground')}>{valorOuTraco(l.recibo)}</td>
-                      <td className={cn(TD_FONTES_NUM, l.diferenca ? 'text-amber-700' : 'text-muted-foreground')}>
+                      <td className={cn(TD_F_TEXTO, at.length === 0 && 'text-muted-foreground')} title={tituloDaFazenda(at, codigo) || undefined} data-testid="folha-mes-fazenda">{rotuloDaFazenda(at, codigo)}</td>
+                      <td className={cn(TD_F_NUM, l.previsto == null && 'text-muted-foreground')}>{valorOuTraco(l.previsto)}</td>
+                      <td className={cn(TD_F_NUM, l.recibo == null && 'text-muted-foreground')}>{valorOuTraco(l.recibo)}</td>
+                      <td className={cn(TD_F_NUM, l.diferenca ? 'text-amber-700' : 'text-muted-foreground')}>
                         {l.diferenca == null || l.diferenca === 0 ? '—' : `${l.diferenca > 0 ? '+' : ''}${n2(l.diferenca)}`}
                       </td>
-                      <td className={cn(TD_FONTES_DATA, !pago && 'text-muted-foreground')}>{pago ? dataBR(pago) : '—'}</td>
-                      <td className={TD_FONTES} title={s.texto}>
+                      <td className={cn(TD_F_DATA, 'text-center', !pago && 'text-muted-foreground')} data-testid="folha-mes-pago-em">{pago ? dataBR(pago) : '—'}</td>
+                      <td className={TD_F} title={s.texto}>
                         <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><span className={cn('h-1.5 w-1.5 rounded-full', PONTO[s.tom])} />{s.texto}</span>
                       </td>
-                      {/* o "ligar" fica no lugar dele (não corta); só a frase corta, com ela inteira no `title` (REGRA DE CORTE) */}
-                      <td className={cn(TD_FONTES, !l.falta_frase && 'text-muted-foreground')}>
-                        <div className="flex min-w-0 items-center">
+                      {/* o "ligar" fica no lugar dele; o resto em palavra curta que cabe (`faltaCurta`), a frase inteira no `title` */}
+                      <td className={cn(TD_F, !l.falta_frase && 'text-muted-foreground')} title={l.falta_frase ?? undefined} data-testid="folha-mes-falta">
+                        <div className="flex min-w-0 items-center whitespace-nowrap">
                           {l.falta.includes('ligar') && (
                             <button type="button" className="mr-1 flex-none font-semibold text-primary hover:underline" onClick={() => void pedirLigar(l)} data-testid="folha-mes-ligar">ligar</button>
                           )}
-                          <span className="min-w-0 truncate" title={l.falta_frase ?? undefined}>{l.falta_frase ?? '—'}</span>
+                          <span className="min-w-0 truncate">{l.falta_frase ? faltaCurta(l.falta) : '—'}</span>
                         </div>
                       </td>
-                      <td className={TD_FONTES}>
-                        {l.recibos.length === 0 ? <span className="text-muted-foreground">—</span> : (
-                          <button type="button" className="text-primary hover:underline" title={l.recibos.map(r => r.nome).join(' · ')}
-                            onClick={() => void ver(l.recibos[0].bucket, l.recibos[0].storage_path, l.recibos[0].nome)} data-testid="folha-mes-ver-recibo">
-                            ver{l.recibos.length > 1 ? ` +${l.recibos.length - 1}` : ''}
-                          </button>
-                        )}
-                      </td>
-                      <td className={cn(TD_FONTES, 'text-center')}>
-                        {lanc && (
-                          <button type="button" className="inline-flex items-center text-primary" onClick={() => setAbrindo(lanc)}
-                            title={l.lancamentos.length > 1 ? `${l.lancamentos.length} lançamentos — abre o 1º` : 'abrir o lançamento'} data-testid="folha-mes-abrir">
-                            <ExternalLink className="h-3 w-3" />
-                          </button>
-                        )}
+                      <td className={cn(TD_F, 'px-0')}>
+                        <span className="flex items-center justify-center gap-1">
+                          <span className="inline-flex w-[16px] justify-center">
+                            {l.recibos.length > 0 && (
+                              <button type="button" className="inline-flex items-center text-primary" aria-label="ver o recibo"
+                                title={`ver o recibo${l.recibos.length > 1 ? ` (${l.recibos.length})` : ''}: ${l.recibos.map(r => r.nome).join(' · ')}`}
+                                onClick={() => void ver(l.recibos[0].bucket, l.recibos[0].storage_path, l.recibos[0].nome)} data-testid="folha-mes-ver-recibo">
+                                <FileText className="h-3 w-3" />
+                              </button>
+                            )}
+                          </span>
+                          <span className="inline-flex w-[16px] justify-center">
+                            {lanc && (
+                              <button type="button" className="inline-flex items-center text-primary" onClick={() => setAbrindo(lanc)} aria-label="abrir o lançamento"
+                                title={l.lancamentos.length > 1 ? `${l.lancamentos.length} lançamentos — abre o 1º` : 'abrir o lançamento'} data-testid="folha-mes-abrir">
+                                <ExternalLink className="h-3 w-3" />
+                              </button>
+                            )}
+                          </span>
+                        </span>
                       </td>
                     </tr>
                   );
                 })}
                 {linhas.length === 0 && (
-                  <tr className={LINHA_FONTES}>
-                    <td colSpan={COLUNAS.length} className={cn(TD_FONTES, 'py-6 text-center text-muted-foreground')}>
+                  <tr className={LINHA_F}>
+                    <td colSpan={COLUNAS.length} className={cn(TD_F, 'py-6 text-center text-muted-foreground')}>
                       {isLoading ? 'Carregando…' : error ? 'Não consegui ler a folha do mês. Tente de novo.' : 'Ninguém nesta folha.'}
                     </td>
                   </tr>
@@ -278,18 +286,19 @@ export function AbaFolhaMes({ clienteId, onFicha }: { clienteId: string; onFicha
             <table className="w-full table-fixed border-collapse">
               <Colunas />
               <tbody>
-                <tr className="h-[24px] text-[11px] font-semibold">
+                <tr className={LINHA_RODAPE_F}>
                   <td colSpan={2} className="truncate px-1" title={t ? `${t.pessoas} funcionários · ${t.confere} conferem` : undefined}>
                     {t ? `${t.pessoas.toLocaleString('pt-BR')} ${t.pessoas === 1 ? 'funcionário' : 'funcionários'}` : ''}
                   </td>
                   <td className="whitespace-nowrap px-1 text-right tabular-nums">{t ? valorOuTraco(t.previsto) : ''}</td>
                   <td className="whitespace-nowrap px-1 text-right tabular-nums">{t ? valorOuTraco(t.recibo) : ''}</td>
                   <td className="whitespace-nowrap px-1 text-right tabular-nums">{t && t.diferenca ? n2(t.diferenca) : '—'}</td>
-                  <td colSpan={5} className="truncate px-1 text-[10px] font-normal" data-testid="folha-mes-contagem"
+                  <td />
+                  <td colSpan={3} className="truncate px-1 text-[10px] font-normal" data-testid="folha-mes-contagem"
                     title={t ? `${t.confere} conferem · ${t.diferencas} com diferença · ${t.sem_recibo} sem recibo · ${t.a_conferir} a conferir · ${t.sem_previsto} sem previsto` : undefined}>
                     {t && <>
-                      <TextoReservado texto={`${t.confere}`} reserva="999" /> conferem · <TextoReservado texto={`${t.diferencas}`} reserva="999" /> com diferença ·{' '}
-                      <TextoReservado texto={`${t.sem_recibo}`} reserva="999" /> sem recibo
+                      <TextoReservado texto={`${t.confere}`} reserva="99" /> conferem · <TextoReservado texto={`${t.diferencas}`} reserva="99" /> com diferença ·{' '}
+                      <TextoReservado texto={`${t.sem_recibo}`} reserva="99" /> sem recibo
                     </>}
                   </td>
                 </tr>

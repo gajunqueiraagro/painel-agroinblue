@@ -79,8 +79,15 @@ export interface DocumentoDoFuncionario {
 export interface PagamentoLigado { lancamento_id: string; descricao: string | null; valor: number; status: string | null; data: string | null; competencia: string | null }
 export interface Ficha {
   funcionario: CadastroFuncionario; pagamento: PagamentoDoFavorecido | null; salarios: SalarioDoFuncionario[]; atuacoes: AtuacaoDesde[];
-  documentos: DocumentoDoFuncionario[]; ultimos_pagamentos: PagamentoLigado[];
+  documentos: DocumentoDoFuncionario[];
+  /** FOLHA-REGUA-01: os REALIZADOS até hoje, do mais recente para trás (5) — e os PREVISTOS de hoje em diante, do mais perto (3). A regra é do
+   *  banco (`fn_folha_funcionario_ficha`, lote 118750); sem a chave nova (banco antes do lote) os próximos vêm vazios. */
+  ultimos_pagamentos: PagamentoLigado[]; proximos_pagamentos: PagamentoLigado[];
 }
+
+const pagamentoLigadoDaLinha = (u: Linha): PagamentoLigado => ({
+  lancamento_id: String(u.lancamento_id), descricao: txt(u.descricao), valor: num(u.valor), status: txt(u.status), data: txt(u.data), competencia: txt(u.competencia),
+});
 
 export function documentoDaLinha(d: Linha): DocumentoDoFuncionario {
   return {
@@ -110,9 +117,8 @@ export function fichaDoBanco(v: unknown): Ficha | null {
     salarios: linhas(v.salarios).map(s => ({ desde: txt(s.desde), salario: numOuNulo(s.salario), parte_pct: numOuNulo(s.parte_pct), motivo: txt(s.motivo) })),
     atuacoes: linhas(v.atuacoes).map(a => ({ ...atuacaoDaLinha(a), desde: txt(a.desde) })),
     documentos: linhas(v.documentos).map(documentoDaLinha),
-    ultimos_pagamentos: linhas(v.ultimos_pagamentos).map(u => ({
-      lancamento_id: String(u.lancamento_id), descricao: txt(u.descricao), valor: num(u.valor), status: txt(u.status), data: txt(u.data), competencia: txt(u.competencia),
-    })),
+    ultimos_pagamentos: linhas(v.ultimos_pagamentos).map(pagamentoLigadoDaLinha),
+    proximos_pagamentos: linhas(v.proximos_pagamentos).map(pagamentoLigadoDaLinha),
   };
 }
 
@@ -422,22 +428,24 @@ export function problemaDaAtuacao(itens: ReadonlyArray<{ fazenda_id: string; ati
 /* ── as pendências: as ações de cada tipo (contrato §3.3) ────────────────────────────────────────────────────────────────── */
 export type AcaoPendencia = 'ligar_sugestao' | 'outro' | 'cadastrar' | 'cadastrar_desligado' | 'descartar' | 'recibo' | 'novo_documento';
 /** as ações NA ORDEM: as 3 primeiras ficam à vista (botões de largura fixa), o resto vai para o "⋯" */
-export function acoesDaPendencia(p: Pendencia): Array<{ acao: AcaoPendencia; rotulo: string }> {
+export function acoesDaPendencia(p: Pendencia): Array<{ acao: AcaoPendencia; rotulo: string; titulo?: string }> {
+  /* FOLHA-REGUA-01 (Gabriel 26/11): o rótulo INTEIRO, sem "…", num botão pequeno de largura fixa; a frase longa vai no `titulo` (o `title`) */
   const ligar = (r: string) => ({ acao: 'ligar_sugestao' as const, rotulo: r });
+  const naoE = (titulo: string) => ({ acao: 'descartar' as const, rotulo: 'Não é', titulo });
   switch (p.tipo) {
     case 'favorecido_sem_funcionario':
       return p.sugestao
-        ? [ligar(`É o mesmo · ligar ${p.n.toLocaleString('pt-BR')}`), { acao: 'cadastrar', rotulo: 'Cadastrar' }, { acao: 'descartar', rotulo: 'Não é' }, { acao: 'outro', rotulo: 'É de outro funcionário…' }]
-        : [{ acao: 'cadastrar', rotulo: 'Cadastrar' }, { acao: 'outro', rotulo: 'É de alguém…' }, { acao: 'descartar', rotulo: 'Não é' }];
+        ? [ligar(`É o mesmo · ligar ${p.n.toLocaleString('pt-BR')}`), { acao: 'cadastrar', rotulo: 'Cadastrar' }, naoE('não é pagamento de funcionário'), { acao: 'outro', rotulo: 'É de outro funcionário' }]
+        : [{ acao: 'cadastrar', rotulo: 'Cadastrar' }, { acao: 'outro', rotulo: 'É de alguém', titulo: 'é de um funcionário já cadastrado: escolher qual' }, naoE('não é pagamento de funcionário')];
     case 'rescisao_a_conferir':
-      return [{ acao: 'cadastrar_desligado', rotulo: 'Cadastrar desligado' }, { acao: 'cadastrar', rotulo: 'Cadastrar ativo' }, { acao: 'descartar', rotulo: 'Não é' },
-        { acao: 'outro', rotulo: 'É de um funcionário…' }];
+      return [{ acao: 'cadastrar_desligado', rotulo: 'Cadastrar desligado' }, { acao: 'cadastrar', rotulo: 'Cadastrar ativo' }, naoE('não é rescisão de funcionário'),
+        { acao: 'outro', rotulo: 'É de um funcionário' }];
     case 'sugestao_descricao':
       return p.sugestao
-        ? [ligar('Ligar'), { acao: 'outro', rotulo: 'Outro…' }, { acao: 'descartar', rotulo: 'Não é de funcionário' }]
-        : [{ acao: 'outro', rotulo: 'Escolher…' }, { acao: 'descartar', rotulo: 'Não é de funcionário' }];
+        ? [ligar('Ligar'), { acao: 'outro', rotulo: 'Outro', titulo: 'é de outro funcionário: escolher qual' }, naoE('não é de funcionário')]
+        : [{ acao: 'outro', rotulo: 'Escolher', titulo: 'escolher o funcionário' }, naoE('não é de funcionário')];
     case 'sem_recibo':
-      return [{ acao: 'recibo', rotulo: 'Anexar recibo' }, { acao: 'descartar', rotulo: 'Dar baixa sem recibo' }];
+      return [{ acao: 'recibo', rotulo: 'Anexar recibo' }, { acao: 'descartar', rotulo: 'Baixa sem recibo', titulo: 'dar baixa sem recibo' }];
     case 'documento_vence':
       return [{ acao: 'novo_documento', rotulo: 'Novo documento' }, { acao: 'descartar', rotulo: 'Já resolvido' }];
   }

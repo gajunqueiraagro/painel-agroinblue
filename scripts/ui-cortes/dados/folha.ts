@@ -21,11 +21,14 @@ export type FormaDaFolha = 'nj' | 'vera';
 const PRIMEIROS = ['Antônio', 'Bruno', 'Carla', 'Diego', 'Eduardo', 'Fábio', 'Gisele', 'Hugo', 'Ivo', 'Joana', 'Lúcio', 'Marta', 'Nelson', 'Otávio', 'Paula', 'Rui'];
 const SOBRENOMES = ['Exemplo Prado', 'Teste Ribeiro', 'Modelo Santos', 'Fictício Alves', 'Amostra Lima', 'Exemplar Rocha', 'Demonstração Melo', 'Simulado Costa', 'Padrão Nunes'];
 const FAZENDAS = [{ id: 'fSED', nome: 'Sede' }, { id: 'fRET', nome: 'Retiro' }, { id: 'fBOA', nome: 'Boa Vista' }];
-const CARGOS = ['Vaqueiro', 'Tratorista', 'Capataz', 'Serviços gerais', 'Operador de máquinas', 'Cozinheira'];
+/* FOLHA-REGUA-01: os maiores cargos do proto (Vera e NJ, 23 letras) — a coluna Cargo tem de mostrá-los inteiros a 1126 e a 1280 */
+const CARGOS = ['Vaqueiro', 'Trab. Rural Polivalente', 'Capataz', 'Auxiliar Administrativo', 'Operador de Maquinas', 'Cozinheiro(a)'];
+/* FOLHA-REGUA-01: o maior nome da Vera no proto tem 36 letras (sintético, do mesmo tamanho) */
+const NOME_36 = 'Bruno Exemplo Demonstração de Cunhas';
 const NOME_LONGO = 'Maria Aparecida Demonstração dos Santos Lima';   /* 41+ caracteres: o pior caso do NJ */
 const REGISTRO_LONGO = 'Produtor Exemplo de Demonstração Sintética · CEI 00.000.00000/00';
 
-const nomeDe = (i: number) => (i === 3 ? NOME_LONGO : `${PRIMEIROS[i % PRIMEIROS.length]} ${SOBRENOMES[(i * 7) % SOBRENOMES.length]} ${i > 15 ? String(i) : ''}`.trim());
+const nomeDe = (i: number, forma: FormaDaFolha = 'nj') => (i === 3 ? NOME_LONGO : forma === 'vera' && i === 1 ? NOME_36 : `${PRIMEIROS[i % PRIMEIROS.length]} ${SOBRENOMES[(i * 7) % SOBRENOMES.length]} ${i > 15 ? String(i) : ''}`.trim());
 const pad = (n: number) => String(n).padStart(2, '0');
 
 function montarFuncionarios(forma: FormaDaFolha): FuncionarioDaLista[] {
@@ -40,11 +43,11 @@ function montarFuncionarios(forma: FormaDaFolha): FuncionarioDaLista[] {
     const completo = forma === 'vera' && ativo;
     const aAtualizar = completo ? [] : i === 3 ? ['salario', 'admissao', 'cargo', 'cpf', 'desligamento', 'nome_completo'] : i % 3 === 0 ? ['salario', 'admissao'] : ['cargo', 'cpf'];
     return {
-      id: `f${pad(i)}`, nome: nomeDe(i), cpf: completo || i % 2 === 0 ? `0000000${pad(i)}00`.slice(0, 11) : null, cargo: completo ? CARGOS[i % CARGOS.length] : null,
+      id: `f${pad(i)}`, nome: nomeDe(i, forma), cpf: completo || i % 2 === 0 ? `0000000${pad(i)}00`.slice(0, 11) : null, cargo: completo ? CARGOS[i % CARGOS.length] : null,
       vinculo: i % 11 === 5 ? 'domestico' : 'clt', empregador_registro: completo || i === 3 ? (i === 3 ? REGISTRO_LONGO : 'Produtor Exemplo · CEI 0000-00') : null,
       codigo_contador: completo ? String(100 + i) : null, admissao: completo ? `2021-${pad((i % 12) + 1)}-03` : null,
       situacao: ativo ? 'ativo' : 'desligado', desligamento: ativo ? null : `2026-${pad((i % 10) + 1)}-30`, a_atualizar: aAtualizar, a_confirmar: !completo,
-      favorecido_id: `fav${pad(i)}`, favorecido: nomeDe(i), salario: completo ? 3500 + i * 245 : i === 0 ? 99999.99 : null, salario_desde: completo ? '2026-01-01' : null,
+      favorecido_id: `fav${pad(i)}`, favorecido: nomeDe(i, forma), salario: completo ? 3500 + i * 245 : i === 0 ? 99999.99 : null, salario_desde: completo ? '2026-01-01' : null,
       atuacao, lancamentos: i === 0 ? 338 : 12 + i, ultimo_pagamento: '2026-10-05', documentos: i === 0 ? 4 : 0, documentos_vencendo: i === 0 ? 2 : 0,
     };
   });
@@ -125,9 +128,15 @@ export function apiDaFolha(forma: FormaDaFolha = 'nj', opcoes: { folhaOk?: boole
         pagamento: { favorecido_id: f.favorecido_id, favorecido: f.favorecido, tipo_recebimento: 'pix', pix_tipo_chave: 'cpf', pix_chave: f.cpf ?? null, banco: f.cpf ? 'Banco Exemplo 000' : null,
           agencia: f.cpf ? '0001' : null, conta: f.cpf ? '12345-6' : null, tipo_conta: null, telefone: null, celular: f.cpf ? '(00) 90000-0000' : null, email: null },
         salarios: f.salario != null ? [{ desde: f.salario_desde ?? '2026-01-01', salario: f.salario, parte_pct: 100, motivo: 'pelo holerite' }] : [],
-        atuacoes: f.atuacao.map(a => ({ ...a, desde: '2025-11-01' })),
+        /* FOLHA-REGUA-01: o f00 tem uma vigência REPETIDA (o caso do proto: a mesma atuação regravada pela tela depois da carga) */
+        atuacoes: f.id === 'f00' ? [...f.atuacao.map(a => ({ ...a, desde: '2026-07-28' })), ...f.atuacao.map(a => ({ ...a, desde: '2025-11-01' }))]
+          : f.atuacao.map(a => ({ ...a, desde: '2025-11-01' })),
         documentos: f.id === 'f00' ? DOCUMENTOS_DO_0 : [],
-        ultimos_pagamentos: historicoDe(f, forma).slice(0, 5).map(i => ({ lancamento_id: i.lancamento_id, descricao: i.descricao, valor: i.valor, status: i.status, data: i.data, competencia: i.competencia })),
+        /* FOLHA-REGUA-01: como o banco devolve depois do lote 118750 — os 5 REALIZADOS mais recentes e os 3 PREVISTOS de hoje em diante */
+        ultimos_pagamentos: historicoDe(f, forma).filter(i => i.status === 'realizado').slice(0, 5)
+          .map(i => ({ lancamento_id: i.lancamento_id, descricao: i.descricao, valor: i.valor, status: i.status, data: i.data_pagamento ?? i.data, competencia: i.competencia })),
+        proximos_pagamentos: ['2026-12', '2027-01', '2027-02'].map(m => ({ lancamento_id: `${f.id}-p${m}`, descricao: 'Folha de Pagamento', valor: 3500 + f.lancamentos,
+          status: 'previsto', data: `${m}-05`, competencia: m })),
       };
       return ok(ficha);
     },

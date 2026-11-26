@@ -8,7 +8,8 @@
  *   R6 o pedido do gravador: o registro INTEIRO, com o `recorrencia_origem_id` que veio; o "a atualizar" perde o que foi preenchido
  *   R7 a atuação soma 100 (a recusa do banco dita antes)
  *   R8 as ações de cada pendência e a frase da prévia do ligar
- *   R9 a aba Funcionários abaixo de 1000px tira o Registro, abaixo de 760 o Vínculo e o A atualizar; a Fazenda fica (só pela largura, nunca pelo dado)
+ *   R9 a aba Funcionários: coluna opcional só entra se o Nome mantém o lugar dele (FOLHA-REGUA-01; só pela largura, nunca pelo dado)
+ *   R10 FOLHA-REGUA-01: a vigência repetida da atuação aparece uma vez; o "O que falta" curto; os botões das pendências sem "…"; os próximos pagamentos
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -16,7 +17,9 @@ import {
   FORM_VAZIO, formDoCadastro, fraseDaPreviaLigar, listaDoBanco, pedidoDoFuncionario, pendenciasDoBanco, problemaDaAtuacao, rotuloSituacao,
   type FuncionarioDaLista,
 } from './folhaTela';
-import { colunasParaALargura } from '@/components/folha/AbaFuncionarios';
+import { colunasParaALargura, NOME_MINIMO } from '@/components/folha/AbaFuncionarios';
+import { vigenciasDaAtuacao } from './admissao';
+import { faltaCurta } from './folhaMes';
 
 const func = (p: Partial<FuncionarioDaLista>): FuncionarioDaLista => ({
   id: 'f1', nome: 'Antônio Exemplo', cpf: null, cargo: null, vinculo: 'clt', empregador_registro: null, codigo_contador: null, admissao: null,
@@ -158,13 +161,54 @@ describe('R8 as pendências', () => {
 });
 
 describe('R9 as colunas da aba Funcionários pela largura', () => {
-  it('abaixo de 1000px sai o Registro (a Fazenda fica, FOLHA-TELAS-03); de 1000 em diante, as 9 do contrato; sem medida (0), as 9', () => {
-    expect(colunasParaALargura(800).map(c => c.coluna)).toEqual(['nome', 'cargo', 'vinculo', 'fazenda', 'admissao', 'salario', 'situacao', 'a_atualizar']);
-    /* gate 24/11: a 1126 com a ficha (tabela ~610px) o Nome ficava com 22px — abaixo de 760 sai também o "A atualizar" */
-    /* abaixo de 760 saem também o "A atualizar" e o Vínculo (os dois estão na ficha) */
-    expect(colunasParaALargura(756).map(c => c.coluna)).toEqual(['nome', 'cargo', 'fazenda', 'admissao', 'salario', 'situacao']);
-    expect(colunasParaALargura(610).reduce((s, c) => s + (c.largura ?? 0), 0)).toBeLessThanOrEqual(610 - 140);
-    expect(colunasParaALargura(1000)).toHaveLength(9);
+  it('FOLHA-REGUA-01: nenhuma coluna opcional enquanto o Nome não tem o lugar dele; elas entram por ordem (Vínculo, A atualizar, Registro)', () => {
+    const fixas = ['nome', 'cargo', 'fazenda', 'admissao', 'salario', 'situacao'];
+    /* 1126 com a ficha: 608px de tabela — só as fixas, e o Nome fica com o NOME_MINIMO ou mais */
+    expect(colunasParaALargura(608).map(c => c.coluna)).toEqual(fixas);
+    expect(608 - colunasParaALargura(608).reduce((s, c) => s + (c.largura ?? 0), 0)).toBeGreaterThanOrEqual(NOME_MINIMO);
+    /* 1280: 762px — entra o Vínculo; o "A atualizar" (150) ainda não cabe sem tirar o lugar do Nome */
+    expect(colunasParaALargura(762).map(c => c.coluna)).toEqual(['nome', 'cargo', 'vinculo', 'fazenda', 'admissao', 'salario', 'situacao']);
+    expect(colunasParaALargura(906).map(c => c.coluna)).toEqual(['nome', 'cargo', 'vinculo', 'fazenda', 'admissao', 'salario', 'situacao', 'a_atualizar']);
+    for (const l of [608, 700, 762, 906, 1100, 1400]) {
+      expect(l - 16 - colunasParaALargura(l).reduce((s, c) => s + (c.largura ?? 0), 0)).toBeGreaterThanOrEqual(NOME_MINIMO);
+    }
+    expect(colunasParaALargura(1400)).toHaveLength(9);
     expect(colunasParaALargura(0)).toHaveLength(9);
+  });
+});
+
+describe('R10 FOLHA-REGUA-01', () => {
+  const a = (desde: string, fazenda_id: string, atividade: string, pct: number) => ({ desde, fazenda_id, fazenda: fazenda_id, atividade, pct });
+  it('a vigência que repete a anterior não aparece de novo (vale a data da mais antiga); a que muda aparece', () => {
+    /* o caso do proto: a carga (01/07) e a tela (28/07) gravaram a MESMA atuação */
+    expect(vigenciasDaAtuacao([a('2026-07-28', 'z1', 'pecuaria', 100), a('2026-07-01', 'z1', 'pecuaria', 100)]))
+      .toEqual([{ desde: '2026-07-01', itens: [a('2026-07-01', 'z1', 'pecuaria', 100)] }]);
+    /* troca de fazenda no meio, e a volta igual a uma ANTERIOR não-vizinha continua aparecendo */
+    const v = vigenciasDaAtuacao([a('2026-01-01', 'z1', 'pecuaria', 100), a('2026-05-01', 'z2', 'pecuaria', 60), a('2026-05-01', 'z1', 'agricultura', 40),
+      a('2026-08-01', 'z2', 'pecuaria', 60), a('2026-08-01', 'z1', 'agricultura', 40), a('2026-10-01', 'z1', 'pecuaria', 100)]);
+    expect(v.map(x => x.desde)).toEqual(['2026-10-01', '2026-05-01', '2026-01-01']);
+    expect(v[1].itens.map(i => i.pct)).toEqual([60, 40]);
+    expect(vigenciasDaAtuacao([])).toEqual([]);
+  });
+  it('o "O que falta" em palavra curta; o "ligar" fica de fora (é o botão)', () => {
+    expect(faltaCurta(['ligar', 'recibo', 'pagamento', 'vinculo'])).toBe('recibo · pagar · vínculo');
+    expect(faltaCurta(['lancamento', 'recibo'])).toBe('previsto · recibo');
+    expect(faltaCurta(['ligar'])).toBe('');
+    expect(faltaCurta(['novo'])).toBe('novo');
+  });
+  it('nenhum botão de pendência termina em "…"', () => {
+    const base = { favorecido_id: 'f', favorecido: 'F', n: 3, total: 1, desde: null, ate: null, ids: [], tem_rescisao: false, lancamento_id: null, descricao: null,
+      valor: null, data: null, funcionario_id: null, funcionario: null, documento_id: null, especie: null, nome: null, vencimento: null, dias: null, chave: 'k' };
+    const sug = { funcionario_id: 'x', funcionario: 'X' };
+    const tipos = ['favorecido_sem_funcionario', 'rescisao_a_conferir', 'sugestao_descricao', 'sem_recibo', 'documento_vence'] as const;
+    const rotulos = tipos.flatMap(tipo => [null, sug].flatMap(sugestao => acoesDaPendencia({ ...base, tipo, sugestao }).map(x => x.rotulo)));
+    expect(rotulos.length).toBeGreaterThan(15);
+    expect(rotulos.filter(r => r.endsWith('…'))).toEqual([]);
+    expect(rotulos).toContain('É de alguém');
+  });
+  it('a ficha lê os próximos pagamentos; o banco sem a chave nova (antes do lote) dá lista vazia', () => {
+    const u = { lancamento_id: 'l1', descricao: 'Folha', valor: '10', status: 'previsto', data: '2026-12-05', competencia: '2026-12' };
+    expect(fichaDoBanco({ funcionario: { id: 'x', nome: 'B' }, proximos_pagamentos: [u] })?.proximos_pagamentos).toEqual([{ ...u, valor: 10 }]);
+    expect(fichaDoBanco({ funcionario: { id: 'x', nome: 'B' } })?.proximos_pagamentos).toEqual([]);
   });
 });

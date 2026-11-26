@@ -116,6 +116,12 @@ export function lugaresDosDocumentos(f: Pick<FolhaDoMes, 'documentos' | 'tipo'>)
   ];
 }
 
+/** FOLHA-REGUA-01: o "O que falta" na TABELA em palavra curta, que cabe na coluna (160px) sem "…"; a frase inteira do banco (`falta_frase`)
+ *  vai no `title`. O 'ligar' não entra: é o botão "ligar" da célula. Código que o banco ainda não tinha sai como veio. */
+const FALTA_CURTA: Record<string, string> = { lancamento: 'previsto', recibo: 'recibo', pagamento: 'pagar', vinculo: 'vínculo' };
+export const faltaCurta = (falta: readonly string[]): string =>
+  falta.filter(c => c !== 'ligar').map(c => FALTA_CURTA[c] ?? c).join(' · ');
+
 /** o que falta e TRAVA o confirmar — a mesma lista do `fn_folha_mes_confirmar` (118740); o PAGAMENTO não trava: a folha se confirma antes de pagar */
 export const FALTA_QUE_TRAVA: readonly string[] = ['lancamento', 'ligar', 'recibo', 'vinculo'];
 
