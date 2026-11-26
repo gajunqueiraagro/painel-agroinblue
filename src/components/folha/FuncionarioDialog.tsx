@@ -4,7 +4,8 @@
  * ⚠ TODO GESTO PASSA PELA PRÉVIA (`p_simular = true`) e só grava se ela passar; a recusa do banco (P0001) vai para o rodapé, nunca toast
  *   (UX-TOAST-01). Campo obrigatório que falta fica vermelho com a frase e nada vai ao banco (UX-OBRIGATORIOS-01).
  * ⚠ O GRAVADOR SOBRESCREVE: o pedido é o registro INTEIRO (`pedidoDoFuncionario`), com o `recorrencia_origem_id` que veio.
- * ⚠ PIX/BANCO/CONTATO NÃO ESTÃO AQUI: são do fornecedor (o favorecido), sem 2ª fonte.
+ * ⚠ PIX/BANCO/CONTATO SÃO DO FAVORECIDO (fonte única): a aba Cadastro os EDITA (FOLHA-FUNC-CADASTRO-01) e o Salvar grava o funcionário E o
+ *   favorecido (`fn_fornecedor_atualizar_campos`, só o que mudou) — as duas prévias antes, as duas gravações depois.
  * ⚠ NOVO: só a aba Cadastro; salário, atuação e situação abrem depois de salvar (o funcionário precisa existir).
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -19,21 +20,27 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda, CampoPercentual } from '@/components/ui/campo-moeda';
 import { BlocoFormulario, Rotulo, GRADE_FORMULARIO } from '@/components/ui/bloco-formulario';
 import {
-  ALTURA_CONTROLE, CAMPO_DATA, CONTROLE, FONTE_CONTROLE, LARGURA_CAMPO_DATA, LARGURA_DATA_PX, LINHA_COM_CONTROLE, LINHA_FONTES, QUADRADO_CONTROLE, TD_FONTES, TD_FONTES_DATA,
+  ALTURA_CONTROLE, CAMPO_DATA, CONTROLE, FONTE_CONTROLE, LARGURA_CAMPO_DATA, LINHA_COM_CONTROLE, LINHA_FONTES, TD_FONTES, TD_FONTES_DATA,
   TD_FONTES_NUM, TD_FONTES_TEXTO, TEXTO_ROTULO, TH_FONTES, TITULO_MODAL, larguraDoSeletor,
 } from '@/components/ui/regua-fontes';
-import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFicha, useFolhaApi, useRelerFolha } from '@/hooks/useFolha';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { cn } from '@/lib/utils';
 import {
   ATIVIDADES, dataBR, FORM_VAZIO, formDoCadastro, n2, pedidoDoFuncionario, pendenciasDoForm,
-  problemaDaAtuacao, rotuloAAtualizar, rotuloAtividade, rotuloSituacao, VINCULOS, type FormFuncionario,
+  problemaDaAtuacao, rotuloAAtualizar, rotuloAtividade, rotuloSituacao, type FormFuncionario,
 } from '@/lib/folha/folhaTela';
-import { aAtualizarDe, atuacaoVigente, avisoDoDesde, desdeInicial } from '@/lib/folha/admissao';
+import { atuacaoVigente, avisoDoDesde, desdeInicial } from '@/lib/folha/admissao';
+import {
+  aAtualizarDoTopo, camposQueMudaram, EXTRAS_VAZIO, FAVORECIDO_VAZIO, formDoFavorecido, formDosExtras, oQueFaltaPorBloco, pedidoDosExtras,
+  type FormExtras, type FormFavorecido,
+} from '@/lib/folha/fichaCadastro';
+import { useCadastroCompleto, useFichaCadastroApi } from '@/hooks/useFichaCadastro';
+import { AbaCadastroFuncionario } from './AbaCadastroFuncionario';
 
 type Aba = 'cadastro' | 'salario' | 'situacao';
+type Passo = (simular: boolean) => Promise<{ ok: boolean; erro?: string; dados?: Record<string, unknown> }>;
 interface LinhaAtuacao { fazenda_id: string; atividade: string; pct: number | null }
 /* UI-FONTES-REGUA-01 (Gabriel 25/11 07:41): este modal veste a régua nova de fontes e alturas (`regua-fontes`) */
 const TH = cn(TH_FONTES, 'sticky top-0 z-10 bg-primary text-left');
@@ -82,6 +89,13 @@ export function FuncionarioDialog({ clienteId, funcionarioId, aoFechar, aoCriar 
   const [sitMotivo, setSitMotivo] = useState('');
   /* FOLHA-ADMISSAO-01: a admissão vazia e o 1º salário/atuação gravado com uma data → oferecer essa data como admissão (ele confirma) */
   const [ofertaAdmissao, setOfertaAdmissao] = useState<{ data: string; onde: 'salario' | 'atuacao' } | null>(null);
+  /* FOLHA-FUNC-CADASTRO-01: os campos novos do funcionário e o pagamento/contato do favorecido */
+  const apiFicha = useFichaCadastroApi();
+  const [extras, setExtras] = useState<FormExtras>(EXTRAS_VAZIO);
+  const [extrasCarregados, setExtrasCarregados] = useState(false);
+  const [fav, setFavForm] = useState<FormFavorecido>(FAVORECIDO_VAZIO);
+  const [favDoForm, setFavDoForm] = useState<string | null>(null);
+  const { data: cadastro } = useCadastroCompleto(funcionarioId, form.favorecido_id || null);
 
   useEffect(() => {
     if (!ficha || carregado) return;
@@ -92,19 +106,38 @@ export function FuncionarioDialog({ clienteId, funcionarioId, aoFechar, aoCriar 
     setAtuDesde(desdeInicial(ficha.atuacoes.length > 0, ficha.funcionario.admissao));
     setCarregado(true);
   }, [ficha, carregado]);
+  useEffect(() => {
+    if (!cadastro || extrasCarregados) return;
+    setExtras(formDosExtras(cadastro.extras));
+    setExtrasCarregados(true);
+  }, [cadastro, extrasCarregados]);
+  /* o favorecido trocou (ou chegou): o formulário de pagamento/contato passa a ser o DELE */
+  useEffect(() => {
+    const id = cadastro?.favorecido?.id ?? null;
+    if (!cadastro || id === favDoForm) return;
+    setFavForm(formDoFavorecido(cadastro.favorecido));
+    setFavDoForm(id);
+  }, [cadastro, favDoForm]);
 
   const set = <K extends keyof FormFuncionario>(k: K, v: FormFuncionario[K]) => { setForm(f => ({ ...f, [k]: v })); setErros(e => ({ ...e, [k]: undefined })); setRodape(null); };
+  const setExtra = <K extends keyof FormExtras>(k: K, v: FormExtras[K]) => { setExtras(x => ({ ...x, [k]: v })); setRodape(null); };
+  const setFav = <K extends keyof FormFavorecido>(k: K, v: FormFavorecido[K]) => { setFavForm(x => ({ ...x, [k]: v })); setRodape(null); };
   const titulo = funcionarioId ? `Funcionário · ${ficha?.funcionario.nome ?? '…'}` : 'Novo funcionário';
   const desligado = ficha?.funcionario.situacao === 'desligado';
 
-  /** prévia → grava; a recusa vai ao rodapé */
-  const emDoisPassos = async (passo: (simular: boolean) => Promise<{ ok: boolean; erro?: string; dados?: Record<string, unknown> }>, ok: string): Promise<Record<string, unknown> | null> => {
+  /** prévia → grava; a recusa vai ao rodapé. Com `depois` (o favorecido no Salvar do Cadastro): as DUAS prévias antes, as duas gravações depois */
+  const emDoisPassos = async (passo: Passo, ok: string, depois?: Passo | null): Promise<Record<string, unknown> | null> => {
     setIndo(true); setRodape(null);
     try {
       const previa = await passo(true);
       if (!previa.ok) { setRodape(previa.erro ?? 'O banco recusou.'); return null; }
+      if (depois) { const p2 = await depois(true); if (!p2.ok) { setRodape(p2.erro ?? 'O banco recusou o pagamento/contato.'); return null; } }
       const r = await passo(false);
       if (!r.ok) { setRodape(r.erro ?? 'O banco recusou.'); return null; }
+      if (depois) {
+        const r2 = await depois(false);
+        if (!r2.ok) { await reler(); setRodape(`O cadastro foi salvo, mas o pagamento/contato não: ${r2.erro ?? 'o banco recusou'}.`); return null; }
+      }
       toast.success(ok);
       await reler();
       return r.dados ?? {};
@@ -114,8 +147,12 @@ export function FuncionarioDialog({ clienteId, funcionarioId, aoFechar, aoCriar 
   const salvarCadastro = async () => {
     const pend = pendenciasDoForm(form);
     if (Object.keys(pend).length) { setErros(pend); setRodape(Object.values(pend)[0] ?? null); return; }
-    const pedido = pedidoDoFuncionario(form, ficha?.funcionario ?? null);
-    const r = await emDoisPassos(s => api.gravarFuncionario(clienteId, pedido, s), funcionarioId ? 'Cadastro salvo.' : 'Funcionário criado.');
+    const pedido = { ...pedidoDoFuncionario(form, ficha?.funcionario ?? null), ...pedidoDosExtras(extras) };
+    /* o favorecido: só o que mudou, e só o do formulário (trocou de favorecido = o formulário já é o do novo) */
+    const favId = form.favorecido_id && cadastro?.favorecido?.id === form.favorecido_id ? form.favorecido_id : null;
+    const campos = favId ? camposQueMudaram(cadastro?.favorecido ?? null, fav) : {};
+    const doFavorecido: Passo | null = favId && Object.keys(campos).length > 0 ? s => apiFicha.gravarFavorecido(favId, campos, s) : null;
+    const r = await emDoisPassos(s => api.gravarFuncionario(clienteId, pedido, s), funcionarioId ? 'Cadastro salvo.' : 'Funcionário criado.', doFavorecido);
     if (r && !funcionarioId && typeof r.id === 'string') aoCriar(r.id);
     /* a 1ª linha ainda por gravar acompanha a admissão salva (as gravadas, o banco move com trilha) */
     if (r && ficha) {
@@ -162,15 +199,16 @@ export function FuncionarioDialog({ clienteId, funcionarioId, aoFechar, aoCriar 
 
   const fazOpcoes = useMemo(() => fazendasDoCliente.map(f => ({ value: f.id, label: f.codigo ? `${f.codigo} · ${f.nome}` : f.nome })), [fazendasDoCliente]);
   const admissao = ficha?.funcionario.admissao ?? null;
-  const marcas = ficha ? aAtualizarDe(ficha.funcionario, ficha.salarios.length > 0) : [];
+  /* FOLHA-FUNC-CADASTRO-01: o selo de cada bloco e o "a atualizar" do topo (junta o que falta de todos os blocos + as marcas gravadas) */
+  const opFazendasRegistro = useMemo(() => fazendasDoCliente.map(f => ({ value: f.id, label: f.codigo || f.nome, title: f.nome })), [fazendasDoCliente]);
+  const faltas = oQueFaltaPorBloco(form, extras, fav, !!form.favorecido_id);
+  const marcas = ficha ? aAtualizarDoTopo(faltas, ficha.funcionario, ficha.salarios.length > 0, rotuloAAtualizar) : [];
   const vigente = ficha ? atuacaoVigente(ficha.atuacoes, hojeLocal()) : null;
   const avisoSal = avisoDoDesde(salDesde, admissao);
   const avisoAtu = avisoDoDesde(atuDesde, admissao);
   const somaAtuacao = atuacao.reduce((s, a) => s + (a.pct ?? 0), 0);
   /* UI-FONTES-REGUA-01 — o seletor tem a largura do maior nome da lista (o vazio conta) */
-  const opVinculo = useMemo(() => VINCULOS.map(v => ({ value: v.valor, label: v.rotulo })), []);
   const opAtividade = useMemo(() => ATIVIDADES.map(t => ({ value: t.valor, label: t.rotulo })), []);
-  const larguraVinculo = useMemo(() => larguraDoSeletor(['vínculo', ...opVinculo.map(o => o.label)]), [opVinculo]);
   const larguraAtividade = useMemo(() => larguraDoSeletor(['atividade', ...opAtividade.map(o => o.label)]) + 8, [opAtividade]);
   const larguraFazenda = useMemo(() => larguraDoSeletor(['fazenda', ...fazOpcoes.map(o => o.label)]) + 8, [fazOpcoes]);
 
@@ -188,47 +226,15 @@ export function FuncionarioDialog({ clienteId, funcionarioId, aoFechar, aoCriar 
             { valor: 'salario', rotulo: 'Salário e atuação', desabilitada: !funcionarioId, title: funcionarioId ? undefined : 'salve o cadastro primeiro' },
             { valor: 'situacao', rotulo: 'Situação', desabilitada: !funcionarioId, title: funcionarioId ? undefined : 'salve o cadastro primeiro' },
           ]} />
-          <span className={cn('min-w-0 flex-1 truncate text-amber-800', TEXTO_ROTULO)} title={marcas.map(rotuloAAtualizar).join(', ')}>
-            {marcas.length > 0 ? `a atualizar: ${marcas.map(rotuloAAtualizar).join(', ')}` : ''}
+          <span className={cn('min-w-0 flex-1 truncate text-amber-800', TEXTO_ROTULO)} title={marcas.join(', ')} data-testid="funcionario-a-atualizar">
+            {marcas.length > 0 ? `a atualizar: ${marcas.join(', ')}` : ''}
           </span>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col bg-muted p-2" data-testid={`funcionario-aba-${aba}`} data-desloca-livre="">
           {funcionarioId && isLoading ? <p className={cn(TEXTO_ROTULO, 'text-muted-foreground')}>Carregando…</p> : aba === 'cadastro' ? (
-            <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5">
-              <BlocoFormulario titulo="Pessoa" className="min-h-0">
-                <div className={cn(GRADE_FORMULARIO, 'grid-cols-[minmax(0,1fr)_130px]')}>
-                  <div><Rotulo texto="Nome" obrig /><Input value={form.nome} onChange={e => set('nome', e.target.value)} className={cn(CONTROLE, erros.nome && 'border-destructive')} data-testid="funcionario-nome" /></div>
-                  <div><Rotulo texto="CPF" /><Input value={form.cpf} onChange={e => set('cpf', e.target.value)} placeholder="000.000.000-00" className={cn(CONTROLE, 'tabular-nums', erros.cpf && 'border-destructive')} /></div>
-                </div>
-                <div className={cn(GRADE_FORMULARIO, 'mt-1 grid-cols-[112px_minmax(0,1fr)_minmax(0,1fr)]')}>
-                  <div className={LARGURA_CAMPO_DATA}><Rotulo texto="Nascimento" /><DatePicker value={form.nascimento} onChange={v => set('nascimento', v ?? '')} className={CAMPO_DATA} /></div>
-                  <div><Rotulo texto="PIS" /><Input value={form.pis} onChange={e => set('pis', e.target.value)} className={cn(CONTROLE, 'tabular-nums', erros.pis && 'border-destructive')} /></div>
-                  <div><Rotulo texto="CTPS" /><Input value={form.ctps} onChange={e => set('ctps', e.target.value)} className={CONTROLE} /></div>
-                </div>
-                <div className="mt-1">
-                  <Rotulo texto="Favorecido (o fornecedor que recebe: Pix, banco e contato moram nele)" />
-                  <FavorecidoSelect value={form.favorecido_id} onChange={id => set('favorecido_id', id)} clienteId={clienteId} triggerClassName={CONTROLE} novoButtonClassName={QUADRADO_CONTROLE} />
-                </div>
-                <div className="mt-1"><Rotulo texto="Observação" /><Input value={form.observacao} onChange={e => set('observacao', e.target.value)} className={CONTROLE} /></div>
-              </BlocoFormulario>
-              <BlocoFormulario titulo="Contrato" className="min-h-0">
-                <div className={GRADE_FORMULARIO} style={{ gridTemplateColumns: `${larguraVinculo}px ${LARGURA_DATA_PX}px` }}>
-                  <div><Rotulo texto="Vínculo" /><SearchableSelect value={form.vinculo} onValueChange={v => set('vinculo', v)} semTodos allLabel="vínculo" allValue=""
-                    options={opVinculo} triggerClassName={CONTROLE} /></div>
-                  <div className={LARGURA_CAMPO_DATA}><Rotulo texto="Admissão" /><DatePicker value={form.admissao} onChange={v => set('admissao', v ?? '')} className={CAMPO_DATA} /></div>
-                </div>
-                <div className={cn(GRADE_FORMULARIO, 'mt-1 grid-cols-[minmax(0,1fr)_96px]')}>
-                  <div><Rotulo texto="Cargo" /><Input value={form.cargo} onChange={e => set('cargo', e.target.value)} className={CONTROLE} /></div>
-                  <div><Rotulo texto="CBO" /><Input value={form.cbo} onChange={e => set('cbo', e.target.value)} className={CONTROLE} /></div>
-                </div>
-                <div className={cn(GRADE_FORMULARIO, 'mt-1 grid-cols-[minmax(0,1fr)_120px]')}>
-                  <div><Rotulo texto="Registro (empregador · CEI/CAEPF)" /><Input value={form.empregador_registro} onChange={e => set('empregador_registro', e.target.value)} className={CONTROLE} /></div>
-                  <div><Rotulo texto="Código no contador" /><Input value={form.codigo_contador} onChange={e => set('codigo_contador', e.target.value)} className={CONTROLE} /></div>
-                </div>
-                <p className={cn('mt-1 h-[13px] leading-[13px] text-muted-foreground', TEXTO_ROTULO)}>O salário e a atuação têm data "desde": ficam na aba ao lado.</p>
-              </BlocoFormulario>
-            </div>
+            <AbaCadastroFuncionario form={form} set={set} erros={erros} extras={extras} setExtra={setExtra} fav={fav} setFav={setFav} faltas={faltas}
+              clienteId={clienteId} opFazendas={opFazendasRegistro} favorecidoNome={cadastro?.favorecido?.nome ?? null} />
           ) : aba === 'salario' && ficha ? (
             <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5">
               <BlocoFormulario titulo="Salário" dica="o histórico; o novo vale desde a data" className="min-h-0 flex-1">
@@ -326,9 +332,9 @@ export function FuncionarioDialog({ clienteId, funcionarioId, aoFechar, aoCriar 
           </p>
           <Button variant="outline" size="sm" className={CONTROLE} onClick={aoFechar}>Fechar</Button>
           {/* o Salvar é do Cadastro; nas outras abas fica INVISÍVEL no mesmo lugar (o "Fechar" não anda) */}
-          <Button size="sm" className={cn(CONTROLE, 'w-[72px]', aba !== 'cadastro' && 'invisible')} disabled={indo || !carregado || aba !== 'cadastro'}
+          <Button size="sm" className={cn(CONTROLE, 'w-[110px]', aba !== 'cadastro' && 'invisible')} disabled={indo || !carregado || aba !== 'cadastro'}
             onClick={() => void salvarCadastro()} data-testid="funcionario-salvar" aria-hidden={aba !== 'cadastro'}>
-            {indo ? 'Salvando…' : 'Salvar'}
+            {indo ? 'Salvando…' : 'Salvar cadastro'}
           </Button>
         </div>
       </DialogContent>
