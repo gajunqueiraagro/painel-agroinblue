@@ -34,7 +34,9 @@ describe('a régua', () => {
 });
 
 describe('o modal Funcionário veste a régua (lido da fonte)', () => {
-  const src = readFileSync(resolve(process.cwd(), 'src/components/folha/FuncionarioDialog.tsx'), 'utf8');
+  /* FOLHA-FUNC-CADASTRO-01: a aba Cadastro mora em `AbaCadastroFuncionario` — o modal é os dois arquivos */
+  const src = readFileSync(resolve(process.cwd(), 'src/components/folha/FuncionarioDialog.tsx'), 'utf8')
+    + readFileSync(resolve(process.cwd(), 'src/components/folha/AbaCadastroFuncionario.tsx'), 'utf8');
   it('nenhum tamanho de fonte solto e nenhum token antigo', () => {
     expect(src.match(/text-\[\d/g) ?? []).toEqual([]);
     expect(src).not.toMatch(/REGUA_CAMPO|TH_REGUA|TD_REGUA/);
@@ -43,12 +45,12 @@ describe('o modal Funcionário veste a régua (lido da fonte)', () => {
     expect(src).toContain("className={cn('min-w-0 truncate', TITULO_MODAL)}");
     expect(src).toContain('<Segmentado altura={ALTURA_CONTROLE} fonte={FONTE_CONTROLE}');
     const datas = src.match(/<DatePicker [\s\S]*?\/>/g) ?? [];
-    expect(datas.length).toBe(5);
-    for (const d of datas) expect(d).toContain('className={CAMPO_DATA}');
-    expect((src.match(/className=\{LARGURA_CAMPO_DATA\}><Rotulo/g) ?? []).length).toBe(5);
+    expect(datas.length).toBe(7);
+    for (const d of datas) expect(d).toMatch(/className=\{(CAMPO_DATA\}|cn\(CAMPO_DATA, )/);
+    expect((src.match(/className=\{LARGURA_CAMPO_DATA\}><Rotulo/g) ?? []).length).toBe(7);
   });
   it('os seletores com a largura do maior nome', () => {
-    expect(src).toContain("larguraDoSeletor(['vínculo', ...opVinculo.map(o => o.label)])");
+    expect(src).toContain("vinculo: L(['vínculo', ...VINCULOS.map(s => s.rotulo)])");
     expect(src).toContain("larguraDoSeletor(['atividade', ...opAtividade.map(o => o.label)]) + 8");
     expect(src).toContain('<col style={{ width: larguraAtividade }} />');
   });

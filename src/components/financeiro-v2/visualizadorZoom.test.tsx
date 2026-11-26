@@ -20,10 +20,10 @@ const roda = (alvo: Element, init: WheelEventInit) => {
 };
 
 describe('VISUALIZADOR-PDF-01 — as contas', () => {
-  it('a roda para cima amplia, para baixo reduz; o zoom fica entre 25% e 400%', () => {
+  it('a roda para cima amplia, para baixo reduz; o zoom fica entre 25% e 500% (VISUALIZADOR-PDF-02b: o teto do Chrome)', () => {
     expect(zoomPelaRoda(1, -100)).toBeGreaterThan(1);
     expect(zoomPelaRoda(1, 100)).toBeLessThan(1);
-    expect(zoomPelaRoda(4, -1000)).toBe(4);
+    expect(zoomPelaRoda(5, -1000)).toBe(5);
     expect(zoomPelaRoda(0.25, 1000)).toBe(0.25);
     expect(limitarZoom(1.234)).toBe(1.23);
   });
@@ -41,14 +41,14 @@ describe('VISUALIZADOR-PDF-01 — no componente', () => {
     expect(zoomNaBarra()).toBe('100%');
     const comCtrl = roda(quadro, { deltaY: -100, ctrlKey: true, clientX: 10, clientY: 10 });
     expect(comCtrl.defaultPrevented).toBe(true);
-    await waitFor(() => expect(zoomNaBarra()).toBe('122%'));
+    await waitFor(() => expect(zoomNaBarra()).toBe('125%'));
     const comCmd = roda(quadro, { deltaY: 100, metaKey: true });
     expect(comCmd.defaultPrevented).toBe(true);
-    await waitFor(() => expect(zoomNaBarra()).toBe('100%'));
+    await waitFor(() => expect(zoomNaBarra()).toBe('94%'));
     /* a roda sozinha rola o documento (o zoom não muda; o cancelar dela, em jsdom, é do bloqueio de rolagem do diálogo, não nosso) */
     roda(quadro, { deltaY: 100 });
     await new Promise((ok) => setTimeout(ok, 20));
-    expect(zoomNaBarra()).toBe('100%');
+    expect(zoomNaBarra()).toBe('94%');
     expect(quadro.getAttribute('data-modo')).toBe('livre');
   });
   it('a pinça do Safari (gesturechange com scale) amplia e cancela o zoom do navegador', async () => {
@@ -61,10 +61,10 @@ describe('VISUALIZADOR-PDF-01 — no componente', () => {
     expect(g.defaultPrevented).toBe(true);
     await waitFor(() => expect(zoomNaBarra()).toBe('200%'));
   });
-  it('duplo clique: da "Página inteira" (VISUALIZADOR-PDF-02 abre nela) vai a "Ajustar à largura", e alterna largura ↔ 100%', async () => {
+  it('duplo clique: dos 100% (VISUALIZADOR-PDF-02b abre neles) vai a "Ajustar à largura", e alterna largura ↔ 100%', async () => {
     montar();
     const quadro = await screen.findByTestId('visualizador-quadro');
-    expect(quadro.getAttribute('data-modo')).toBe('pagina');
+    expect(quadro.getAttribute('data-modo')).toBe('livre');
     fireEvent.doubleClick(quadro);
     await waitFor(() => expect(quadro.getAttribute('data-modo')).toBe('largura'));
     fireEvent.doubleClick(quadro);

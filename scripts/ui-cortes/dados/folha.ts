@@ -13,6 +13,9 @@ import type {
   Atuacao, DocumentoDoFuncionario, Ficha, FuncionarioDaLista, Historico, ItemDoHistorico, Linha, ListaFuncionarios, Pendencia, Pendencias,
 } from '@/lib/folha/folhaTela';
 
+import type { CadastroDoBanco, FichaCadastroApi } from '@/lib/folha/fichaCadastroApi';
+import type { ExtrasDoFuncionario, FavorecidoDaFicha } from '@/lib/folha/fichaCadastro';
+
 export type FormaDaFolha = 'nj' | 'vera';
 
 const PRIMEIROS = ['Antônio', 'Bruno', 'Carla', 'Diego', 'Eduardo', 'Fábio', 'Gisele', 'Hugo', 'Ivo', 'Joana', 'Lúcio', 'Marta', 'Nelson', 'Otávio', 'Paula', 'Rui'];
@@ -247,5 +250,30 @@ export function apiDaFolhaMes(forma: FormaDaFolha = 'nj', caso: 'normal' | 'tudo
       const r = feriasDoBanco(v);
       return r ? { ok: true, dados: r } : { ok: false, erro: 'bancada: férias inválidas' };
     },
+  };
+}
+
+/* ── FOLHA-FUNC-CADASTRO-01 — a aba Cadastro completa: os campos novos e o favorecido (pagamento e contato), SINTÉTICOS ──────────────── */
+/** f00: a ficha CHEIA (Pix, conta, endereço, todos os campos) com o titular = o próprio; os outros: vazios (o NJ do proto: nada de pagamento) */
+export function fichaCadastroDaFolha(): FichaCadastroApi & { chamadas: Array<{ fn: string; args: unknown[] }> } {
+  const chamadas: Array<{ fn: string; args: unknown[] }> = [];
+  return {
+    chamadas,
+    async ler(funcionarioId, favorecidoId): Promise<Resultado<CadastroDoBanco>> {
+      const cheio = funcionarioId === 'f00';
+      const extras: ExtrasDoFuncionario = cheio
+        ? { sexo: 'M', estado_civil: 'uniao_estavel', dependentes: 2, jornada: '44h', fazenda_registro_id: 'fSED', experiencia_ate: null, rg: '0.000.000 SSP/XX',
+            cnh_categoria: 'D', cnh_validade: '2029-03-31', contato_emergencia: 'Fulana Exemplo · (00) 9 0000-0000', dia_pagamento: 5, dia_pagamento_util: true }
+        : { sexo: null, estado_civil: null, dependentes: null, jornada: null, fazenda_registro_id: null, experiencia_ate: null, rg: null, cnh_categoria: null,
+            cnh_validade: null, contato_emergencia: null, dia_pagamento: null, dia_pagamento_util: false };
+      const favorecido: FavorecidoDaFicha | null = !favorecidoId ? null : cheio
+        ? { id: favorecidoId, nome: 'Antônio Exemplo Prado', tipo_recebimento: 'PIX', pix_tipo_chave: 'CPF', pix_chave: '000.000.000-00', banco: '000 Banco Exemplo Sintético S.A.',
+            agencia: '0001', conta: '123456-7', tipo_conta: 'Salário', cpf_cnpj_pagamento: '00000000000', celular: '(00) 9 0000-0001', email: 'exemplo@exemplo.invalid',
+            logradouro: 'Fazenda Exemplo, sede · Município Sintético/XX', cep: '00000-000' }
+        : { id: favorecidoId, nome: 'Favorecido Sintético', tipo_recebimento: null, pix_tipo_chave: null, pix_chave: null, banco: null, agencia: null, conta: null,
+            tipo_conta: null, cpf_cnpj_pagamento: null, celular: null, email: null, logradouro: null, cep: null };
+      return { ok: true, dados: { extras, favorecido } };
+    },
+    async gravarFavorecido(...a) { chamadas.push({ fn: 'gravarFavorecido', args: a }); return { ok: true, dados: { ok: true } }; },
   };
 }

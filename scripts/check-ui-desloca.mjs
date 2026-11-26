@@ -69,6 +69,22 @@ const noLugar = (sel) => async (p) => { await p.locator(sel).first().dispatchEve
 /* UI-MESES-PADRAO-01 — os botões de mês da Visão Geral financeira (o SeletorPeriodo da casa não tem testid por mês) */
 const MES_DA_VG = '[data-testid="vg-meses"] [data-testid="seletor-periodo-meses"] > button';
 /* o gesto e, depois, a casca da bancada de volta ao topo (o clique rola a PAGINA para trazer o botao a vista; o que se mede e' a tela) */
+/* LANC-FILTROS-02a — Class./Sem caixa/Pagamento no "Exibir ▾" do desktop: abre, clica, fecha (Esc); no celular o clique é direto */
+const naExibir = (g) => async (p) => {
+  const exibir = p.locator('[data-testid="btn-exibir"]');
+  const comExibir = await exibir.count() > 0 && await exibir.first().isVisible();
+  if (comExibir) { await exibir.first().click(); await espera(p, 300); }
+  await g(p);
+  if (comExibir) { await p.keyboard.press('Escape'); await espera(p, 300); }
+};
+/* o atalho do Período (desktop; no celular, abaixo de 768, o campo não existe e o estado não faz nada) */
+const noPeriodo = (atalho) => async (p) => {
+  const campo = p.locator('[data-testid="lanc-periodo"]');
+  if (await campo.count() === 0 || !await campo.first().isVisible()) return;
+  await campo.first().click(); await espera(p, 300);
+  await p.locator(`[data-atalho="${atalho}"]`).first().click(); await espera(p, 200);
+  await p.locator('[data-testid="lanc-periodo-aplicar"]').first().click(); await espera(p, 600);
+};
 const noTopo = (g) => async (p) => { await g(p); await p.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll('[data-casca]').forEach((c) => { c.scrollTop = 0; }); }); await espera(p, 150); };
 const ampliar = async (p) => { await p.locator('[data-testid="rodape-lancamentos"]').waitFor(); await espera(p, 900); await p.getByRole('button', { name: /^Ampliar$/ }).first().click(); await espera(p, 700); };
 const digitar = (sel, txt) => async (p) => { await p.locator(sel).first().fill(txt); await espera(p, 800); };
@@ -112,8 +128,12 @@ const CENARIOS = [
       ['por pagina 50', noTopo(botao(/^50$/))], ['por pagina 100', noTopo(botao(/^100$/))], ['por pagina 200', noTopo(botao(/^200$/))],
       ['proxima pagina', noTopo(clicar('[data-testid="pagina-proxima"]'))], ['proxima de novo', noTopo(clicar('[data-testid="pagina-proxima"]'))],
       ['pagina anterior', noTopo(clicar('[data-testid="pagina-anterior"]'))],
-      ['Classificação Macro', noTopo(botao(/^Macro$/))], ['Classificação Subcentro', noTopo(botao(/^Subcentro$/))], ['Classificação Centro', noTopo(botao(/^Centro$/))],
-      ['Sem caixa Só c/ DRE', noTopo(botao(/^Só c\/ DRE$/))], ['Sem caixa Ocultar', noTopo(botao(/^Ocultar$/))],
+      ['Classificação Macro', noTopo(naExibir(botao(/^Macro$/)))], ['Classificação Subcentro', noTopo(naExibir(botao(/^Subcentro$/)))], ['Classificação Centro', noTopo(naExibir(botao(/^Centro$/)))],
+      ['Sem caixa Só c/ DRE', noTopo(naExibir(botao(/^Só c\/ DRE$/)))], ['Sem caixa Ocultar', noTopo(naExibir(botao(/^Ocultar$/)))],
+      /* LANC-FILTROS-02a — o Período (atalhos do seletor) e o resumo: trocar o período não move a caixa, o resumo nem a tabela */
+      ['Período Este mês', noTopo(noPeriodo('este-mes'))],
+      ['Período 12 meses', noTopo(noPeriodo('ultimos-12'))],
+      ['resumo com 9 dígitos', { url: 'tela=financeiro&v=volume&n=450&estresse=1' }],
       /* TABELA-ALTURA-FIXA-01 — filtrar de muitos para poucos (6), um ou nenhum lançamento: o quadro não encolhe e a barra da página
          (Anterior/Próxima, "Por pág.") fica no mesmo lugar */
       ...[6, 1, 0].map((n) => [`filtro com ${n} lancamento(s)`, { url: `tela=financeiro&v=volume&n=450&linhas=${n}` }]),
@@ -920,6 +940,14 @@ const CENARIOS = [
     ['atualizar as nao pagas', noLugar('[data-testid="nota-atualizar-nao-pagas"] button')],
     ['etapa Itens da nota', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens da nota")')],
     /* D-a — o "Criar novo (duplica)" troca de modo (volta para as 3 abas da nova): não se mede aqui; o ⋯ dele fica no lugar (teste no vitest) */
+  ] },
+  /* NOTA-ENTREGA-FUTURA-01 (3) — o achado com OUTRA NF: trocar ↔ criar e ir às etapas não movem a barra das etapas, as opções nem o rodapé */
+  { nome: 'nota-outra-nf', url: 'tela=nota-pdf&v=outranota', antes: async (p) => { await p.locator('[data-testid="nota-outra-nf"]').waitFor({ timeout: 8000 }); await espera(p, 300); },
+    estados: [
+    ['escolher criar', noLugar('[data-testid="nota-outra-nf-criar"]')],
+    ['escolher trocar', noLugar('[data-testid="nota-outra-nf-trocar"]')],
+    ['etapa Confirmar', clicar('[data-testid="nota-abas-ja"] button:has-text("Confirmar")')],
+    ['etapa Como vai ficar', clicar('[data-testid="nota-abas-ja"] button:has-text("Como vai ficar")')],
   ] },
   /* P102 — o Editar obrigação da compra parcelada: trocar de aba não move a barra de abas nem o rodapé (o "Voltar para à vista" e o Salvar) */
   { nome: 'obrigacao-editar', url: 'tela=contrato&v=parcelamento&np=18&docs=1', antes: async (p) => {

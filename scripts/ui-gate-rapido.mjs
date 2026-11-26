@@ -181,10 +181,56 @@ export function filtroRapido(nomeDoGate) {
  */
 export function telasDaReguaDeFonte(base = 'origin/proto') {
   let diff;
-  try { diff = arquivosDoDiff(base); } catch (e) { return { telas: new Set(), fora: [], aviso: `sem o diff contra ${base}: ${String(e).slice(0, 80)}` }; }
+  try { diff = arquivosDoDiff(base); } catch (e) { return { telas: new Set(), fora: [], testids: [], aviso: `sem o diff contra ${base}: ${String(e).slice(0, 80)}` }; }
   const { mb, arquivos } = diff;
   const linhas = arquivos.includes('scripts/ui-cortes/telas.tsx') ? linhasMudadasDoTelas(mb) : [];
-  return { ...telasDaReguaPelosArquivos(arquivos, linhas), aviso: null };
+  let testids = [];
+  try { testids = testidsDasLinhas(linhasAcrescentadasDeSrc(base)); } catch { /* sem o diff das linhas: nenhum elemento é do diff (só relatório) */ }
+  return { ...telasDaReguaPelosArquivos(arquivos, linhas), testids, aviso: null };
+}
+
+/**
+ * UI-FONTES-REGUA-01 ajuste (Gabriel 25/11: "a régua vale para elementos NOVOS/ALTERADOS; o gate checa só os elementos do diff, não a tela
+ * inteira") — os elementos do diff pelo `data-testid`: cada testid escrito numa linha ACRESCENTADA ou alterada de `src/` (a do arquivo novo
+ * inteiro inclusive; testes fora). O gate nomeia cada achado pelo testid mais próximo (`tag[testid]`); o achado reprova só quando esse testid
+ * é do diff — o elemento antigo já aprovado vai ao relatório (exceção declarada). Limite declarado: o elemento novo SEM testid próprio herda o
+ * do ancestral (se o ancestral for antigo, escapa) — tela nova põe testid nos elementos que mede.
+ */
+export function testidsDasLinhas(linhas) {
+  const saida = [];
+  const comoRegex = (t) => new RegExp(`^${t.replace(/[.*+?^()|[\]\\]/g, '\\$&').replace(/\$\{[^}]*\}/g, '[\\w.:-]+').replace(/[{}]/g, '')}$`);
+  /* o miolo de `{…}` contando as chaves (o `${…}` do template fica dentro) */
+  const miolo = (l, i) => { let n = 0; for (let j = i; j < l.length; j++) { if (l[j] === '{') n++; else if (l[j] === '}' && --n === 0) return l.slice(i + 1, j); } return l.slice(i + 1); };
+  for (const l of linhas) {
+    for (const m of l.matchAll(/data-testid=(?:"([^"]+)"|'([^']+)'|(\{))/g)) {
+      if (m[1] || m[2]) { saida.push(comoRegex(m[1] ?? m[2])); continue; }
+      for (const t of miolo(l, (m.index ?? 0) + m[0].length - 1).matchAll(/'([^']+)'|"([^"]+)"|`([^`]+)`/g)) saida.push(comoRegex(t[1] ?? t[2] ?? t[3]));
+    }
+  }
+  return saida;
+}
+
+/** o achado da régua é de um elemento do diff? (o testid do `tag[testid] "texto"`; sem testid, não) */
+export function elementoDoDiff(elemento, testids) {
+  const m = /^[a-z0-9-]+\[([^\]]+)\]/i.exec(String(elemento ?? ''));
+  return !!m && testids.some((re) => re.test(m[1]));
+}
+
+/** as linhas acrescentadas/alteradas de `src/` contra a base (o arquivo novo, inteiro); testes fora */
+export function linhasAcrescentadasDeSrc(base = 'origin/proto') {
+  const mb = git('merge-base', base, 'HEAD').trim();
+  const ehTeste = (a) => /\.test\.[tj]sx?$/.test(a);
+  const out = git('diff', '-U0', mb, '--', 'src');
+  const linhas = [];
+  let arquivo = '';
+  for (const l of out.split('\n')) {
+    if (l.startsWith('+++ ')) { arquivo = l.slice(6); continue; }
+    if (l.startsWith('+') && !l.startsWith('+++') && !ehTeste(arquivo)) linhas.push(l.slice(1));
+  }
+  for (const a of git('ls-files', '--others', '--exclude-standard', '--', 'src').split('\n').filter(Boolean)) {
+    if (!ehTeste(a)) try { linhas.push(...fs.readFileSync(a, 'utf8').split('\n')); } catch { /* sumiu: nada */ }
+  }
+  return linhas;
 }
 
 /** O miolo (sem git): os arquivos do diff e as linhas mudadas do `telas.tsx` → as telas sob a régua e o que ficou de fora (compartilhado). */

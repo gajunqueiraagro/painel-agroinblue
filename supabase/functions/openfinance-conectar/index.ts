@@ -26,13 +26,14 @@ Deno.serve(async (req) => {
   try { const c = await req.json(); if (c && typeof c === "object") corpo = c; } catch { corpo = {}; }
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim() || null;
 
-  const r = await conectar({ token, clienteId: corpo.cliente_id, itemId: corpo.item_id }, {
+  const r = await conectar({ token, clienteId: corpo.cliente_id, itemId: corpo.item_id, termo: corpo.termo }, {
     autorDoToken: async (t) => (await admin.auth.getUser(t)).data.user?.id ?? null,
     podeConectar: async (autor, clienteId) => {
       const { data: ehAdmin } = await admin.rpc("is_admin_agroinblue", { _user_id: autor });
       if (ehAdmin === true) return true;
       const { data: perfil } = await admin.rpc("get_user_perfil", { _user_id: autor, _cliente_id: clienteId });
-      return perfil === "gestor_cliente";
+      /* OPENFINANCE-PRONTO-NJ-01 (8, Gabriel 15:36): conecta o admin ou o PROPRIETÁRIO; o gestor só vê */
+      return perfil === "proprietario";
     },
     credenciais: () => {
       const clientId = Deno.env.get("PLUGGY_CLIENT_ID");
@@ -41,6 +42,11 @@ Deno.serve(async (req) => {
     },
     busca: (u, init) => fetch(u, init),
     registrar: async (a) => !(await admin.rpc("_fn_openfinance_evento_registrar", { p: a })).error,
+    /* OPENFINANCE-PRONTO-NJ-01 (8): o aceite do termo (118150) antes da conexão nova; 22023 = o termo mudou */
+    aceitarTermo: async (a) => {
+      const { error } = await admin.rpc("_fn_openfinance_termo_aceitar", { ...a, p_convite: null });
+      return !error ? "ok" : error.code === "22023" ? "mudou" : "erro";
+    },
   });
   return json(r.status, r.corpo);
 });

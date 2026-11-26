@@ -35,7 +35,7 @@ import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { filtroRapido, telaDoCenario, telasDaReguaDeFonte } from './ui-gate-rapido.mjs';
+import { elementoDoDiff, filtroRapido, telaDoCenario, telasDaReguaDeFonte } from './ui-gate-rapido.mjs';
 import { lerOpcoesDaRodada, planoDaRodada, comTeto, deveParar, textoDoTeto, linhaDaMedicao, fraseDoParcial, codigoDaRodada, criarRegistro,
   paginasDaMedicao } from './ui-cortes/teto.mjs';
 
@@ -106,6 +106,15 @@ const TAMANHOS_DO_P92 = [[750, 483], [750, 520], [750, 600], [814, 530], [900, 6
 const EXCETO_CONSORCIO = '[data-testid="lista-parcelas-consorcio"], [data-testid="lista-faixas-consorcio"]';
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await p.waitForTimeout(500); };
 const clicarRotulo = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await p.waitForTimeout(500); };
+/* LANC-FILTROS-02a — os seletores de exibição da lista de Lançamentos (Class., Sem caixa, Pagamento) moram no "Exibir ▾" do desktop: abre,
+   clica e fecha (Esc); no celular (< 1000) seguem na faixa, e o clique é direto */
+const naExibir = (acao) => async (p) => {
+  const exibir = p.locator('[data-testid="btn-exibir"]');
+  const comExibir = await exibir.count() > 0 && await exibir.first().isVisible();
+  if (comExibir) { await exibir.first().click(); await p.waitForTimeout(300); }
+  await acao(p);
+  if (comExibir) { await p.keyboard.press('Escape'); await p.waitForTimeout(300); }
+};
 const clicarTexto = (txt) => async (p) => { await p.getByText(txt, { exact: true }).first().click(); await p.waitForTimeout(500); };
 /* CONC-CRIAR-COM-NOTA-01 — o "Criar lançamento" da estação, a aba Documentos e (com `ler`) a NF SINTÉTICA da bancada solta no "Ler a NF" */
 const criarComNota = (ler) => async (p) => {
@@ -190,7 +199,7 @@ const CENARIOS = [
     antes: clicar('[data-testid="btn-novo"]') },
   /* P94 — os avisos da conferência e os chips do que veio da OC, na faixa dos totais: rolam no lugar reservado, sem "…"; e os seletores da
      barra com o valor fora das opções ("valor inexistente (limpar)", vermelho) na largura da barra */
-  { nome: 'financeiro-fantasma', url: 'tela=financeiro&fantasma=1', regiao: '[data-testid="faixa-totais"]' },
+  { nome: 'financeiro-fantasma', url: 'tela=financeiro&fantasma=1', regiao: '[data-testid="faixa-totais"], [data-testid="cabecalho-dos-filtros"]' },
   { nome: 'valor-inexistente', url: 'tela=valor-inexistente', regiao: '[data-testid="barra-inexistente"]' },
   /* FORN-BUSCA-UNICA-01 — o filtro de fornecedor com um nome longo escolhido: o chip mostra o nome inteiro. FIN-FILTRO-DOC-01 —
      `alturaFixa`: a fileira de filtros tem de ter a MESMA altura antes e depois de escolher o nome longo (nada empurra a tela) */
@@ -276,6 +285,10 @@ const CENARIOS = [
   ...['Geral', 'Pagamento', 'Documentos'].flatMap((aba) => ['novo', 'editar'].map((m) => ({ nome: `lancamento-${m}-${aba}`, url: `tela=lancamento&m=${m}`, antes: clicarTexto(aba) }))),
   /* DOC-NOTA-XML-PDF-01 — a aba Documentos com a nota em PDF + XML numa linha (selos), a nota so' em XML e um boleto */
   { nome: 'lancamento-editar-Documentos-nota', url: 'tela=lancamento&m=editar&docs=nota', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Documentos') },
+  /* NOTA-ENTREGA-FUTURA-01 (B) — a compra com entrega futura: Papel · Documento…, "gera a conta"/"sem financeiro", o Saldo a entregar (nome longo, 2 itens)
+     e o Resumo com Compra · Entregas · LCDPR */
+  { nome: 'lancamento-editar-Documentos-entregas', url: 'tela=lancamento&m=editar&docs=entregas', tamanhos: TAMANHOS_DO_CONTRATO,
+    antes: async (p) => { await clicarTexto('Documentos')(p); await p.locator('[data-testid="saldo-tabela"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
   /* FIN-CLASSIF-DIVIDIDA-01b/01c — a classificação dividida: a Geral com as partes, a aba Itens na vista "Contas" (18 itens), a lista com
      a parte "de R$ total" e os selos */
   { nome: 'lancamento-dividido-Geral', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO },
@@ -1862,7 +1875,12 @@ const CENARIOS = [
   { nome: 'contas-lista-longo', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO },
   /* CONTAS-OF-LINHA-01 — a coluna "Open Finance" com o link do titular vivo, e o modal do "Conectar" da linha (altura fixa) */
   { nome: 'contas-of-link', url: 'tela=contas&barra=32&n=longo&of=link', tamanhos: TAMANHOS_DO_CONTRATO },
-  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-conectar-linha"]' },
+  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-conectar-linha"]',
+    antes: async (p) => { await p.locator('[data-testid="openfinance-termo-aceito"]').waitFor(); await p.waitForTimeout(300); } },
+  /* OPENFINANCE-PRONTO-NJ-01 (1)+(7) — "Bancos conectados" como a Pluggy vê: nome, Empresa, os 4 estados e a frase inteira das que não completaram */
+  { nome: 'contas-of-lista', url: 'tela=contas&barra=32&of=lista', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-desconectar-dialogo"]',
+    visivelNaTela: { sels: ['[data-testid="openfinance-conexao-frase"]'], inteirosEm: ['[data-testid="openfinance-conexoes"]'] },
+    antes: async (p) => { await p.locator('[data-testid="openfinance-conexao"]').first().waitFor(); await p.waitForTimeout(300); } },
   { nome: 'contas-inativas', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="mostrar-inativas"]') },
   ...['dados', 'gerente', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-editar-${aba}`, url: `tela=contas&barra=32&v=editar&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
@@ -2109,6 +2127,16 @@ const CENARIOS = [
     antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcelas-no-pagamento"]').waitFor(); await p.waitForTimeout(500); } },
   { nome: 'lancamento-parcelar-confirmar', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
     antes: async (p) => { await parcelarEm4(p); await p.locator('[data-testid="parcelar-este-confirmar"]').click(); await p.waitForTimeout(500); } },
+  /* NOTA-ENTREGA-FUTURA-01 (3) — o achado com OUTRA NF: a etapa 1 (seção própria, "O que fazer") e o Confirmar nas duas escolhas */
+  ...[['etapa1', null, false], ['confirmar-trocar', 'trocar', true], ['confirmar-criar', 'criar', true]].map(([nome, escolha, confirmar]) => ({
+    nome: `nota-outra-nf-${nome}`, url: 'tela=nota-pdf&v=outranota', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-itens-rolagem"], [data-testid="nota-outra-nf"], [data-testid="nota-outra-nf-rolagem"], [data-testid="nota-confirmar"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-outra-nf"]').waitFor({ timeout: 8000 });
+      if (escolha) await p.locator(`[data-testid="nota-outra-nf-${escolha}"]`).click();
+      if (confirmar) await p.locator('[data-testid="nota-etapa-lancamento"]').click();
+      await p.waitForTimeout(400);
+    } })),
   /* P128a — os TRÊS CAMINHOS com o "Criar um lançamento novo" escolhido (o aviso vermelho "duplica", o botão "Criar novo (duplica)") */
   { nome: 'nota-pdf-caminho-criar', url: 'tela=nota-pdf&v=diferenca', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
@@ -2439,17 +2467,22 @@ const CENARIOS = [
       }
       await p.waitForTimeout(350);
     } })),
-  /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Escolher contas com o "Lança na conta", antes e depois da prévia da ligação: o
-     botão inteiro e na mesma largura, a frase "Liga … em …" na linha dela, inteira (sem "…" e sem passar da caixa) */
-  ...[['escolher-contas', false], ['escolher-contas-previa', true]].map(([nome, previa]) => ({ nome, url: 'tela=escolher-contas',
-    tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[role="dialog"]',
-    botoesDentro: '[data-testid="openfinance-lanca-na-conta"]',
-    visivelNaTela: { sels: [previa ? '[data-testid="openfinance-gravar-ligacao"]' : '[data-testid="openfinance-ver-ligacao"]', '[data-testid="openfinance-previa-ligacao"]'],
-      dentro: '[data-testid="openfinance-lanca-na-conta"]', altura: 88, inteirosEm: ['[data-testid="openfinance-lanca-na-conta"]'] },
-    semRolarNoLugar: '[data-testid="openfinance-lanca-na-conta"]',
+  /* OF-ESCOLHER-CONTAS-LAYOUT-01 + OPENFINANCE-PRONTO-NJ-01 (1) — Escolher contas num passo: a coluna "Lança na conta" (o seletor na
+     linha, a sugestão pela agência e conta), antes e depois da prévia (2 contas marcadas), e a Pluggy ainda lendo ("Ler de novo") */
+  ...[['escolher-contas', ''], ['escolher-contas-previa', 'previa'], ['escolher-contas-lendo', 'lendo']].map(([nome, estado]) => ({ nome,
+    url: `tela=escolher-contas${estado === 'lendo' ? '&v=lendo' : ''}`,
+    tamanhos: [[1000, 600], [1126, 640], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[role="dialog"]',
+    botoesDentro: '[data-testid="openfinance-previa"]',
+    visivelNaTela: { sels: ['[data-testid="openfinance-previa"]', estado === 'previa' ? '[data-testid="openfinance-gravar-escolha"]' : '[data-testid="openfinance-ver-previa"]'],
+      inteirosEm: ['[role="dialog"]'] },
     antes: async (p) => {
-      await p.locator('[data-testid="openfinance-ver-ligacao"]').waitFor();
-      if (previa) { await p.locator('[data-testid="openfinance-ver-ligacao"]').click(); await p.locator('[data-testid="openfinance-gravar-ligacao"]').waitFor(); }
+      if (estado === 'lendo') { await p.locator('[data-testid="openfinance-ler-de-novo"]').waitFor(); await p.waitForTimeout(300); return; }
+      await p.locator('[data-testid="openfinance-conta"]').first().waitFor();
+      if (estado === 'previa') {
+        const marcar = p.locator('[data-testid="openfinance-conta-marcar"]');
+        await marcar.nth(0).click(); await marcar.nth(1).click();
+        await p.locator('[data-testid="openfinance-ver-previa"]').click(); await p.locator('[data-testid="openfinance-gravar-escolha"]').waitFor();
+      }
       await p.waitForTimeout(300);
     } })),
   /* OF-CONFERIR-CASAMENTO-01 (Gabriel 17/11 09:04) — o "Conferir com o banco": até 90vh, uma rolagem só (o corpo), cabeçalhos presos, as
@@ -2670,13 +2703,36 @@ const CENARIOS = [
   { nome: 'financeiro-tabela-pagina-2', url: 'tela=financeiro&v=volume&n=450', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: clicar('[data-testid="pagina-proxima"]') },
   /* o item 2 do 01b: a faixa de totais + controles nunca fica por cima do que vem embaixo — dez trocas de filtro e o "sobreposicao" */
-  { nome: 'financeiro-faixa-totais', url: 'tela=financeiro', regiao: '[data-testid="faixa-totais"]', tamanhos: TAMANHOS_DO_CONTRATO,
-    botoesDentro: '[data-testid="faixa-totais"]',
-    antes: async (p) => { for (let i = 0; i < 10; i++) await clicarRotulo([/^Macro$/, /^Subcentro$/, /^Centro$/, /^Mostrar$/, /^Ocultar$/][i % 5])(p); } },
+  { nome: 'financeiro-faixa-totais', url: 'tela=financeiro', regiao: '[data-testid="faixa-totais"], [data-testid="resumo-da-lista"]', tamanhos: TAMANHOS_DO_CONTRATO,
+    botoesDentro: '[data-testid="faixa-totais"], [data-testid="cabecalho-dos-filtros"]',
+    antes: async (p) => { for (let i = 0; i < 10; i++) await naExibir(clicarRotulo([/^Macro$/, /^Subcentro$/, /^Centro$/, /^Mostrar$/, /^Ocultar$/][i % 5]))(p); } },
   /* FIN-PRONTO-PAGAR-01 — o seletor "Pagamento" em Faltando: a tabela só com os pontos laranja (o ponto antes do status, sem coluna nova) */
   { nome: 'financeiro-pronto-faltando', url: 'tela=financeiro', regiao: '[data-testid="quadro-lancamentos"]',
     tamanhos: [[1240, 700], [1024, 600], [1280, 800], [1920, 1080], ...TAMANHOS_DO_CONTRATO],
-    antes: async (p) => { await clicarRotulo(/^Faltando/)(p); await p.locator('[data-testid="ponto-pronto"][data-pronto="nao"]').first().waitFor({ timeout: 8000 }); } },
+    antes: async (p) => { await naExibir(clicarRotulo(/^Faltando/))(p); await p.locator('[data-testid="ponto-pronto"][data-pronto="nao"]').first().waitFor({ timeout: 8000 }); } },
+  /* LANC-FILTROS-02a (Gabriel 25/11, mock lancamentos-filtros-ref/mock-aprovado.html) — a caixa de filtros do desktop (6 colunas, 24px a 10,5,
+     Período no lugar de Ano/Mês), recolhida (os ativos em chips), o calendário aberto (o compacto do DRE) e o resumo Caixa × A pagar, nos
+     5 tamanhos do pedido (o celular, abaixo de 768, não mudou); o ESTRESSE: −R$ 99.999.999,99 em todos os cards — nada corta nem empurra */
+  ...(() => {
+    const T5 = [[918, 600], [1024, 640], [1126, 579], [1280, 720], [1366, 768]];
+    const escolherForn = async (p) => {
+      await p.locator('[data-testid="filtro-fornecedor-largo"] [role="combobox"]').first().click(); await p.waitForTimeout(300);
+      await p.locator('[data-testid="favorecido-opcao"]').filter({ hasText: 'Cooperativa' }).first().click(); await p.waitForTimeout(500);
+    };
+    return [
+      { nome: 'financeiro-filtros-02-aberta', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]', tamanhos: T5,
+        botoesDentro: '[data-testid="cabecalho-dos-filtros"]' },
+      { nome: 'financeiro-filtros-02-recolhida', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]', tamanhos: T5.slice(1),
+        antes: async (p) => { await escolherForn(p); await clicar('[data-testid="recolher-filtros"]')(p); } },
+      { nome: 'financeiro-filtros-02-calendario', url: 'tela=financeiro', regiao: '[data-testid="lanc-periodo-popup"]', tamanhos: T5.slice(1),
+        antes: clicar('[data-testid="lanc-periodo"]') },
+      { nome: 'financeiro-filtros-02-exibir', url: 'tela=financeiro', regiao: '[data-testid="painel-exibir"]', tamanhos: T5.slice(1),
+        antes: clicar('[data-testid="btn-exibir"]') },
+      { nome: 'financeiro-resumo-02', url: 'tela=financeiro', regiao: '[data-testid="resumo-da-lista"]', tamanhos: T5.slice(1) },
+      { nome: 'financeiro-resumo-02-estresse', url: 'tela=financeiro&estresse=1', regiao: '[data-testid="resumo-da-lista"]', tamanhos: T5.slice(1),
+        alturaFixa: '[data-testid="resumo-da-lista"]' },
+    ];
+  })(),
 ];
 /* UI-TEXTO-LONGO-01 — o que tem de ter a mesma altura com texto curto e longo (o que não existe na tela é pulado nos dois lados) */
 const ALTURAS_DO_MODAL = ['[role="dialog"]', '[role="dialog"] aside', '[data-testid="grade-de-parcelas"]'];
@@ -3887,7 +3943,7 @@ try {
       console.error(`check-ui-cortes: AUTO-TESTE DA RÉGUA DE FONTE FALHOU (faltou: ${esperados.filter((t) => !tiposMau.has(t)).join(', ') || 'nada'}; acusou no que cabe: ${bom.map((a) => a.texto).join(' | ') || 'nada'})`); process.exit(2);
     }
   }
-  registrar(`check-ui-cortes: régua de fonte (UI-FONTES-REGUA-01) reprova em ${REGUA.telas.size} tela(s) do diff${REGUA.telas.size ? `: ${[...REGUA.telas].join(', ')}` : ''}${REGUA.aviso ? ` (${REGUA.aviso})` : ''}`);
+  registrar(`check-ui-cortes: régua de fonte (UI-FONTES-REGUA-01) reprova só os elementos do diff (${(REGUA.testids ?? []).length} testids) em ${REGUA.telas.size} tela(s) do diff${REGUA.telas.size ? `: ${[...REGUA.telas].join(', ')}` : ''}${REGUA.aviso ? ` (${REGUA.aviso})` : ''}`);
 
   /* GATE-TELA-TETO-01 — AUTO-TESTE DO TETO: uma página em laço infinito tem de virar estouro (o contexto fecha) em ~2 s, não prender */
   const tt0 = Date.now(); const pgTeto = paginasDaMedicao(navegador); const pt = await pgTeto.nova({ viewport: { width: 400, height: 300 } });
@@ -3926,10 +3982,13 @@ try {
     rastro.passo = 'medir';
     /* UI-FONTES-REGUA-01 — a régua: reprova só na tela do diff; a das antigas vai ao relatório. Com `--so-fonte`, só ela. */
     const daFonte = await p.evaluate(medirFonteRegua, cen.regiao ?? null);
-    const sobARegua = REGUA.telas.has(telaDoCenario(cen));
+    /* ajuste 25/11 (Gabriel, opção 2): na tela do diff, reprova só o ELEMENTO do diff (`elementoDoDiff`, pelo testid); o antigo já aprovado vai
+       ao relatório como exceção declarada (`sobARegua: false`) */
+    const telaSob = REGUA.telas.has(telaDoCenario(cen));
+    const doDiff = (a) => telaSob && elementoDoDiff(a.elemento, REGUA.testids ?? []);
     if (RELATORIO_FONTES && daFonte.length) fs.appendFileSync(RELATORIO_FONTES, daFonte.map((a) => JSON.stringify({ cena: cen.nome,
-      tela: telaDoCenario(cen), tamanho: `${w}x${h}`, sobARegua, tipo: a.tipo, medida: a.medida, elemento: a.elemento, px: a.tamanho, limite: a.limite })).join('\n') + '\n');
-    if (SO_FONTE) { for (const a of (sobARegua ? daFonte : [])) meus.push({ tela: cen.nome, tamanho: `${w}x${h}`, regra: a.regra, texto: a.texto });
+      tela: telaDoCenario(cen), tamanho: `${w}x${h}`, sobARegua: doDiff(a), tipo: a.tipo, medida: a.medida, elemento: a.elemento, px: a.tamanho, limite: a.limite })).join('\n') + '\n');
+    if (SO_FONTE) { for (const a of daFonte.filter(doDiff)) meus.push({ tela: cen.nome, tamanho: `${w}x${h}`, regra: a.regra, texto: a.texto });
       await p.close(); return meus; }
     if (FOTOS) { fs.mkdirSync(FOTOS, { recursive: true }); await p.screenshot({ path: path.join(FOTOS, `${cen.nome}_${w}x${h}.png`) }); }
     /* FORN-BUSCA-UNICA-01 — `regiao` (opcional): o cenário varre só o que o seletor pega (a tela inteira sem ele) */
@@ -3981,7 +4040,7 @@ try {
     /* `soRegras` (UI-SEM-CORTE-02): o cenario conta so' estas regras — a tabela do Financeiro V2, suspensa (FIN-V2-SEM-CORTE-01), entra
        so' pelo texto inclinado e pela sobreposicao. Erro de pagina conta sempre. */
     /* UI-FONTES-REGUA-01 — a régua vale também no cenário de `soRegras` (ela só olha o máximo: as exceções ao piso não a tocam) */
-    if (sobARegua) achadosTodos.push(...daFonte.map((a) => ({ regra: a.regra, texto: a.texto })));
+    achadosTodos.push(...daFonte.filter(doDiff).map((a) => ({ regra: a.regra, texto: a.texto })));
     const achados = cen.soRegras ? achadosTodos.filter((a) => a.regra === 'erro' || a.regra === 'fonte' || cen.soRegras.includes(a.regra)) : achadosTodos;
     for (const a of achados) if (!EXCECOES.some((x) => x.tela === cen.nome && x.regra === a.regra && x.texto === a.texto)) meus.push({ tela: cen.nome, tamanho: `${w}x${h}`, ...a });
     await p.close();

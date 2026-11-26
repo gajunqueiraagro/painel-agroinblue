@@ -3,7 +3,7 @@
  * O mapa tela ← arquivo sai do `telas.tsx` (o ramo de cada `tela === '…'` e o que ele importa) e do grafo de imports de `src/`.
  */
 import { describe, it, expect } from 'vitest';
-import { telasDaBancada, COMPARTILHADOS, telaDoCenario, telasDaReguaPelosArquivos } from '../../../scripts/ui-gate-rapido.mjs';
+import { telasDaBancada, COMPARTILHADOS, telaDoCenario, telasDaReguaPelosArquivos, testidsDasLinhas, elementoDoDiff } from '../../../scripts/ui-gate-rapido.mjs';
 
 const telas: Map<string, { arquivos: Set<string> }> = telasDaBancada().telas;
 const regras: RegExp[] = COMPARTILHADOS;
@@ -54,5 +54,29 @@ describe('UI-FONTES-REGUA-01 — as telas sob a régua de fonte', () => {
   it('cena nova na bancada: a tela do ramo mudado entra; o trecho comum (antes do 1º ramo) não', () => {
     expect([...telasDaReguaPelosArquivos(['scripts/ui-cortes/telas.tsx'], [ramo('recorrencias')]).telas]).toEqual(['recorrencias']);
     expect(telasDaReguaPelosArquivos(['scripts/ui-cortes/telas.tsx'], [1]).telas.size).toBe(0);
+  });
+});
+
+/* UI-FONTES-REGUA-01 ajuste (Gabriel 25/11, opção 2): a régua reprova só o ELEMENTO do diff — o testid escrito numa linha acrescentada */
+describe('a régua de fonte só nos elementos do diff', () => {
+  const linhas = [
+    '<td data-testid="nota-outra-nf-numero">',
+    "<li data-testid={`nota-confirmar-${c.chave}`}>",
+    "<span data-testid={cond ? 'saldo-falta' : 'saldo-ok'} className={cn('a', { b: true })}>",
+    "<p data-testid='doc-papel'>",
+  ];
+  const ids: RegExp[] = testidsDasLinhas(linhas);
+  it('acha o testid simples, o de template (com o ${…}) e os dois do ternário', () => {
+    expect(elementoDoDiff('td[nota-outra-nf-numero] "30.436"', ids)).toBe(true);
+    expect(elementoDoDiff('li[nota-confirmar-atualizar] "Atualizar 1"', ids)).toBe(true);
+    expect(elementoDoDiff('td[saldo-falta] "600 kg"', ids)).toBe(true);
+    expect(elementoDoDiff('td[saldo-ok] "completa"', ids)).toBe(true);
+    expect(elementoDoDiff('p[doc-papel] "Compra"', ids)).toBe(true);
+  });
+  it('o elemento antigo (testid fora do diff) e o sem testid não reprovam: vão ao relatório', () => {
+    expect(elementoDoDiff('span[nota-fiscal] "Close"', ids)).toBe(false);
+    expect(elementoDoDiff('button[nota-etapa-ficar] "Como vai ficar"', ids)).toBe(false);
+    expect(elementoDoDiff('span "Close"', ids)).toBe(false);
+    expect(elementoDoDiff('td[nota-outra-nf-numero-x] "1"', ids)).toBe(false);
   });
 });

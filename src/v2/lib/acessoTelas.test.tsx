@@ -87,14 +87,14 @@ describe('a marca de liberacao (navGrupos)', () => {
 describe('a matriz perfil × grupo (aprovada em 16/09/2026)', () => {
   it('a matriz inteira, celula por celula', () => {
     expect(MATRIZ_ACESSO).toEqual({
-      home:         { gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'ver',    leitura: 'ver' },
-      rebanho:      { gestor_cliente: 'editar', financeiro: 'ver',    campo: 'editar', leitura: 'ver' },
-      financeiro:   { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
-      planejamento: { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
-      executivo:    { gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
-      auditoria:    { gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
-      cadastros:    { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
-      validar:      { gestor_cliente: 'nao',    financeiro: 'nao',    campo: 'nao',    leitura: 'nao' },
+      home:         { proprietario: 'ver', gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'ver',    leitura: 'ver' },
+      rebanho:      { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'ver',    campo: 'editar', leitura: 'ver' },
+      financeiro:   { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
+      planejamento: { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
+      executivo:    { proprietario: 'ver', gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
+      auditoria:    { proprietario: 'ver', gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
+      cadastros:    { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
+      validar:      { proprietario: 'nao', gestor_cliente: 'nao',    financeiro: 'nao',    campo: 'nao',    leitura: 'nao' },
     });
   });
   it('todo grupo do menu tem linha na matriz (grupo novo sem linha ficaria invisivel calado)', () => {
@@ -143,7 +143,7 @@ describe('a excecao por tela (NIVEL_POR_TELA) — ACESSOS-OC-01', () => {
     }
   });
   it('a excecao VENCE a matriz do grupo: no grupo `rebanho` o financeiro veria e o campo editaria', () => {
-    expect(MATRIZ_ACESSO.rebanho).toEqual({ gestor_cliente: 'editar', financeiro: 'ver', campo: 'editar', leitura: 'ver' });
+    expect(MATRIZ_ACESSO.rebanho).toEqual({ proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'ver', campo: 'editar', leitura: 'ver' });
     expect(Object.keys(NIVEL_POR_TELA).sort())
       .toEqual([...TELAS_DA_OC, ...TELAS_DO_FINANCEIRO, ...TELAS_DA_EVOLUCAO, ...TELAS_DO_GESTOR, ...TELAS_SO_COM_BPO].sort());
   });
