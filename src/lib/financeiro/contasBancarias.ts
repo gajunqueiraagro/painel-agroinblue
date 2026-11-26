@@ -200,11 +200,45 @@ export function faixasDaLista(contas: readonly ContaBancariaCadastro[]): FaixaDa
   })).filter(f => f.contas.length > 0);
 }
 
-export function rodapeDaLista(contas: readonly ContaBancariaCadastro[]): { contas: number; ativas: number; saldo: number; texto: string } {
+/** CONTAS-BANCARIAS-AJUSTES-01 (a) — o TÍTULO conta o cadastro inteiro: "15 ativas · 4 inativas" (sem inativa, só "15 ativas"). */
+export function resumoDoCadastro(contas: readonly ContaBancariaCadastro[]): { ativas: number; inativas: number; texto: string } {
   const ativas = contas.filter(c => c.ativa).length;
-  const saldo = Math.round(contas.reduce((s, c) => s + (saldoNumero(c.saldo_inicial_oficial) ?? 0), 0) * 100) / 100;
-  const n = contas.length;
-  return { contas: n, ativas, saldo, texto: `${n} ${n === 1 ? 'conta' : 'contas'} · ${ativas} ${ativas === 1 ? 'ativa' : 'ativas'}` };
+  const inativas = contas.length - ativas;
+  const a = `${ativas} ${ativas === 1 ? 'ativa' : 'ativas'}`;
+  return { ativas, inativas, texto: inativas > 0 ? `${a} · ${inativas} ${inativas === 1 ? 'inativa' : 'inativas'}` : a };
+}
+
+/** (a) o RODAPÉ conta o que a lista MOSTRA: com filtro (busca, tipo, fazenda ou inativas escondidas) "mostrando N de 19"; sem, "19 contas".
+ *  Uma regra só com o título: os dois contam o MESMO cadastro (`todas`). */
+export function rodapeDaLista(mostradas: readonly ContaBancariaCadastro[], todas: readonly ContaBancariaCadastro[] = mostradas):
+  { contas: number; saldo: number; texto: string } {
+  const saldo = Math.round(mostradas.reduce((s, c) => s + (saldoNumero(c.saldo_inicial_oficial) ?? 0), 0) * 100) / 100;
+  const n = mostradas.length;
+  const t = todas.length;
+  return { contas: n, saldo, texto: n < t ? `mostrando ${n} de ${t}` : `${t} ${t === 1 ? 'conta' : 'contas'}` };
+}
+
+/* ─── (c) o código curto ───────────────────────────────────────────────────── */
+
+/** CONTAS-BANCARIAS-AJUSTES-01 (c) — o código curto tem 2 dígitos ("01" … "99"). */
+export const codigoDeDoisDigitos = (codigo: string): boolean => /^\d{2}$/.test(codigo.trim());
+
+/** O `tipo_conta` que a conta terá no banco: o da conta aberta enquanto o tipo da tela não muda (a permuta aparece como "cc" na tela). */
+export function tipoContaDoFormulario(f: Pick<FormularioConta, 'tipo'>, conta: Pick<ContaBancariaCadastro, 'tipo_conta' | 'banco'> | null): string {
+  if (conta && tipoNaTela(conta) === f.tipo) return conta.tipo_conta || 'cc';
+  return f.tipo === 'caixa' ? 'cc' : f.tipo;
+}
+
+/** O próximo código livre do tipo, em 2 dígitos: o maior número do MESMO `tipo_conta` do cliente + 1 (a régua de `fn_gerar_codigo_conta`,
+ *  que numera por tipo). `semEsta`: a conta aberta não conta. */
+export function proximoCodigoLivre(contas: readonly ContaBancariaCadastro[], tipoConta: string, semEsta: string | null = null): string {
+  let max = 0;
+  for (const c of contas) {
+    if (c.id === semEsta || (c.tipo_conta || 'cc') !== tipoConta) continue;
+    const s = (c.codigo_conta ?? '').trim();
+    if (/^\d+$/.test(s)) max = Math.max(max, Number(s));
+  }
+  return String(max + 1).padStart(2, '0');
 }
 
 /* ─── o formulario do modal ────────────────────────────────────────────────── */
@@ -315,9 +349,13 @@ export function mudancas(original: FormularioConta | null, atual: FormularioCont
 }
 
 /** O que falta para gravar. Na conta nova a data e o saldo inicial sao obrigatorios (a aba ganha o selo "obrigatório"). */
-export function faltasDoFormulario(f: FormularioConta, nova: boolean): string[] {
+export function faltasDoFormulario(f: FormularioConta, nova: boolean, codigo: { original?: string; sugestao?: string } = {}): string[] {
   const falta: string[] = [];
   if (!f.nome.trim()) falta.push('o nome da conta');
+  /* (c) o código confere 2 dígitos na conta nova e quando muda (o de hoje, intocado, não trava outro Salvar) */
+  if ((nova || f.codigo.trim() !== (codigo.original ?? '').trim()) && !codigoDeDoisDigitos(f.codigo)) {
+    falta.push(codigo.sugestao ? `o código curto com 2 dígitos (o próximo livre do tipo: ${codigo.sugestao})` : 'o código curto com 2 dígitos');
+  }
   if (!f.fazendaId) falta.push('a fazenda');
   if (nova || f.saldoEm || f.saldoInicial !== null) {
     if (!f.saldoEm) falta.push('a data do saldo');

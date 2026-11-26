@@ -151,15 +151,23 @@ export interface PecasConectar {
   credenciais: () => { clientId: string; clientSecret: string } | null;
   busca: Busca;
   registrar: (a: { origem: 'agroinblue'; evento: 'agroinblue/connect_token'; client_user_id: string; autor: string }) => Promise<boolean>;
+  /** OPENFINANCE-PRONTO-NJ-01 (8): o aceite do termo (118150) ANTES de toda conexão nova; 'mudou' = a versão/md5 não é a vigente */
+  aceitarTermo: (a: { p_cliente: string; p_versao: number; p_md5: string; p_autor: string }) => Promise<'ok' | 'mudou' | 'erro'>;
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export async function conectar(pedido: { token: string | null; clienteId: unknown; itemId?: unknown }, pecas: PecasConectar):
+export async function conectar(pedido: { token: string | null; clienteId: unknown; itemId?: unknown; termo?: unknown }, pecas: PecasConectar):
   Promise<{ status: number; corpo: { ok: boolean; accessToken?: string; connectorIds?: number[]; frase?: string } }> {
   const autor = pedido.token ? await pecas.autorDoToken(pedido.token) : null;
   if (!autor) return { status: 401, corpo: { ok: false, frase: 'Entre de novo no sistema.' } };
   const clienteId = typeof pedido.clienteId === 'string' && UUID.test(pedido.clienteId) ? pedido.clienteId : null;
   if (!clienteId) return { status: 400, corpo: { ok: false, frase: 'Escolha o cliente.' } };
-  if (!(await pecas.podeConectar(autor, clienteId))) return { status: 403, corpo: { ok: false, frase: 'Só o gestor do cliente ou a AGROinBLUE conecta um banco.' } };
+  /* a conexão NOVA leva o termo lido (versão + md5 do texto que a tela mostrou); o Reconectar de um item já consentido, não */
+  const novo = pedido.itemId === undefined || pedido.itemId === null;
+  const termo = objeto(pedido.termo);
+  const versaoDoTermo = typeof termo?.versao === 'number' && Number.isInteger(termo.versao) && termo.versao > 0 ? termo.versao : null;
+  const md5DoTermo = typeof termo?.md5 === 'string' && /^[0-9a-f]{32}$/.test(termo.md5) ? termo.md5 : null;
+  if (novo && (versaoDoTermo === null || md5DoTermo === null)) return { status: 400, corpo: { ok: false, frase: 'Leia e aceite o termo antes de conectar.' } };
+  if (!(await pecas.podeConectar(autor, clienteId))) return { status: 403, corpo: { ok: false, frase: 'Só o proprietário do cliente ou a AGROinBLUE conecta um banco.' } };
   const cred = pecas.credenciais();
   if (!cred) return { status: 503, corpo: { ok: false, frase: 'O Open Finance ainda não está configurado neste ambiente.' } };
   const chave = await chaveDaApi(pecas.busca, cred.clientId, cred.clientSecret);
@@ -179,6 +187,11 @@ export async function conectar(pedido: { token: string | null; clienteId: unknow
       dono = objeto(await ri.json())?.clientUserId;
     } catch { return { status: 502, corpo: { ok: false, frase: 'Não consegui falar com a Pluggy agora. Tente de novo.' } }; }
     if (dono !== clienteId) return { status: 409, corpo: { ok: false, frase: 'Esta conexão não é deste cliente. Nada foi aberto.' } };
+  }
+  if (novo && versaoDoTermo !== null && md5DoTermo !== null) {
+    const aceite = await pecas.aceitarTermo({ p_cliente: clienteId, p_versao: versaoDoTermo, p_md5: md5DoTermo, p_autor: autor });
+    if (aceite === 'mudou') return { status: 409, corpo: { ok: false, frase: 'O termo mudou: leia a versão nova e aceite de novo. Nada foi aberto.' } };
+    if (aceite !== 'ok') return { status: 500, corpo: { ok: false, frase: 'Não consegui registrar o aceite do termo; nada foi aberto.' } };
   }
   const t = await pedirConnectToken(pecas.busca, chave.valor, clienteId, itemId);
   if (t.ok === false) return { status: t.status, corpo: { ok: false, frase: t.frase } };
@@ -239,7 +252,7 @@ export async function desconectar(pedido: { token: string | null; clienteId: unk
 
 /**
  * OPENFINANCE-P3a — CONTAS PERMITIDAS (Gabriel 16/11, saída A: o consentimento do Itaú da Vera pegou o CPF inteiro do Gabriel).
- * `openfinance-contas`, só o admin AGROinBLUE:
+ * `openfinance-contas`, o admin AGROinBLUE ou o gestor do cliente (OPENFINANCE-PRONTO-NJ-01 (8); antes só o admin):
  *  · 'listar'   → confere na Pluggy que o item é deste cliente e devolve, por conta, SÓ tipo · banco · 4 últimos dígitos · titular e
  *                 documento MASCARADOS · se já é permitida. Nunca saldo, limite nem transação; nunca chama /transactions.
  *  · 'permitir' → relê as contas na Pluggy, recusa accountId que não é do item e grava (`_fn_openfinance_contas_gravar`, 118130) a lista
@@ -248,6 +261,8 @@ export async function desconectar(pedido: { token: string | null; clienteId: unk
 export interface ContaParaEscolher {
   account_id: string; tipo: 'BANK' | 'CREDIT'; subtipo: string | null; tipo_legivel: string; banco: string;
   final4: string | null; titular: string | null; documento: string | null; permitida: boolean;
+  /** OPENFINANCE-PRONTO-NJ-01 (1): a AGÊNCIA (só algarismos) do `bankData.transferNumber` — para sugerir a conta do cadastro; nulo = não disse */
+  agencia: string | null;
 }
 const TIPO_LEGIVEL: Record<string, string> = {
   CHECKING_ACCOUNT: 'Conta corrente', SAVINGS_ACCOUNT: 'Poupança', CREDIT_CARD: 'Cartão de crédito',
@@ -281,31 +296,87 @@ export function contaDaPluggy(a: unknown, banco: string, permitidas: ReadonlySet
   return {
     account_id: id, tipo, subtipo, tipo_legivel: (subtipo && TIPO_LEGIVEL[subtipo]) || (tipo === 'CREDIT' ? 'Crédito' : 'Conta'),
     banco, final4: finalDaConta(o.number), titular: mascararTitular(o.owner), documento: mascararDocumento(o.taxNumber),
-    permitida: permitidas.has(id),
+    permitida: permitidas.has(id), agencia: agenciaDaConta(o.bankData),
   };
+}
+/** "0748/95982-3" ou "748/0748/95982-3" → "0748" (a parte antes da conta); sem barra, ou mais de 5 algarismos = nulo */
+export function agenciaDaConta(bankData: unknown): string | null {
+  const t = texto(objeto(bankData)?.transferNumber, 64);
+  const partes = t ? t.split('/').map((x) => x.replace(/\D/g, '')) : [];
+  const ag = partes.length >= 2 ? partes[partes.length - 2] : '';
+  return /^\d{1,5}$/.test(ag) ? ag : null;
 }
 export function rotuloDaConta(c: ContaParaEscolher): string {
   return [c.banco, c.tipo_legivel, c.final4].filter(Boolean).join(' · ').slice(0, 80);
 }
 
+/**
+ * OPENFINANCE-PRONTO-NJ-01 (1)+(7) — as CONEXÕES do cliente como a PLUGGY as vê (o webhook não traz o conector: o nome e a situação só
+ * existem em `GET /items/{id}`). Inclui as tentativas que NÃO completaram (esperando o titular, erro), com a frase pronta — nunca o
+ * corpo da Pluggy, só o código dela. A lista de itens vem da NOSSA trilha (o item que a Pluggy avisou com o clientUserId deste cliente);
+ * o item de outro cliente ou que já não existe na Pluggy fica de fora.
+ */
+export type SituacaoDaConexao = 'conectado' | 'lendo' | 'esperando' | 'erro';
+export interface ConexaoDaPluggy {
+  item_id: string; banco: string; empresa: boolean; situacao: SituacaoDaConexao; codigo: string | null; frase: string | null;
+  criado_em: string | null; atualizado_em: string | null;
+}
+const FRASE_DO_CODIGO: Record<string, string> = {
+  USER_INPUT_TIMEOUT: 'O banco esperou a confirmação no app e o tempo acabou. Tente de novo com o celular em mãos.',
+  USER_AUTHORIZATION_PENDING: 'Esperando o titular aprovar no app do banco (o prazo é de 20 minutos).',
+  USER_AUTHORIZATION_NOT_GRANTED: 'O titular não autorizou no app do banco. Nada foi lido; tente de novo se foi engano.',
+  USER_AUTHORIZATION_REVOKED: 'A autorização foi revogada no banco. Conecte de novo para voltar a ler.',
+  SITE_NOT_AVAILABLE: 'O banco está fora do ar agora. Tente de novo mais tarde.',
+  ACCOUNT_NEEDS_ACTION: 'O banco pede uma ação do titular (no app ou na agência) antes de liberar.',
+  CONNECTION_ERROR: 'A conexão com o banco caiu no meio. Tente de novo.',
+};
+const FRASE_DA_SITUACAO: Record<SituacaoDaConexao, string | null> = {
+  conectado: null,
+  lendo: 'A Pluggy está lendo as contas do banco; fica pronta em alguns minutos.',
+  esperando: 'Esperando o titular aprovar no app do banco (o prazo é de 20 minutos).',
+  erro: 'A conexão não terminou. Tente de novo.',
+};
+/** um item da Pluggy → a linha da janela (puro) */
+export function conexaoDoItem(item: unknown): ConexaoDaPluggy | null {
+  const it = objeto(item);
+  const id = texto(it?.id, 128);
+  if (!it || !id) return null;
+  const st = texto(it.status, 32);
+  const situacao: SituacaoDaConexao = st === 'UPDATED' ? 'conectado' : st === 'UPDATING' ? 'lendo'
+    : st === 'WAITING_USER_INPUT' || st === 'WAITING_USER_ACTION' ? 'esperando' : 'erro';
+  const codigo = texto(objeto(it.error)?.code, 64) ?? (situacao === 'conectado' ? null : texto(it.executionStatus, 64));
+  const conector = objeto(it.connector);
+  return {
+    item_id: id, banco: texto(conector?.name, 40) ?? 'Banco', empresa: conector?.type === 'BUSINESS_BANK', situacao, codigo,
+    frase: situacao === 'conectado' ? null : (codigo && FRASE_DO_CODIGO[codigo]) || FRASE_DA_SITUACAO[situacao],
+    criado_em: texto(it.createdAt, 40), atualizado_em: texto(it.lastUpdatedAt, 40) ?? texto(it.updatedAt, 40),
+  };
+}
+
 export interface PecasContas {
   autorDoToken: (token: string) => Promise<string | null>;
-  ehAdmin: (autor: string) => Promise<boolean>;
+  /** OPENFINANCE-PRONTO-NJ-01 (8): ESCOLHER as contas ('permitir') = admin AGROinBLUE OU proprietário (a mesma regra do conectar) */
+  podeConectar: (autor: string, clienteId: string) => Promise<boolean>;
+  /** VER ('listar' e 'conexoes') = admin, proprietário OU gestor do cliente (o gestor vê a situação, não conecta — Gabriel 15:36) */
+  podeVer: (autor: string, clienteId: string) => Promise<boolean>;
   credenciais: () => { clientId: string; clientSecret: string } | null;
   busca: Busca;
   permitidasDoItem: (itemId: string) => Promise<string[] | null>;
+  /** os itens que a NOSSA trilha liga a este cliente (sem os desconectados), do mais novo ao mais velho; nulo = não consegui ler */
+  itensDoCliente: (clienteId: string) => Promise<string[] | null>;
   gravar: (p: { p_cliente: string; p_item: string; p_contas: unknown[]; p_autor: string; p_simular: boolean }) =>
     Promise<{ ok: true; corpo: Record<string, unknown> } | { ok: false; codigo: string | null }>;
 }
 type RespostaContas = { status: number; corpo: { ok: boolean; frase?: string; contas?: ContaParaEscolher[]; [k: string]: unknown } };
-export async function contas(pedido: { token: string | null; acao: unknown; clienteId: unknown; itemId: unknown; accountIds?: unknown; simular?: unknown },
+const MAX_CONEXOES = 20;
+export async function contas(pedido: { token: string | null; acao: unknown; clienteId: unknown; itemId?: unknown; accountIds?: unknown; simular?: unknown },
   pecas: PecasContas): Promise<RespostaContas> {
   const autor = pedido.token ? await pecas.autorDoToken(pedido.token) : null;
   if (!autor) return { status: 401, corpo: { ok: false, frase: 'Entre de novo no sistema.' } };
-  const acao = pedido.acao === 'listar' || pedido.acao === 'permitir' ? pedido.acao : null;
+  const acao = pedido.acao === 'listar' || pedido.acao === 'permitir' || pedido.acao === 'conexoes' ? pedido.acao : null;
   const clienteId = typeof pedido.clienteId === 'string' && UUID.test(pedido.clienteId) ? pedido.clienteId : null;
   const itemId = typeof pedido.itemId === 'string' && UUID.test(pedido.itemId) ? pedido.itemId : null;
-  if (!acao || !clienteId || !itemId) return { status: 400, corpo: { ok: false, frase: 'Escolha o cliente e o banco.' } };
+  if (!acao || !clienteId || (acao !== 'conexoes' && !itemId)) return { status: 400, corpo: { ok: false, frase: 'Escolha o cliente e o banco.' } };
   let marcadas: string[] = [];
   if (acao === 'permitir') {
     const v = pedido.accountIds;
@@ -314,21 +385,47 @@ export async function contas(pedido: { token: string | null; acao: unknown; clie
     }
     marcadas = v;
   }
-  if (!(await pecas.ehAdmin(autor))) return { status: 403, corpo: { ok: false, frase: 'Só a AGROinBLUE escolhe as contas do banco.' } };
+  if (acao === 'permitir' ? !(await pecas.podeConectar(autor, clienteId)) : !(await pecas.podeVer(autor, clienteId))) {
+    return { status: 403, corpo: { ok: false, frase: acao === 'permitir' ? 'Só o proprietário do cliente ou a AGROinBLUE escolhe as contas do banco.'
+      : 'Só o proprietário, o gestor do cliente ou a AGROinBLUE vê os bancos conectados.' } };
+  }
   const cred = pecas.credenciais();
   if (!cred) return { status: 503, corpo: { ok: false, frase: 'O Open Finance ainda não está configurado neste ambiente.' } };
   const chave = await chaveDaApi(pecas.busca, cred.clientId, cred.clientSecret);
   if (chave.ok === false) return { status: chave.status, corpo: { ok: false, frase: chave.frase } };
   const h = { 'Content-Type': 'application/json', 'X-API-KEY': chave.valor };
+
+  if (acao === 'conexoes') {
+    const ids = await pecas.itensDoCliente(clienteId);
+    if (!ids) return { status: 500, corpo: { ok: false, frase: 'Não consegui ler as conexões deste cliente. Tente de novo.' } };
+    const conexoes: ConexaoDaPluggy[] = [];
+    try {
+      for (const id of ids.slice(0, MAX_CONEXOES)) {
+        const r = await pecas.busca(`${PLUGGY_BASE}/items/${id}`, { method: 'GET', headers: h });
+        if (r.status === 404) continue;
+        if (!r.ok) return { status: 502, corpo: { ok: false, frase: 'Não consegui ler as conexões na Pluggy. Tente de novo.' } };
+        const it = await r.json();
+        if (objeto(it)?.clientUserId !== clienteId) continue;
+        const c = conexaoDoItem(it);
+        if (c) conexoes.push(c);
+      }
+    } catch { return { status: 502, corpo: { ok: false, frase: 'Não consegui falar com a Pluggy agora. Tente de novo.' } }; }
+    return { status: 200, corpo: { ok: true, conexoes } };
+  }
+
   let lidas: ContaParaEscolher[];
+  let banco = 'Banco';
+  let lendo = false;
   try {
     const item = await pecas.busca(`${PLUGGY_BASE}/items/${itemId}`, { method: 'GET', headers: h });
     if (item.status === 404) return { status: 404, corpo: { ok: false, frase: 'Esta conexão não existe mais na Pluggy.' } };
     if (!item.ok) return { status: 502, corpo: { ok: false, frase: 'Não consegui ler a conexão na Pluggy. Tente de novo.' } };
     const it = objeto(await item.json());
     if (it?.clientUserId !== clienteId) return { status: 409, corpo: { ok: false, frase: 'Esta conexão não é deste cliente. Nada foi lido.' } };
-    const banco = texto(objeto(it.connector)?.name, 40) ?? 'Banco';
-    const permitidas = await pecas.permitidasDoItem(itemId);
+    banco = texto(objeto(it.connector)?.name, 40) ?? 'Banco';
+    /* logo depois do consentimento a Pluggy ainda está lendo o banco: a lista pode vir vazia — a tela relê, nunca diz "não há contas" */
+    lendo = it.status === 'UPDATING';
+    const permitidas = await pecas.permitidasDoItem(itemId ?? '');
     if (!permitidas) return { status: 500, corpo: { ok: false, frase: 'Não consegui ler as contas já escolhidas. Tente de novo.' } };
     const r = await pecas.busca(`${PLUGGY_BASE}/accounts?itemId=${itemId}`, { method: 'GET', headers: h });
     if (!r.ok) return { status: 502, corpo: { ok: false, frase: 'Não consegui ler as contas na Pluggy. Tente de novo.' } };
@@ -336,7 +433,7 @@ export async function contas(pedido: { token: string | null; acao: unknown; clie
     const set = new Set(permitidas);
     lidas = (Array.isArray(lista) ? lista : []).map((a) => contaDaPluggy(a, banco, set)).filter((c): c is ContaParaEscolher => c !== null);
   } catch { return { status: 502, corpo: { ok: false, frase: 'Não consegui falar com a Pluggy agora. Tente de novo.' } }; }
-  if (acao === 'listar') return { status: 200, corpo: { ok: true, contas: lidas } };
+  if (acao === 'listar') return { status: 200, corpo: { ok: true, banco, lendo, contas: lidas } };
 
   const porId = new Map(lidas.map((c) => [c.account_id, c]));
   if (marcadas.some((id) => !porId.has(id))) {
@@ -346,7 +443,7 @@ export async function contas(pedido: { token: string | null; acao: unknown; clie
     const c = porId.get(id);
     return c ? [{ account_id: c.account_id, tipo: c.tipo, subtipo: c.subtipo, final4: c.final4, rotulo: rotuloDaConta(c) }] : [];
   });
-  const g = await pecas.gravar({ p_cliente: clienteId, p_item: itemId, p_contas, p_autor: autor, p_simular: pedido.simular === true });
+  const g = await pecas.gravar({ p_cliente: clienteId, p_item: itemId ?? '', p_contas, p_autor: autor, p_simular: pedido.simular === true });
   if (g.ok === false) {
     if (g.codigo === '42501') return { status: 409, corpo: { ok: false, frase: 'Esta conexão não está ligada a este cliente. Nada foi gravado.' } };
     if (g.codigo === '23505') return { status: 409, corpo: { ok: false, frase: 'Uma das contas já está ligada a outra conexão. Nada foi gravado.' } };
@@ -356,13 +453,14 @@ export async function contas(pedido: { token: string | null; acao: unknown; clie
 }
 
 /**
- * OPENFINANCE-P3b — LIGAR a conta permitida à conta do SISTEMA (onde o extrato cai). Só o admin AGROinBLUE; quem confere cliente, tipo
+ * OPENFINANCE-P3b — LIGAR a conta permitida à conta do SISTEMA (onde o extrato cai). O admin AGROinBLUE ou o gestor do cliente (PRONTO-NJ-01); quem confere cliente, tipo
  * e "uma conta do sistema recebe de UMA conta do banco" é a interna `_fn_openfinance_conta_ligar_sistema` (118140). Não fala com a
  * Pluggy: a conta permitida já foi conferida lá quando o admin a marcou. `contaBancariaId` nulo = desliga. `simular` = a prévia.
  */
 export interface PecasLigar {
   autorDoToken: (token: string) => Promise<string | null>;
-  ehAdmin: (autor: string) => Promise<boolean>;
+  /** OPENFINANCE-PRONTO-NJ-01 (8): admin AGROinBLUE OU gestor do cliente */
+  podeConectar: (autor: string, clienteId: string) => Promise<boolean>;
   ligar: (p: { p_cliente: string; p_permitida: string; p_conta: string | null; p_autor: string; p_simular: boolean }) =>
     Promise<{ ok: true; corpo: Record<string, unknown> } | { ok: false; codigo: string | null }>;
 }
@@ -375,7 +473,7 @@ export async function ligarConta(pedido: { token: string | null; clienteId: unkn
   const conta = pedido.contaBancariaId === null ? null
     : typeof pedido.contaBancariaId === 'string' && UUID.test(pedido.contaBancariaId) ? pedido.contaBancariaId : undefined;
   if (!clienteId || !permitidaId || conta === undefined) return { status: 400, corpo: { ok: false, frase: 'Escolha a conta do banco e a conta do sistema.' } };
-  if (!(await pecas.ehAdmin(autor))) return { status: 403, corpo: { ok: false, frase: 'Só a AGROinBLUE liga a conta do banco à conta do sistema.' } };
+  if (!(await pecas.podeConectar(autor, clienteId))) return { status: 403, corpo: { ok: false, frase: 'Só o proprietário do cliente ou a AGROinBLUE liga a conta do banco à conta do sistema.' } };
   const g = await pecas.ligar({ p_cliente: clienteId, p_permitida: permitidaId, p_conta: conta, p_autor: autor, p_simular: pedido.simular === true });
   if (g.ok === false) {
     if (g.codigo === '42501') return { status: 409, corpo: { ok: false, frase: 'Esta conta não é deste cliente. Nada foi gravado.' } };

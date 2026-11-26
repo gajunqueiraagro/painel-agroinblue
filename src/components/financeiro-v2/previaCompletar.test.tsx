@@ -89,7 +89,8 @@ describe('P163 v4 — uma linha por parcela, na ordem da casa', () => {
     await conferido();
     /* DA-NOTA-CLASSIF-01 — a classificação (fazenda, subcentro, safra) aparece SEMPRE; a conta da nota mudaria a da l2 (vazia hoje): aparece;
        o fornecedor igual: não (e a legenda não diz mais "não mudam") */
-    expect(cabecalhos()).toEqual(['Parc.', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Nº documento', 'Fazenda', 'Conta', 'Subcentro', 'Safra', 'Valor', 'Status']);
+    /* NOTA-ENTREGA-FUTURA-01 (3, Gabriel 25/11): a ORDEM DA LISTA do Financeiro — … · Fornecedor · Faz. · Plano de contas · (Safra) · Conta · NF · Valor · Status */
+    expect(cabecalhos()).toEqual(['Parc.', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fazenda', 'Plano de contas', 'Safra', 'Conta', 'NF', 'Valor', 'Status']);
     expect(screen.getByTestId('previa-iguais').textContent).toBe('Fornecedor: igual em todas');
     expect(screen.getByRole('dialog').textContent).toContain('O que a nota muda em cada parcela · NF 000.000.001 · Fornecedor sintetico · R$ 1.264,00');
     expect(screen.getByTestId('previa-dre').textContent).toBe('DRE: R$ 1.264,00 passam de 05/2031 para 06/2031');
@@ -104,7 +105,7 @@ describe('P163 v4 — uma linha por parcela, na ordem da casa', () => {
     abrir();
     await conferido();
     expect(cabecalhos()).not.toContain('Fornecedor');
-    expect(cabecalhos()).toEqual(expect.arrayContaining(['Fazenda', 'Subcentro', 'Safra']));
+    expect(cabecalhos()).toEqual(expect.arrayContaining(['Fazenda', 'Plano de contas', 'Safra']));
     expect(screen.getByTestId('previa-iguais').textContent).not.toContain('azenda');
     /* na conciliada (l1) o cadeado fica SÓ no caixa: subcentro, fazenda e safra sem 🔒 */
     for (const c of ['fazenda', 'subcentro', 'safra']) expect(within(naColuna('l1', c)).queryByTestId('previa-cadeado')).toBeNull();
@@ -175,7 +176,9 @@ describe('P163 v4 — uma linha por parcela, na ordem da casa', () => {
     await conferido();
     banco.completarComANota.mockResolvedValueOnce({ ok: false, motivo: 'sem conexão' });
     fireEvent.change(screen.getByTestId('previa-numero'), { target: { value: 'NF 9' } });
-    expect((await screen.findByTestId('previa-falha')).textContent).toBe('Não consegui conferir a prévia (sem conexão).');
+    /* NOTA-ENTREGA-FUTURA-01 (3): a frase curta; o motivo técnico não aparece na tela (vai no ⓘ) */
+    expect((await screen.findByTestId('previa-falha')).textContent).toBe('Não consegui conferir agora. Tente de novo.');
+    expect(screen.getByTestId('previa-rodape-frase').textContent).not.toContain('sem conexão');
     expect(screen.getByTestId('previa-gravar')).toBeDisabled();
     fireEvent.change(screen.getByTestId('previa-numero'), { target: { value: 'NF 2' } });
     await conferido();

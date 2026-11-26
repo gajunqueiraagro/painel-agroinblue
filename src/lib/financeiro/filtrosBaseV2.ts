@@ -56,6 +56,8 @@ export interface FiltrosV2 extends FiltrosListaV2 {
    * faixas — a mesma expressão, mais termos.
    */
   anos?: string[];
+  /** LANC-FILTROS-02a: o PERÍODO por datas ('AAAA-MM-DD', inclusivos); vindo, manda sobre ano/anos/mês/meses (UMA faixa) */
+  periodo?: { de: string; ate: string };
   mes?: string;           // single month or 'todos'
   meses?: string[];       // multi-month select
   conta_bancaria_id?: string;
@@ -235,6 +237,13 @@ function ramoDerivado(ini: string, fim: string): string {
        + `and(data_pagamento.is.null,data_vencimento.gte.${ini},data_vencimento.lt.${fim})`;
 }
 
+/** LANC-FILTROS-02a — o dia seguinte de 'AAAA-MM-DD' (o fim exclusivo da faixa), pelo calendário (UTC: sem fuso). */
+export function diaSeguinte(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Segmento OR de UMA faixa [ini,fim) para a dimensão selecionada. */
 export function ramoDimensao(dimensao: DimensaoDataFinanceiro, ini: string, fim: string): string {
   const coluna = COLUNA_DATA[dimensao];
@@ -273,6 +282,11 @@ export function montarPlanoBaseV2(
 
   if (opcoes.semRecorteTemporal) {
     // Universo sem período: usado só para medir quanto o período cortou.
+  } else if (filtros.periodo) {
+    /* LANC-FILTROS-02a — o período do seletor é UMA faixa [de, ate + 1) na dimensão, o mesmo ramo de sempre (o mesmo recorte da
+       `fn_fin_v2_lista_pagina` com `de`/`ate`) */
+    const ramo = ramoDimensao(dimensao, filtros.periodo.de, diaSeguinte(filtros.periodo.ate));
+    plano.orTemporal = extra ? `${ramo},${extra}` : ramo;
   } else if (isTodosAnos) {
     if (mesesRecorte.length === 0) {
       // Todos os anos + todos os meses: sem faixa, mas a dimensão continua soberana.

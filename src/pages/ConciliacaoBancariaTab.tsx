@@ -287,7 +287,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const { clienteAtual } = useCliente();
   const queryClient = useQueryClient();
   const perm = usePermissions();
-  const isAdmin = perm.perfil === 'admin_agroinblue' || perm.perfil === 'gestor_cliente';
+  const isAdmin = perm.perfil === 'admin_agroinblue' || perm.perfil === 'gestor_cliente' || perm.perfil === 'proprietario';
   const isFinanceiro = perm.perfil === 'financeiro';
   const clienteId = clienteAtual?.id;
 

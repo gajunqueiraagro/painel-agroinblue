@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import type { TabId } from '@/components/BottomNav';
 
-export type Perfil = 'admin_agroinblue' | 'gestor_cliente' | 'financeiro' | 'campo' | 'leitura';
+export type Perfil = 'admin_agroinblue' | 'proprietario' | 'gestor_cliente' | 'financeiro' | 'campo' | 'leitura';
 
 export interface Permissions {
   perfil: Perfil;
@@ -28,7 +28,8 @@ export function usePermissions(): Permissions {
 
   return useMemo(() => {
     const isAdmin = perfil === 'admin_agroinblue';
-    const isGestor = perfil === 'gestor_cliente';
+    /* PERFIL-PROPRIETARIO: o Proprietário tem tudo o que o Gestor tem */
+    const isGestor = perfil === 'gestor_cliente' || perfil === 'proprietario';
     const isFinanceiro = perfil === 'financeiro';
     const isCampo = perfil === 'campo';
     const isReadOnly = perfil === 'leitura';

@@ -13,6 +13,7 @@ import { BUCKET_LANCAMENTO_DOCUMENTOS } from '@/hooks/useLancamentoDocumentos';
 import { gravarDocumentosPendentes, novoPendente } from '@/lib/financeiro/documentosPendentes';
 import { baixarArquivo } from '@/lib/financeiro/itensDaNotaBanco';
 import { danfePdfDoXml } from '@/lib/fiscal/danfePdf';
+import { lerNFe } from '@/lib/financeiro/nfe/lerNFe';
 
 /* as tabelas fiscais novas ainda não estão nos tipos gerados (o mesmo idioma do `useNotasDaReceita`) */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: `(supabase as any)`
@@ -45,7 +46,9 @@ export function candidatasSemPdf(docs: readonly DocDaNota[], vinculos: readonly 
   const saida: CandidataDoDanfe[] = [];
   for (const [chave, lista] of porChave) {
     if (lista.some(ehPdf)) continue;
-    const xml = lista.find((d) => ehXml(d) && d.url);
+    /* NOTA-ENTREGA-FUTURA-01 (Gabriel 25/11 09:26) — a NF que nasceu da Receita SEM arquivo (só o registro: o XML mora na caixa) também é
+       candidata; o `danfeDaCandidata` lê o XML da caixa. A com arquivo vem primeiro */
+    const xml = lista.find((d) => ehXml(d) && d.url) ?? lista.find((d) => !d.url && (ehXml(d) || d.especie === 'nf'));
     if (!xml) continue;
     const ligados = [...new Set(vinculos.filter((v) => v.documento_id === xml.id && v.lancamento_id !== xml.lancamento_id).map((v) => v.lancamento_id))];
     saida.push({ doc: xml, chave, ligados });
@@ -128,4 +131,35 @@ export async function danfeDaCandidata(clienteId: string, c: CandidataDoDanfe, s
     if (error) { console.error('[danfeDaCandidata] vincular', error); return { ok: false, frase: 'o PDF foi anexado, mas não foi ligado às outras parcelas' }; }
   }
   return { ok: true, bytes: g.pdf.size };
+}
+
+/**
+ * NOTA-ENTREGA-FUTURA-01 (Gabriel 25/11 09:26: a NF 30.150 da compra "sem arquivo") — "Ligar o XML da Receita": o documento NF que nasceu da
+ * Receita só com o registro recebe o ARQUIVO do XML que já está na caixa (a chave do XML confere com a do documento: senão nada se grava), pela
+ * MESMA porta de sempre (`anexar` do documento), e o DANFE gerado dele (`danfeDaCandidata`, ligado aos mesmos lançamentos), se ainda não há
+ * PDF dessa chave. Nada muda em valor, data, status ou conciliação. Nunca lança: a falha volta como frase.
+ */
+export async function ligarXmlDaReceitaAoDocumento(clienteId: string, documentoId: string, chave: string, temPdf: boolean,
+  anexarXml: (arquivo: File) => Promise<boolean>,
+  g: { daCaixa?: typeof xmlDaCaixaDaReceita; danfe?: typeof danfeDaCandidata; lerChave?: (xml: ArrayBuffer) => string | null } = {}): Promise<{ ok: boolean; frase: string }> {
+  const daCaixa = g.daCaixa ?? xmlDaCaixaDaReceita;
+  const danfe = g.danfe ?? danfeDaCandidata;
+  const lerChave = g.lerChave ?? ((xml: ArrayBuffer) => { const r = lerNFe(xml); return r.ok ? r.nota.chave.replace(/\D/g, '') : null; });
+  const ch = chave.replace(/\D/g, '');
+  const xml = await daCaixa(clienteId, ch);
+  if (!xml) return { ok: false, frase: 'O XML desta nota não está na caixa da Receita.' };
+  if (lerChave(xml) !== ch) return { ok: false, frase: 'O XML da caixa é de outra nota (a chave não confere). Nada foi gravado.' };
+  let anexou = false;
+  try { anexou = await anexarXml(new File([xml], `NFe${ch}.xml`, { type: 'application/xml' })); } catch (e) { console.error('[ligarXmlDaReceita] anexar', e); }
+  if (!anexou) return { ok: false, frase: 'Não consegui anexar o XML ao documento.' };
+  if (temPdf) return { ok: true, frase: 'XML ligado ao documento.' };
+  const d = await supabase.from('financeiro_lancamento_documentos')
+    .select('id, lancamento_id, chave_acesso, nome, tipo, url, especie, numero, serie, data_emissao, valor_documento, emitente_id, emitente_nome, emitente_documento')
+    .eq('cliente_id', clienteId).eq('id', documentoId).maybeSingle();
+  if (d.error || !d.data) return { ok: false, frase: 'XML ligado; o DANFE não foi gerado (não li o documento). Use "DANFE das notas já guardadas".' };
+  const doc: DocDaNota = { ...d.data, url: null, valor_documento: d.data.valor_documento == null ? null : Number(d.data.valor_documento) };
+  const v = await supabase.from('financeiro_documento_vinculos').select('lancamento_id').eq('cliente_id', clienteId).eq('documento_id', documentoId);
+  const ligados = [...new Set((v.data ?? []).map((x) => x.lancamento_id).filter((x): x is string => typeof x === 'string' && x !== doc.lancamento_id))];
+  const r = await danfe(clienteId, { doc, chave: ch, ligados }, false);
+  return r.ok === false ? { ok: false, frase: `XML ligado; o DANFE não saiu (${r.frase}).` } : { ok: true, frase: 'XML ligado e DANFE gerado.' };
 }
