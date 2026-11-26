@@ -107,7 +107,8 @@ export function textoDoEstado(e: EstadoNaLinha, agora: Date = new Date()): { tex
     case 'reconectar': return { texto: '⚠ Reconectar', titulo: 'O banco pede o titular de novo (confirmação ou consentimento vencido): clique para confirmar' };
     case 'link': return { texto: `Link enviado · ${horaCurta(e.ate, agora)}`, titulo: `Link do titular enviado · vale até ${horaDaLeitura(e.ate, agora)}` };
     case 'conectar': return { texto: 'Conectar', titulo: 'Conectar esta conta pelo Open Finance (só leitura do extrato)' };
-    case 'em_breve': return { texto: 'Em breve', titulo: FRASE_CARTAO_EM_BREVE };
+    /* CONTAS-BANCARIAS-LISTA-01: "em breve" em cinza, sem caixa alta (mock 26/11) */
+    case 'em_breve': return { texto: 'em breve', titulo: FRASE_CARTAO_EM_BREVE };
     default: if (e.motivo === 'investimento') return { texto: '—', titulo: FRASE_INVESTIMENTO_SEM_OF };
       return { texto: '—', titulo: 'Caixa físico, permuta, virtual ou conta sem banco: não há Open Finance' };
   }

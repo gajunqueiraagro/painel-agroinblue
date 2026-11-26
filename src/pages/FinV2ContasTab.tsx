@@ -1,17 +1,18 @@
 /**
- * Financeiro › Contas bancárias — CAD-CONTAS-BANCARIAS-01 (mock aprovado 20/10 12h53, vista "Lista").
- *   · colunas: Cód. · Nome da conta · Tipo · Banco · Agência · Conta · Fazenda · Gerente · Telefone · Início · Status · ✎
- *   · faixas por tipo ("Conta corrente · 5"); CONTAS-BANCARIAS-AJUSTES-01 (a): título "15 ativas · 4 inativas" (o cadastro inteiro) e rodapé preso
- *     "mostrando N de 19" com filtro (sem filtro, "19 contas") — `resumoDoCadastro` / `rodapeDaLista`
- *   · LIMPEZA-TELAS-01 C1 (Gabriel 16/11): sem a coluna "Saldo inicial" nem o total dela (sem a data, não diz de quando é; o saldo
- *     inicial segue no modal da conta) e a tabela 1 ponto menor
- *   · vazio "não inf." em cinza; caixa físico "não se aplica"; sem saldo/início em âmbar
- *   · barra: busca (conta, banco ou gerente) · Todas/Conta corrente/Investimento/Cartão · fazenda · Mostrar inativas · + Nova conta
- *   · estreitando, somem Telefone e Início, depois Gerente e Agência, depois Fazenda (`colunasEscondidas`, pela largura da lista)
+ * Financeiro › Contas bancárias — CAD-CONTAS-BANCARIAS-01 + CONTAS-BANCARIAS-LISTA-01 (mock aprovado 26/11, md5 7c4a8e62…).
+ *   · colunas: Cód. · Nome da conta · Banco · Agência · Conta · Fazenda · Open Finance · Situação · ✎ (larguras FIXAS, `LARGURAS_DA_LISTA`);
+ *     saiu a coluna Tipo com os selos grandes — o tipo é o GRUPO ("Conta corrente · 12") e o filtro do topo
+ *   · Banco = o código (9 px cinza, largura fixa) + o nome; Agência e Conta em colunas próprias, número tabular; sem dado = "—"
+ *   · Open Finance: "Conectar" como link pequeno; conectado = ponto verde + a hora da última leitura; cartão "em breve" cinza; sem OF "—"
+ *   · Situação: selo pequeno — "Ativa" · "Inativa desde dd/mm/aaaa" (CONTA-INATIVAR-DATA-01)
+ *   · régua: linha 20 px a 10,5 px, cabeçalho 22 px a 10 px, sem caixa alta, nada cortado (o Nome corta com "…" e o nome inteiro no title)
+ *   · barra: busca (conta, banco, agência ou conta) · Todas/Conta corrente/Investimento/Cartão · fazenda · Mostrar inativas · Exportar ▾
+ *     (Excel · PDF) · "+ Nova conta" no navy do sistema
+ *   · título "15 ativas · 4 inativas" (o cadastro inteiro, `resumoDoCadastro`); rodapé FIXO "19 contas · 12 conta corrente · 4 investimento ·
+ *     3 cartão" (com filtro, "mostrando N de 19 · …", `rodapeDosTipos`)
+ *   · estreitando, somem a Fazenda e depois a Agência (`colunasDaListaEscondidas`, pela largura da lista)
  *   · clique na linha abre o modal (`ContaBancariaModal`); salvou, a lista relê SÓ a conta salva
- *   · CONTAS-OF-LINHA-01 (mock aprovado 23/11 18:10; admin e, desde OPENFINANCE-PRONTO-NJ-01, o gestor do cliente): selo "Open Finance · N bancos conectados" no título (abre as conexões)
- *     e a coluna FIXA "Open Finance" (132px) antes do Status — Conectado · Conectar · Link enviado · ⚠ Reconectar · — (`estadoNaLinha`);
- *     saíram os 3 botões soltos da barra (Conectar banco · Bancos conectados · Registrar webhook)
+ *   · CONTAS-OF-LINHA-01: o selo "Open Finance · N bancos conectados" no título (abre as conexões); a coluna só para quem vê o OF
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,15 +25,16 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/lib/utils';
 import { ContaBancariaModal } from '@/components/financeiro-v2/ContaBancariaModal';
+import { ContasExportMenu } from '@/components/financeiro-v2/ContasExportMenu';
 import { OpenFinanceDoAdmin, SeloOpenFinance, usePodeOpenFinance, usePodeConectarOpenFinance, type PedidoOpenFinance } from '@/components/financeiro-v2/OpenFinanceDoAdmin';
 import { MOTIVO_SO_PROPRIETARIO } from '@/lib/openfinance/openfinanceTela';
 import { useOpenFinanceDasContas } from '@/hooks/useOpenFinanceDasContas';
 import { conexoesDoCliente } from '@/lib/openfinance/openfinanceTela';
 import { bancoDaConta, estadoNaLinha, finaisDaConta, textoDoEstado, type EstadoNaLinha } from '@/lib/openfinance/openfinanceNaLinha';
 import {
-  celulaAgencia, celulaBanco, celulaConta, celulaGerente, celulaInicio, celulaTelefone, colunasEscondidas,
-  faixaDaConta, faixasDaLista, filtrarContas, nomeDaConta, rodapeDaLista, resumoDoCadastro, SELO_TIPO,
-  type BancoReferencia, type Celula, type ColunaOpcional, type ContaBancariaCadastro, type SegmentoDaLista,
+  agenciaNaLista, bancoNaLista, colunasDaListaEscondidas, contaNaLista, faixasDaLista, filtrarContas, LARGURAS_DA_LISTA, nomeDaConta,
+  resumoDoCadastro, rodapeDosTipos, situacaoNaLista,
+  type BancoReferencia, type ContaBancariaCadastro, type SegmentoDaLista,
 } from '@/lib/financeiro/contasBancarias';
 
 /** Mantido para quem já o importava: "Nome (Ag Conta-Dv)" quando há dados bancários. */
@@ -48,18 +50,11 @@ const SEGMENTOS: Array<{ valor: SegmentoDaLista; rotulo: string }> = [
   { valor: 'todas', rotulo: 'Todas' }, { valor: 'cc', rotulo: 'Conta corrente' }, { valor: 'inv', rotulo: 'Investimento' }, { valor: 'cartao', rotulo: 'Cartão' },
 ];
 const TODAS_FAZENDAS = '__todas__';
-const SELO_CLASSE: Record<'cc' | 'inv' | 'cartao', string> = {
-  cc: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200',
-  inv: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-200',
-  cartao: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
-};
-const TH = 'sticky top-0 z-[2] h-[23px] whitespace-nowrap bg-primary px-1.5 text-left text-[9.5px] font-semibold text-primary-foreground';
-const TD = 'h-[22px] whitespace-nowrap border-b border-border/60 px-1.5 text-[10px]';
-const TF = 'sticky bottom-0 z-[2] h-[23px] whitespace-nowrap border-t bg-muted px-1.5 text-[10px] font-semibold';
-
-function Cel({ c, className }: { c: Celula; className?: string }) {
-  return <td title={c.texto} className={cn(TD, c.tom === 'vazio' && 'text-muted-foreground', c.tom === 'aviso' && 'font-semibold text-amber-700 dark:text-amber-400', className)}>{c.texto}</td>;
-}
+/* a régua do mock: cabeçalho 22 px a 10 px, linha 20 px a 10,5 px, sem caixa alta */
+const TH = 'sticky top-0 z-[2] h-[22px] whitespace-nowrap bg-primary px-1.5 text-left text-[10px] font-semibold text-primary-foreground';
+const TD = 'h-[20px] whitespace-nowrap border-b border-border/60 px-1.5 text-[10.5px]';
+const TF = 'sticky bottom-0 z-[2] h-[23px] whitespace-nowrap border-t bg-muted px-1.5 text-[10.5px] font-semibold';
+const CINZA = 'text-[#8b96aa]';
 
 export function FinV2ContasTab() {
   const { clienteAtual } = useCliente();
@@ -113,11 +108,11 @@ export function FinV2ContasTab() {
     busca, segmento, fazendaId: fazendaFiltro === TODAS_FAZENDAS ? null : fazendaFiltro, mostrarInativas,
   }, bancos), [contas, busca, segmento, fazendaFiltro, mostrarInativas, bancos]);
   const faixas = useMemo(() => faixasDaLista(filtradas), [filtradas]);
-  const rodape = useMemo(() => rodapeDaLista(filtradas, contas), [filtradas, contas]);
+  const rodape = useMemo(() => rodapeDosTipos(filtradas, contas), [filtradas, contas]);
   const resumo = useMemo(() => resumoDoCadastro(contas), [contas]);
-  const fazendaNome = (id: string | null) => fazendasReais.find(f => f.id === id)?.nome ?? '';
+  const fazendaNome = useCallback((id: string | null) => fazendasReais.find(f => f.id === id)?.nome ?? '', [fazendasReais]);
 
-  /* as colunas que somem conforme a LARGURA DA LISTA */
+  /* as colunas que somem conforme a LARGURA DA LISTA (o Nome nunca abaixo de 160 px) */
   const caixaRef = useRef<HTMLDivElement>(null);
   const [largura, setLargura] = useState(1400);
   useLayoutEffect(() => {
@@ -128,11 +123,14 @@ export function FinV2ContasTab() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  /* a coluna Open Finance (só o admin) tem largura FIXA: as opcionais somem antes, como se a lista fosse 132px mais estreita */
-  const LARGURA_OF = 132;
-  const escondidas = colunasEscondidas(largura - (podeOF ? LARGURA_OF : 0));
-  const mostra = (c: ColunaOpcional) => !escondidas.has(c);
-  const nColunas = 12 - escondidas.size + (podeOF ? 1 : 0);
+  const escondidas = colunasDaListaEscondidas(largura, podeOF);
+  const mostraFazenda = !escondidas.has('fazenda');
+  const mostraAgencia = !escondidas.has('agencia');
+  /* no celular (~750) a coluna Open Finance sai (o selo do título segue abrindo as conexões) */
+  const mostraOF = podeOF && !escondidas.has('openFinance');
+  /* Cód. · Nome · Banco · Conta · Situação · ✎ sempre; Agência, Fazenda e Open Finance quando aparecem */
+  const nColunas = 6 + (mostraAgencia ? 1 : 0) + (mostraFazenda ? 1 : 0) + (mostraOF ? 1 : 0);
+  const L = LARGURAS_DA_LISTA;
   const estadoDa = (c: ContaBancariaCadastro): EstadoNaLinha | null => (of.dados
     ? estadoNaLinha(c, { bancos, ...of.dados, agoraIso: new Date().toISOString() }) : null);
   const pedirConectar = (c: ContaBancariaCadastro) => setPedidoOF({ tipo: 'conectar',
@@ -148,76 +146,78 @@ export function FinV2ContasTab() {
         <SeloOpenFinance n={nConectados} onAbrir={() => setPedidoOF({ tipo: 'lista' })} />
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-        <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar conta, banco ou gerente" className="h-6 w-[200px] text-[11px]" data-testid="busca-contas" />
+        <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar conta, banco, agência ou conta" className="h-6 w-[230px] text-[10.5px]" data-testid="busca-contas" />
         <Segmentado altura={24} valor={segmento} onEscolher={setSegmento} opcoes={SEGMENTOS} />
-        <div className="w-[170px]">
+        <div className="w-[160px]">
           <SearchableSelect value={fazendaFiltro} onValueChange={setFazendaFiltro} allValue={TODAS_FAZENDAS} allLabel="Todas as fazendas"
-            options={fazendasReais.map(f => ({ value: f.id, label: f.nome }))} placeholder="Todas as fazendas" dense triggerClassName="h-6 text-[11px]" />
+            options={fazendasReais.map(f => ({ value: f.id, label: f.nome }))} placeholder="Todas as fazendas" dense triggerClassName="h-6 text-[10.5px]" />
         </div>
-        <label className="flex items-center gap-1 whitespace-nowrap text-[10px] text-muted-foreground">
+        <label className="flex items-center gap-1 whitespace-nowrap text-[10.5px] text-muted-foreground">
           <Checkbox checked={mostrarInativas} onCheckedChange={v => setMostrarInativas(v === true)} data-testid="mostrar-inativas" />Mostrar inativas
         </label>
-        <Button size="sm" className="ml-auto h-6 px-2.5 text-[11px]" onClick={() => setModal({ conta: null })} data-testid="nova-conta">+ Nova conta</Button>
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <ContasExportMenu contas={filtradas} bancos={bancos} fazendaNome={fazendaNome} clienteNome={clienteAtual?.nome ?? ''} />
+          {/* o navy do sistema (saiu o amarelo) */}
+          <Button size="sm" className="h-6 bg-primary px-2.5 text-[10.5px] text-primary-foreground hover:bg-primary/90" onClick={() => setModal({ conta: null })}
+            data-testid="nova-conta">+ Nova conta</Button>
+        </div>
       </div>
 
       <div ref={caixaRef} className="min-h-0 flex-1 overflow-auto rounded-lg border bg-card" data-testid="lista-contas">
-        {/* `table-fixed`: as larguras não seguem o conteúdo — filtrar (só Investimento, busca) não mexe nas colunas */}
+        {/* `table-fixed` com larguras FIXAS: filtrar não mexe nas colunas; só o Nome fica com a sobra */}
         <table className="h-full w-full table-fixed border-separate border-spacing-0">
           <colgroup>
-            {/* o Nome (e o Gerente, quando aparece) ficam com a sobra: cortam com "…" e o nome inteiro no `title`; número, data e valor nunca */}
-            <col style={{ width: 38 }} /><col /><col style={{ width: 50 }} /><col style={{ width: 100 }} />
-            {mostra('agencia') && <col style={{ width: 80 }} />}<col style={{ width: 92 }} />
-            {mostra('fazenda') && <col style={{ width: 120 }} />}{mostra('gerente') && <col />}
-            {mostra('telefone') && <col style={{ width: 112 }} />}{mostra('inicio') && <col style={{ width: 84 }} />}
-            {podeOF && <col style={{ width: LARGURA_OF }} />}<col style={{ width: 54 }} /><col style={{ width: 24 }} />
+            <col style={{ width: L.codigo }} /><col /><col style={{ width: L.banco }} />
+            {mostraAgencia && <col style={{ width: L.agencia }} />}<col style={{ width: L.conta }} />
+            {mostraFazenda && <col style={{ width: L.fazenda }} />}
+            {mostraOF && <col style={{ width: L.openFinance }} />}<col style={{ width: L.situacao }} /><col style={{ width: L.editar }} />
           </colgroup>
           <thead><tr>
-            <th className={TH}>Cód.</th><th className={TH}>Nome da conta</th><th className={TH}>Tipo</th><th className={TH}>Banco</th>
-            {mostra('agencia') && <th className={TH}>Agência</th>}<th className={TH}>Conta</th>
-            {mostra('fazenda') && <th className={TH}>Fazenda</th>}{mostra('gerente') && <th className={TH}>Gerente</th>}
-            {mostra('telefone') && <th className={TH}>Telefone</th>}{mostra('inicio') && <th className={TH}>Início</th>}
-            {podeOF && <th className={TH}>Open Finance</th>}
-            <th className={cn(TH, 'text-center')}>Status</th><th className={TH} aria-label="Editar" />
+            <th className={TH}>Cód.</th><th className={TH}>Nome da conta</th><th className={TH}>Banco</th>
+            {mostraAgencia && <th className={TH}>Agência</th>}<th className={TH}>Conta</th>
+            {mostraFazenda && <th className={TH}>Fazenda</th>}
+            {mostraOF && <th className={TH}>Open Finance</th>}
+            <th className={TH}>Situação</th><th className={TH} aria-label="Editar" />
           </tr></thead>
           <tbody>
             {carregando && contas.length === 0 && <tr><td colSpan={nColunas} className={cn(TD, 'text-muted-foreground')}>Carregando…</td></tr>}
             {!carregando && filtradas.length === 0 && <tr><td colSpan={nColunas} className={cn(TD, 'text-muted-foreground')}>Nenhuma conta.</td></tr>}
             {faixas.map(f => (
-              <FaixaLinhas key={f.tipo} rotulo={`${f.rotulo} · ${f.contas.length}`} n={nColunas}>
+              <FaixaLinhas key={f.tipo} rotulo={f.rotulo} n={f.contas.length} colunas={nColunas}>
                 {f.contas.map(c => {
-                  const t = faixaDaConta(c);
+                  const b = bancoNaLista(c, bancos);
+                  const ag = agenciaNaLista(c); const ct = contaNaLista(c); const st = situacaoNaLista(c);
                   return (
                     <tr key={c.id} onClick={() => setModal({ conta: c })} data-testid="linha-conta"
                       className={cn('cursor-pointer hover:[&>td]:bg-muted/50', !c.ativa && '[&>td]:text-muted-foreground')}>
-                      <td className={cn(TD, 'tabular-nums text-muted-foreground')}>{c.codigo_conta ?? ''}</td>
-                      <td className={cn(TD, 'max-w-0 truncate font-semibold')} title={nomeDaConta(c)}>{nomeDaConta(c)}</td>
-                      <td className={TD}><span className={cn('inline-block rounded px-1.5 text-[9.5px] font-bold leading-[15px]', SELO_CLASSE[t])}>{SELO_TIPO[t]}</span></td>
-                      <Cel c={celulaBanco(c, bancos)} className="max-w-0 truncate" />
-                      {mostra('agencia') && <Cel c={celulaAgencia(c)} className="tabular-nums" />}
-                      <Cel c={celulaConta(c)} className="tabular-nums" />
-                      {mostra('fazenda') && <td className={cn(TD, 'max-w-0 truncate')} title={fazendaNome(c.fazenda_id)}>{fazendaNome(c.fazenda_id)}</td>}
-                      {mostra('gerente') && <Cel c={celulaGerente(c)} className="max-w-0 truncate" />}
-                      {mostra('telefone') && <Cel c={celulaTelefone(c)} className="tabular-nums" />}
-                      {mostra('inicio') && <Cel c={celulaInicio(c)} className="tabular-nums" />}
-                      {podeOF && <CelulaOpenFinance estado={estadoDa(c)} erro={of.erro} conecta={conectaOF} onConectar={() => pedirConectar(c)}
+                      <td className={cn(TD, 'tabular-nums', CINZA)}>{c.codigo_conta ?? ''}</td>
+                      <td className={cn(TD, 'max-w-0 truncate font-medium')} title={nomeDaConta(c)}>{nomeDaConta(c)}</td>
+                      <td className={cn(TD, 'max-w-0 truncate')} title={b.codigo ? `${b.codigo} ${b.nome}` : b.nome} data-testid="celula-banco">
+                        <span className={cn('inline-block w-[24px] text-[9px] tabular-nums', CINZA)}>{b.codigo}</span>
+                        <span className={cn(b.cinza && CINZA)}>{b.nome}</span>
+                      </td>
+                      {mostraAgencia && <td className={cn(TD, 'tabular-nums', ag === '—' && CINZA)}>{ag}</td>}
+                      <td className={cn(TD, 'tabular-nums', ct === '—' && CINZA)}>{ct}</td>
+                      {mostraFazenda && <td className={cn(TD, 'max-w-0 truncate')} title={fazendaNome(c.fazenda_id)}>{fazendaNome(c.fazenda_id) || '—'}</td>}
+                      {mostraOF && <CelulaOpenFinance estado={estadoDa(c)} erro={of.erro} conecta={conectaOF} onConectar={() => pedirConectar(c)}
                         onReconectar={(itemId) => setPedidoOF({ tipo: 'reconectar', itemId })} />}
-                      <td className={cn(TD, 'text-center')}>
-                        <span className={cn('inline-block rounded-full px-1.5 text-[9.5px] font-semibold leading-[15px]',
-                          c.ativa ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-muted text-muted-foreground')}>
-                          {c.ativa ? 'Ativa' : 'Inativa'}
+                      <td className={TD} data-testid="celula-situacao">
+                        <span className={cn('inline-block rounded px-1.5 text-[9.5px] font-semibold leading-[15px]',
+                          st.ativa ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-muted text-muted-foreground')}>
+                          {st.texto}
                         </span>
                       </td>
-                      <td className={cn(TD, 'text-[11px] text-muted-foreground')} aria-label="Editar">✎</td>
+                      <td className={cn(TD, 'text-center text-[11px]', CINZA)} aria-label="Editar">✎</td>
                     </tr>
                   );
                 })}
               </FaixaLinhas>
             ))}
-            {/* a sobra do quadro fica aqui: o total desce ao pé da tela (preso quando a lista rola) */}
+            {/* a sobra do quadro fica aqui: o rodapé desce ao pé da tela (preso quando a lista rola) */}
             <tr aria-hidden="true" className="h-full"><td colSpan={nColunas} className="p-0" /></tr>
           </tbody>
           <tfoot><tr data-testid="rodape-contas">
-            <td colSpan={nColunas} className={TF}>{rodape.texto}</td>
+            <td colSpan={nColunas} className={TF}>{rodape}</td>
           </tr></tfoot>
         </table>
       </div>
@@ -232,38 +232,42 @@ export function FinV2ContasTab() {
   );
 }
 
-/* a célula da coluna Open Finance: os botões param o clique (a linha abre o Editar conta) */
+/* a célula da coluna Open Finance (o mock 26/11: sem botão grande): "Conectar" como link pequeno; conectado = ponto verde + a hora;
+   cartão "em breve" cinza; sem OF "—". Os links param o clique (a linha abre o Editar conta). */
 function CelulaOpenFinance({ estado, erro, conecta, onConectar, onReconectar }: {
   estado: EstadoNaLinha | null; erro: boolean; conecta: boolean; onConectar: () => void; onReconectar: (itemId: string) => void;
 }) {
-  if (erro) return <td className={cn(TD, 'text-muted-foreground')} title="Não consegui ler o Open Finance deste cliente agora" data-testid="of-linha">—</td>;
+  if (erro) return <td className={cn(TD, CINZA)} title="Não consegui ler o Open Finance deste cliente agora" data-testid="of-linha">—</td>;
   if (!estado) return <td className={TD} data-testid="of-linha" />;
   const { texto, titulo } = textoDoEstado(estado);
   const parar = (e: { stopPropagation: () => void }) => e.stopPropagation();
   if (estado.tipo === 'conectar') return (
     <td className={TD} data-testid="of-linha" data-estado="conectar">
       <button type="button" title={conecta ? titulo : MOTIVO_SO_PROPRIETARIO} disabled={!conecta} onClick={(e) => { parar(e); onConectar(); }} data-testid="of-conectar"
-        className="h-[16px] rounded-full disabled:cursor-not-allowed disabled:opacity-50 border border-blue-200 bg-blue-50 px-2 text-[10px] leading-[14px] text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">{texto}</button>
+        className="text-[10.5px] text-[#2d5fb8] hover:underline disabled:cursor-not-allowed disabled:opacity-50">{texto}</button>
     </td>);
-  /* CONTAS-BANCARIAS-AJUSTES-01 (b): cartão = "Em breve" desabilitado, o motivo no `title` */
+  /* CONTAS-BANCARIAS-AJUSTES-01 (b): cartão = "em breve" (cinza, desabilitado), o motivo no `title` */
   if (estado.tipo === 'em_breve') return (
     <td className={TD} data-testid="of-linha" data-estado="em_breve">
-      <button type="button" title={titulo} disabled onClick={parar} data-testid="of-em-breve"
-        className="h-[16px] cursor-not-allowed rounded-full border border-border bg-muted px-2 text-[10px] leading-[14px] text-muted-foreground">{texto}</button>
+      <button type="button" title={titulo} disabled onClick={parar} data-testid="of-em-breve" className={cn('cursor-not-allowed text-[10.5px]', CINZA)}>{texto}</button>
     </td>);
   if (estado.tipo === 'reconectar') return (
     <td className={TD} data-testid="of-linha" data-estado="reconectar">
       <button type="button" title={conecta ? titulo : MOTIVO_SO_PROPRIETARIO} disabled={!conecta} onClick={(e) => { parar(e); onReconectar(estado.itemId); }} data-testid="of-reconectar"
-        className="disabled:cursor-not-allowed disabled:opacity-50 text-[10px] font-semibold text-amber-700 hover:underline dark:text-amber-400">{texto}</button>
+        className="text-[10.5px] font-semibold text-amber-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-400">{texto}</button>
     </td>);
-  return (
-    <td title={titulo} data-testid="of-linha" data-estado={estado.tipo}
-      className={cn(TD, 'tabular-nums', estado.tipo === 'conectado' ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground')}>{texto}</td>);
+  if (estado.tipo === 'conectado') return (
+    <td title={titulo} data-testid="of-linha" data-estado="conectado" className={cn(TD, 'tabular-nums')}>
+      <span className="mr-[5px] inline-block h-[6px] w-[6px] rounded-full bg-emerald-600 align-[1px]" aria-hidden />{texto.replace(/^● /, '')}
+    </td>);
+  return <td title={titulo} data-testid="of-linha" data-estado={estado.tipo} className={cn(TD, 'tabular-nums', CINZA)}>{texto}</td>;
 }
 
-function FaixaLinhas({ rotulo, n, children }: { rotulo: string; n: number; children: ReactNode }) {
+/* o grupo do tipo: "Conta corrente · 12" (fundo cinza claro, 10 px, o número em cinza) */
+function FaixaLinhas({ rotulo, n, colunas, children }: { rotulo: string; n: number; colunas: number; children: ReactNode }) {
   return (<>
-    <tr data-testid="faixa-contas"><td colSpan={n} className={cn(TD, 'bg-primary/10 font-semibold text-primary')}>{rotulo}</td></tr>
+    <tr data-testid="faixa-contas"><td colSpan={colunas} className={cn(TD, 'h-[19px] bg-[#f1f4f8] text-[10px] font-semibold text-foreground dark:bg-muted')}>
+      {rotulo} <span className={cn('font-normal', CINZA)}>· {n}</span></td></tr>
     {children}
   </>);
 }

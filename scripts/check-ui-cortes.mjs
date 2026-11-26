@@ -1875,7 +1875,9 @@ const CENARIOS = [
   { nome: 'contas-lista-longo', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO },
   /* CONTAS-OF-LINHA-01 — a coluna "Open Finance" com o link do titular vivo, e o modal do "Conectar" da linha (altura fixa) */
   { nome: 'contas-of-link', url: 'tela=contas&barra=32&n=longo&of=link', tamanhos: TAMANHOS_DO_CONTRATO },
-  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-conectar-linha"]',
+  /* CONTAS-BANCARIAS-LISTA-01: abaixo de ~900 px a coluna Open Finance sai da lista (o Nome nunca abaixo de 160 px) — o "Conectar" da linha
+     só existe de 1000 px para cima */
+  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO.filter(([w]) => w >= 1000), regiao: '[data-testid="openfinance-conectar-linha"]',
     antes: async (p) => { await p.locator('[data-testid="openfinance-termo-aceito"]').waitFor(); await p.waitForTimeout(300); } },
   /* OPENFINANCE-PRONTO-NJ-01 (1)+(7) — "Bancos conectados" como a Pluggy vê: nome, Empresa, os 4 estados e a frase inteira das que não completaram */
   { nome: 'contas-of-lista', url: 'tela=contas&barra=32&of=lista', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-desconectar-dialogo"]',
@@ -1887,6 +1889,16 @@ const CENARIOS = [
   /* CARTAO-LANCAMENTO-01 — o cadastro do cartão: Dia de fechamento e Dia de vencimento no lugar de Agência e Conta, e a explicação embaixo */
   { nome: 'contas-editar-cartao', url: 'tela=contas&barra=32&n=longo&v=editar&aba=dados&cartao=1', tamanhos: [...TAMANHOS_DO_CONTRATO, [1366, 768]],
     regiao: '[data-testid="modal-conta-bancaria"]' },
+  /* CONTA-INATIVAR-DATA-01 — "Inativa desde" na aba Dados: desmarcar "Ativa", escolher a data; a recusa da prévia (o campo vermelho e o
+     rodapé "Falta: … mova-os antes de inativar") e a conferência que passa, nos tamanhos do contrato */
+  ...[['contas-editar-inativar-recusa', 'recusa'], ['contas-editar-inativar-ok', 'ok']].map(([nome, v]) => ({ nome,
+    url: `tela=contas&barra=32&v=editar&aba=dados&inativar=${v}`, tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="campo-situacao"]').click();
+      const c = p.locator('[data-testid="campo-inativa-desde-bloco"] input'); await c.fill('15/02/2026'); await c.blur();
+      await p.locator('[data-testid="campo-inativa-desde-frase"]', { hasText: v === 'ok' ? 'Confere' : 'mova-os' }).waitFor({ state: 'attached' });
+      await p.waitForTimeout(300);
+    } })),
   ...['dados', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-nova-${aba}`, url: `tela=contas&barra=32&v=nova&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
   /* UI-SIDEBAR-ESTREITA-01 — a barra lateral de verdade (V2Sidebar, `LARGURA_DA_LATERAL`) com o grupo Financeiro aberto. Com nomes que

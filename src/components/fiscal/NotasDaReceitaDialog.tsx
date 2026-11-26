@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Segmentado } from '@/components/ui/segmentado';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
@@ -229,11 +230,10 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
               Vencidas <TextoReservado texto={dados ? String(vencidas) : '—'} reserva="999" />
             </button>
             <span className="flex-1" />
-            <select className="h-[24px] w-[130px] flex-none truncate rounded-md border bg-card px-1 text-[10px]" value={titular ?? ''} aria-label="Produtor"
-              onChange={(e) => setTitular(e.target.value || null)} data-testid="receita-produtor">
-              <option value="">Produtor: todos</option>
-              {(dados?.titulares ?? []).map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </select>
+            <div className="w-[130px] flex-none" data-testid="receita-produtor">
+              <SearchableSelect value={titular ?? ''} onValueChange={(v) => setTitular(v || null)} allLabel="Produtor: todos" allValue=""
+                options={(dados?.titulares ?? []).map((t) => ({ value: t.id, label: t.nome }))} triggerClassName="h-[24px] bg-card text-[10px]" />
+            </div>
             <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Busca emitente, nº"
               className="h-[24px] w-[110px] bg-card px-1.5 text-[10px]" data-testid="receita-busca" />
           </div>
