@@ -2447,17 +2447,23 @@ if (tela === 'mesclar') {
   const montarFolha = async () => {
     const { FolhaTela } = await import('@/components/folha/FolhaTela');
     const { FolhaApiProvider } = await import('@/hooks/useFolha');
-    const { apiDaFolha, FAZENDAS_DA_FOLHA, fichaCadastroDaFolha } = await import('./dados/folha');
+    const { FolhaMesApiProvider } = await import('@/hooks/useFolhaMes');
+    const { apiDaFolha, apiDaFolhaMes, FAZENDAS_DA_FOLHA, fichaCadastroDaFolha } = await import('./dados/folha');
     const { FichaCadastroApiProvider } = await import('@/hooks/useFichaCadastro');
     g.__fazendaBancada = { fazendas: FAZENDAS_DA_FOLHA, fazendaAtual: null, isGlobal: true, fazendaId: '__global__' };
     const forma = q.get('v') === 'vera' ? 'vera' : 'nj';
     const abaQ = q.get('aba');
-    const aba = abaQ === 'historico' || abaQ === 'pendencias' || abaQ === 'mes' ? abaQ : 'funcionarios';
+    const aba = abaQ === 'historico' || abaQ === 'pendencias' || abaQ === 'mes' || abaQ === 'ferias' ? abaQ : 'funcionarios';
     const func = q.get('func');
     const entrada = { aba, funcionarioId: func, voltarAoLancamento: q.get('voltar') === '1' ? () => {} : null };
+    /* FOLHA-TELAS-03: `mes=confere` = a folha do mês em que tudo bate; `mes=confirmada` = a já confirmada (o Reabrir) */
+    const casoMes = q.get('mes');
+    const apiMes = apiDaFolhaMes(forma, casoMes === 'confere' ? 'tudo_confere' : casoMes === 'confirmada' ? 'confirmada' : 'normal');
     montar(
       <FolhaApiProvider api={apiDaFolha(forma, { folhaOk: q.get('ok') !== '0' })}>
-        <FichaCadastroApiProvider api={fichaCadastroDaFolha()}><FolhaTela entrada={entrada} /></FichaCadastroApiProvider>
+        <FichaCadastroApiProvider api={fichaCadastroDaFolha()}>
+          <FolhaMesApiProvider api={apiMes}><FolhaTela entrada={entrada} /></FolhaMesApiProvider>
+        </FichaCadastroApiProvider>
       </FolhaApiProvider>,
     );
   };
