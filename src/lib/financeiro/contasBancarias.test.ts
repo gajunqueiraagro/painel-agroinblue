@@ -6,11 +6,14 @@
  *   K4 so' o que mudou vai ao banco: nada mudou = {}; saldo; caixa = cc + banco Dinheiro; "Sem extrato" e' a marca; conta e digito
  *   K5 larguras: somem Telefone e Inicio, depois Gerente e Agencia, depois Fazenda
  *   K6 conta nova exige a data e o saldo inicial
+ *   K8 CONTAS-BANCARIAS-AJUSTES-01 (a) título "N ativas · N inativas" do cadastro inteiro; rodapé "mostrando N de T" só com filtro
+ *   K9 (c) o código: 2 dígitos na nova e quando muda (o de hoje intocado não trava); o próximo livre é POR tipo_conta (a permuta é dela)
  */
 import { describe, it, expect } from 'vitest';
 import {
   celulaAgencia, celulaBanco, celulaConta, celulaGerente, celulaInicio, celulaSaldo, celulaTelefone, colunasEscondidas, faixasDaLista,
-  faltasDoFormulario, filtrarContas, formularioDaConta, mudancas, mudaOSaldoInicial, rodapeDaLista, subtituloDaConta,
+  codigoDeDoisDigitos, faltasDoFormulario, filtrarContas, formularioDaConta, mudancas, mudaOSaldoInicial, proximoCodigoLivre, rodapeDaLista,
+  resumoDoCadastro, subtituloDaConta, tipoContaDoFormulario,
   type BancoReferencia, type ContaBancariaCadastro,
 } from './contasBancarias';
 
@@ -64,7 +67,7 @@ describe('CAD-CONTAS-BANCARIAS-01 — a lista', () => {
     expect(fx.map(f => [f.rotulo, f.contas.map(c => c.id)])).toEqual([
       ['Conta corrente', ['cx', 'a', 'b', 'p']], ['Investimento', ['i']], ['Cartão', ['k']]]);
     const r = rodapeDaLista(lista);
-    expect(r.texto).toBe('6 contas · 5 ativas');
+    expect(r.texto).toBe('6 contas');
     expect(r.saldo).toBe(Math.round((48210.37 * 3 + 286904.12) * 100) / 100);
   });
 });
@@ -105,8 +108,8 @@ describe('CAD-CONTAS-BANCARIAS-01 — o formulario', () => {
 
   it('K6 conta nova exige data e saldo', () => {
     const vazio = formularioDaConta(null, 'f1');
-    expect(faltasDoFormulario(vazio, true)).toEqual(['o nome da conta', 'a data do saldo', 'o saldo inicial']);
-    expect(faltasDoFormulario({ ...vazio, nome: 'X', saldoEm: '2026-01-01', saldoInicial: 0 }, true)).toEqual([]);
+    expect(faltasDoFormulario({ ...vazio, codigo: '05' }, true)).toEqual(['o nome da conta', 'a data do saldo', 'o saldo inicial']);
+    expect(faltasDoFormulario({ ...vazio, codigo: '05', nome: 'X', saldoEm: '2026-01-01', saldoInicial: 0 }, true)).toEqual([]);
     expect(faltasDoFormulario(formularioDaConta(conta({ mes_inicio: null, saldo_inicial_oficial: null }), 'f1'), false)).toEqual([]);
   });
 
@@ -128,3 +131,44 @@ describe('CAD-CONTAS-BANCARIAS-01 — o formulario', () => {
   });
 });
 
+describe('CONTAS-BANCARIAS-AJUSTES-01', () => {
+  const lista = [conta({ id: 'a' }), conta({ id: 'b', ativa: false }), conta({ id: 'c', tipo_conta: 'inv' }), conta({ id: 'd', ativa: false }), conta({ id: 'e' })];
+
+  it('K8 título do cadastro e rodapé da lista: uma regra só', () => {
+    expect(resumoDoCadastro(lista).texto).toBe('3 ativas · 2 inativas');
+    expect(resumoDoCadastro([conta()]).texto).toBe('1 ativa');
+    expect(resumoDoCadastro([conta(), conta({ id: 'z', ativa: false })]).texto).toBe('1 ativa · 1 inativa');
+    expect(rodapeDaLista(lista, lista).texto).toBe('5 contas');                                // sem filtro
+    const so = filtrarContas(lista, { busca: '', segmento: 'todas', fazendaId: null, mostrarInativas: false });
+    expect(rodapeDaLista(so, lista).texto).toBe('mostrando 3 de 5');                           // inativas escondidas = filtro
+    const inv = filtrarContas(lista, { busca: '', segmento: 'inv', fazendaId: null, mostrarInativas: true });
+    expect(rodapeDaLista(inv, lista).texto).toBe('mostrando 1 de 5');
+  });
+
+  it('K9 o código curto', () => {
+    expect(['01', '13', ' 07 '].map(codigoDeDoisDigitos)).toEqual([true, true, true]);
+    expect(['013', '1', '', 'a1', '1-2'].map(codigoDeDoisDigitos)).toEqual([false, false, false, false, false]);
+    const nj = [conta({ id: 'c1', codigo_conta: '01' }), conta({ id: 'c2', codigo_conta: '11' }), conta({ id: 'c3', codigo_conta: '06', ativa: false }),
+      conta({ id: 'p1', tipo_conta: 'permuta', codigo_conta: '12' }), conta({ id: 'p2', tipo_conta: 'permuta', codigo_conta: '013' }),
+      conta({ id: 'i1', tipo_conta: 'inv', codigo_conta: '04' }), conta({ id: 'x', codigo_conta: null })];
+    expect(proximoCodigoLivre(nj, 'cc')).toBe('12');
+    expect(proximoCodigoLivre(nj, 'inv')).toBe('05');
+    expect(proximoCodigoLivre(nj, 'cartao')).toBe('01');
+    expect(proximoCodigoLivre(nj, 'permuta')).toBe('14');
+    expect(proximoCodigoLivre(nj, 'permuta', 'p2')).toBe('13');                                 // o Kemp: o próximo depois do 12
+    // o tipo no banco: a permuta segue permuta enquanto a tela não troca o tipo; a caixa é cc
+    const kemp = nj[4];
+    expect(tipoContaDoFormulario(formularioDaConta(kemp, 'f1'), kemp)).toBe('permuta');
+    expect(tipoContaDoFormulario({ tipo: 'inv' }, kemp)).toBe('inv');
+    expect(tipoContaDoFormulario({ tipo: 'caixa' }, null)).toBe('cc');
+    // a trava: a nova e o código que muda conferem; o de hoje, intocado, não trava outro Salvar
+    const fk = formularioDaConta(kemp, 'f1');
+    expect(faltasDoFormulario(fk, false, { original: '013', sugestao: '13' })).toEqual([]);
+    expect(faltasDoFormulario({ ...fk, codigo: '0131' }, false, { original: '013', sugestao: '13' }))
+      .toEqual(['o código curto com 2 dígitos (o próximo livre do tipo: 13)']);
+    expect(faltasDoFormulario({ ...fk, codigo: '13' }, false, { original: '013', sugestao: '13' })).toEqual([]);
+    const nova = { ...formularioDaConta(null, 'f1'), nome: 'X', saldoEm: '2026-01-01', saldoInicial: 0 };
+    expect(faltasDoFormulario(nova, true)).toEqual(['o código curto com 2 dígitos']);
+    expect(faltasDoFormulario({ ...nova, codigo: '12' }, true)).toEqual([]);
+  });
+});

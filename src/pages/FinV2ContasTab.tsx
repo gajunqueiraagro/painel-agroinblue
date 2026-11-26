@@ -1,7 +1,8 @@
 /**
  * Financeiro › Contas bancárias — CAD-CONTAS-BANCARIAS-01 (mock aprovado 20/10 12h53, vista "Lista").
  *   · colunas: Cód. · Nome da conta · Tipo · Banco · Agência · Conta · Fazenda · Gerente · Telefone · Início · Status · ✎
- *   · faixas por tipo ("Conta corrente · 5"), rodapé preso com "N contas · N ativas"
+ *   · faixas por tipo ("Conta corrente · 5"); CONTAS-BANCARIAS-AJUSTES-01 (a): título "15 ativas · 4 inativas" (o cadastro inteiro) e rodapé preso
+ *     "mostrando N de 19" com filtro (sem filtro, "19 contas") — `resumoDoCadastro` / `rodapeDaLista`
  *   · LIMPEZA-TELAS-01 C1 (Gabriel 16/11): sem a coluna "Saldo inicial" nem o total dela (sem a data, não diz de quando é; o saldo
  *     inicial segue no modal da conta) e a tabela 1 ponto menor
  *   · vazio "não inf." em cinza; caixa físico "não se aplica"; sem saldo/início em âmbar
@@ -30,7 +31,7 @@ import { conexoesDoCliente } from '@/lib/openfinance/openfinanceTela';
 import { bancoDaConta, estadoNaLinha, finaisDaConta, textoDoEstado, type EstadoNaLinha } from '@/lib/openfinance/openfinanceNaLinha';
 import {
   celulaAgencia, celulaBanco, celulaConta, celulaGerente, celulaInicio, celulaTelefone, colunasEscondidas,
-  faixaDaConta, faixasDaLista, filtrarContas, nomeDaConta, rodapeDaLista, SELO_TIPO,
+  faixaDaConta, faixasDaLista, filtrarContas, nomeDaConta, rodapeDaLista, resumoDoCadastro, SELO_TIPO,
   type BancoReferencia, type Celula, type ColunaOpcional, type ContaBancariaCadastro, type SegmentoDaLista,
 } from '@/lib/financeiro/contasBancarias';
 
@@ -112,7 +113,8 @@ export function FinV2ContasTab() {
     busca, segmento, fazendaId: fazendaFiltro === TODAS_FAZENDAS ? null : fazendaFiltro, mostrarInativas,
   }, bancos), [contas, busca, segmento, fazendaFiltro, mostrarInativas, bancos]);
   const faixas = useMemo(() => faixasDaLista(filtradas), [filtradas]);
-  const rodape = useMemo(() => rodapeDaLista(filtradas), [filtradas]);
+  const rodape = useMemo(() => rodapeDaLista(filtradas, contas), [filtradas, contas]);
+  const resumo = useMemo(() => resumoDoCadastro(contas), [contas]);
   const fazendaNome = (id: string | null) => fazendasReais.find(f => f.id === id)?.nome ?? '';
 
   /* as colunas que somem conforme a LARGURA DA LISTA */
@@ -141,7 +143,7 @@ export function FinV2ContasTab() {
       <div className="flex shrink-0 items-baseline gap-2">
         <h2 className="whitespace-nowrap text-[13px] font-semibold text-foreground">Contas bancárias</h2>
         <span className="uma-linha-que-rola min-w-0 text-[11px] text-muted-foreground">
-          {clienteAtual?.nome ? `${clienteAtual.nome} · ` : ''}{contas.length} {contas.length === 1 ? 'conta' : 'contas'}
+          {clienteAtual?.nome ? `${clienteAtual.nome} · ` : ''}{resumo.texto}
         </span>
         <SeloOpenFinance n={nConectados} onAbrir={() => setPedidoOF({ tipo: 'lista' })} />
       </div>
@@ -242,6 +244,12 @@ function CelulaOpenFinance({ estado, erro, conecta, onConectar, onReconectar }: 
     <td className={TD} data-testid="of-linha" data-estado="conectar">
       <button type="button" title={conecta ? titulo : MOTIVO_SO_PROPRIETARIO} disabled={!conecta} onClick={(e) => { parar(e); onConectar(); }} data-testid="of-conectar"
         className="h-[16px] rounded-full disabled:cursor-not-allowed disabled:opacity-50 border border-blue-200 bg-blue-50 px-2 text-[10px] leading-[14px] text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">{texto}</button>
+    </td>);
+  /* CONTAS-BANCARIAS-AJUSTES-01 (b): cartão = "Em breve" desabilitado, o motivo no `title` */
+  if (estado.tipo === 'em_breve') return (
+    <td className={TD} data-testid="of-linha" data-estado="em_breve">
+      <button type="button" title={titulo} disabled onClick={parar} data-testid="of-em-breve"
+        className="h-[16px] cursor-not-allowed rounded-full border border-border bg-muted px-2 text-[10px] leading-[14px] text-muted-foreground">{texto}</button>
     </td>);
   if (estado.tipo === 'reconectar') return (
     <td className={TD} data-testid="of-linha" data-estado="reconectar">
