@@ -215,7 +215,7 @@ export function SugestoesCasarModal({ open, onClose, extrato, nomeConta, sugesto
   const acaoDoMotor = (c: CandidatoConciliacao) => (c.origem === 'nota'
     ? <span className="text-[9px] text-muted-foreground" title="Nota sem lançamento: crie pelo “+ Da nota” do Financeiro (a mesma nota)." data-testid="motor-nota">nota</span>
     : <button type="button" onClick={() => onCasarDoMotor?.(c)} disabled={!onCasarDoMotor} data-testid="motor-casar"
-        className={c.exata ? 'h-[17px] rounded bg-emerald-700 px-2 text-[9px] font-semibold text-white hover:bg-emerald-800 disabled:opacity-50' : LINK_PARA_CASAR}
+        className={c.exata ? 'h-[15px] rounded bg-emerald-700 px-2 text-[9px] font-semibold leading-[15px] text-white hover:bg-emerald-800 disabled:opacity-50' : LINK_PARA_CASAR}
         title={c.outraConta ? `Casar e trocar a conta (${c.contaNome ?? '—'} → ${nomeConta ?? 'a do extrato'})` : 'Casar com o movimento do banco'}>Casar</button>);
   const nomeDoBanco = nomeDoHistorico(extrato.historico, extrato.data);
   const docDoBanco = documentoDoHistorico(extrato.historico);

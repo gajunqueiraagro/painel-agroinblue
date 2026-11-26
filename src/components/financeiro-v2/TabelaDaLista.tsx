@@ -85,7 +85,8 @@ export function CelulaCaixinha({ marcada, alternar, desabilitada, solta = false 
   return (
     <td className={solta ? 'px-1 py-1 align-middle text-center bg-background' : 'px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background'}
       onClick={(e) => e.stopPropagation()}>
-      <Checkbox checked={marcada} onCheckedChange={alternar} disabled={desabilitada} className="h-3 w-3" />
+      {/* gate 26/11 (desloca): marcada, a caixa de 12px desenhava o ✓ de 16px e a linha crescia ~2px — nas listas da Conciliação (`solta`) o ✓ cabe na caixa */}
+      <Checkbox checked={marcada} onCheckedChange={alternar} disabled={desabilitada} className={solta ? 'h-3 w-3 [&_svg]:h-2.5 [&_svg]:w-2.5' : 'h-3 w-3'} />
     </td>
   );
 }

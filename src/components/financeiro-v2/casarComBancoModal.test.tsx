@@ -66,6 +66,9 @@ vi.mock('@/components/financeiro-v2/EspelhoConciliacaoTab', () => ({ MOTIVO_CASA
 
 import { CasarComBancoModal, CasarN1Modal, CasarBlocoModal, sentidoDaDiferenca, valorAbsorvendo, fraseDaRecusa, ONDE_DESFAZER_BLOCO } from './CasarComBancoModal';
 
+/* gate 26/11: a tabela dos levados só tem as colunas extras (Fornecedor · NF · Faz. · Ativ. · Plano) de 1100px; o jsdom abre a 1024 */
+Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 });
+
 const EXTRATO = { extrato_id: 'e-vivo', data: '2026-09-01', historico: 'Vivo Celular - VIVO MOVEL - MS', valor: -506.51 };
 const VIVO: LevadoInicial = { lancamento_id: 'l-vivo', descricao: 'Vivo Casa', fornecedor: 'Telefonica Brasil S.A.', valor_assinado: -506.84 };
 

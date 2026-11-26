@@ -42,12 +42,16 @@ export function atividadeCurta(escopo: string | null | undefined): string {
 /* ajuste 2 (OK do Edson): sem vão entre Fica e ✕ — o ✕ vai NA célula do Fica, logo depois do selo; a coluna tem a largura do MAIOR texto que o
    conjunto pode mostrar ("parcial · falta <o maior valor>"), fixa enquanto se edita (nada anda); a sobra vai para a Descrição */
 /* CONC-SUGESTOES-V2 C: + Pgto. 72 e Δ dias 40 depois do Venc.; a 11px as datas pedem 70, o Fornecedor e o Plano cedem (120 cada) */
-export const COLUNAS_DOS_LEVADOS: readonly (number | null)[] = [72, 72, 40, null, 120, 84, 40, 38, 120, 76, 96, 124];
+/* gate 26/11 (814px: a Descrição ficava com 2px; 1126: 35px): datas a 10px (régua) — Venc. 70 (o estimado "~dd/mm/aaaa" itálico pede 70), Pgto. 62;
+   Δ dias 32, NF 76 (só na larga), Status 70, Valor 92, Aplicado 94; na larga Fornecedor 104 e Plano 84 (texto: "…" e o inteiro no title) */
+export const COLUNAS_DOS_LEVADOS: readonly (number | null)[] = [70, 62, 32, null, 104, 76, 40, 38, 84, 70, 92, 94];
 /* CASAR-1X1 abaixo de 1000px (a regra do P101; o gate de 19/11 15:20: a 750 e 814 a tabela ficava mais larga que o modal, rolava de lado
    e o foco no Aplicado deslocava tudo) — saem Fornecedor · Faz. · Ativ. · Plano (índices abaixo) e o `title` da Descrição leva os quatro.
    A conta a 750: o modal tem 712 − 24 de recuo = 688px; sem as 4 ficam 452 + o Fica, e a Descrição ainda tem ~100px. */
-export const LARGURA_MINIMA_DAS_COLUNAS_EXTRAS = 1000;
-const SO_NA_JANELA_LARGA: readonly number[] = [4, 6, 7, 8];
+/* gate 26/11: com Pgto. e Δ dias (C) a larga a 1000px deixava a Descrição com 6px — as colunas extras só de 1100px (1126/1280 seguem largas) */
+export const LARGURA_MINIMA_DAS_COLUNAS_EXTRAS = 1100;
+/* gate 26/11: abaixo de 1000px também sai a NF (vai ao `title` da Descrição, como Fornecedor · Faz. · Ativ. · Plano) — a 750 a Descrição pede os 76px */
+const SO_NA_JANELA_LARGA: readonly number[] = [4, 5, 6, 7, 8];
 /** a largura do Fica + ✕ para este conjunto: o selo mais largo possível (10px tabular ≈ 5,6 px por caractere + recuos) + o ✕ */
 export function larguraDoFica(levados: readonly { valor_assinado: number }[]): number {
   const maior = Math.max(0, ...levados.map((l) => Math.abs(l.valor_assinado)));
@@ -99,9 +103,10 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
   const larga = useLarguraDaJanela() >= LARGURA_MINIMA_DAS_COLUNAS_EXTRAS;
   const colunas = COLUNAS_DOS_LEVADOS.filter((_, i) => larga || !SO_NA_JANELA_LARGA.includes(i));
   /* estreita: o `title` da Descrição leva o que saiu da linha */
-  const tituloDaDescricao = (l: LinhaDoLevado): string | undefined => {
+  const tituloDaDescricao = (l: LinhaDoLevado, nf?: string | null): string | undefined => {
     if (larga) return l.descricao ?? undefined;
     const partes = [l.descricao ?? '—'];
+    if (nf && nf !== '—') partes.push(`NF: ${nf}`);
     if (l.fornecedor) partes.push(`Fornecedor: ${l.fornecedor}`);
     if (l.fazendaCodigo || l.fazendaNome) partes.push(`Fazenda: ${l.fazendaNome || l.fazendaCodigo}`);
     if (l.escopoNegocio) partes.push(`Atividade: ${atividadeCurta(l.escopoNegocio)}`);
@@ -120,7 +125,7 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
           <th className={cn(th, 'text-center')}>Venc.</th><th className={cn(th, 'text-center')}>Pgto.</th>
           <th className={cn(th, 'text-right')} title="dias entre o pagamento no banco e o vencimento (− = antes; ~ = vencimento estimado)">Δ dias</th>
           <th className={cn(th, 'text-left')}>Descrição</th>{larga && <th className={cn(th, 'text-left')}>Fornecedor</th>}
-          <th className={cn(th, 'text-right')}>NF</th>
+          {larga && <th className={cn(th, 'text-right')}>NF</th>}
           {larga && <><th className={cn(th, 'text-center')}>Faz.</th><th className={cn(th, 'text-center')}>Ativ.</th><th className={cn(th, 'text-left')}>Plano</th></>}
           <th className={cn(th, 'text-center')}>Status</th><th className={cn(th, 'text-right')}>Valor</th>
           <th className={cn(th, 'text-right')}>Aplicado</th><th className={cn(th, 'text-left')}>Fica</th>
@@ -128,13 +133,15 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
         <tbody>
           {/* o EXTRATO: a 1ª linha da MESMA grade (ALINHAMENTO SOBERANO: data sob data, valor sob valor) */}
           <tr className="h-[28px] bg-[#eaf0fa] font-semibold" data-testid="levados-extrato">
-            <td className="border-b-2 border-primary px-1"><span className="rounded-[3px] bg-primary px-1 text-[9.5px] font-bold leading-[13px] text-primary-foreground">Banco</span></td>
-            <td className="whitespace-nowrap border-b-2 border-primary px-1 text-center tabular-nums">{dataBR(extrato.data)}</td>
+            {/* a linha do banco não tem vencimento: a célula DECLARA (`data-sem-data`, a exceção do gate de datas) e mostra o selo "Banco" */}
+            <td className="border-b-2 border-primary px-1" data-sem-data=""><span className="rounded-[3px] bg-primary px-1 text-[9.5px] font-bold leading-[13px] text-primary-foreground">Banco</span></td>
+            <td className="whitespace-nowrap border-b-2 border-primary px-1 text-center text-[10px] tabular-nums">{dataBR(extrato.data)}</td>
             <td className="border-b-2 border-primary" />
-            <td className="truncate border-b-2 border-primary px-1" title={extrato.historico ?? undefined}
+            <td className="truncate border-b-2 border-primary px-1"
+              title={[nomeDoBanco, extrato.historico].filter((x, i, a) => !!x && a.indexOf(x) === i).join('\n') || undefined}
               data-testid="levados-extrato-historico">{nomeDoBanco || extrato.historico || '—'}</td>
-            {larga && <td className="whitespace-nowrap border-b-2 border-primary px-1 text-[10px] tabular-nums" data-testid="levados-extrato-documento">{docDoBanco}</td>}
-            <td className="border-b-2 border-primary" />
+            {larga && <td className="whitespace-nowrap border-b-2 border-primary px-1 text-[9px] tabular-nums" data-testid="levados-extrato-documento">{docDoBanco}</td>}
+            {larga && <td className="border-b-2 border-primary" />}
             {larga && <><td className="border-b-2 border-primary" /><td className="border-b-2 border-primary" /><td className="border-b-2 border-primary" /></>}
             <td className="border-b-2 border-primary" />
             <td className={cn('whitespace-nowrap border-b-2 border-primary px-1 text-right tabular-nums', cor(extrato.valor))} data-testid="levados-extrato-valor">{fmt(extrato.valor)}</td>
@@ -151,15 +158,16 @@ export function TabelaDosLevados({ extrato, nomeConta, levados, onValor, onRemov
             return (
               <tr key={l.lancamento_id} className="h-[26px] border-b" data-testid="levado-linha">
                 {l.vencEstimado
-                  ? <td className="whitespace-nowrap border-b px-1 text-center italic tabular-nums text-muted-foreground" title={TITULO_ESTIMADO} data-testid="levado-linha-venc-estimado">~{dataBR(l.data_vencimento)}</td>
-                  : <td className="whitespace-nowrap border-b px-1 text-center tabular-nums">{dataBR(l.data_vencimento)}</td>}
-                <td className="whitespace-nowrap border-b px-1 text-center tabular-nums text-muted-foreground" title="a data do pagamento no banco">{dataBR(extrato.data)}</td>
+                  /* o "~" é desenho (CSS), fora do texto: a célula segue uma data dd/mm/aaaa para quem lê e para o gate */
+                  ? <td className="whitespace-nowrap border-b px-1 text-center text-[10px] italic tabular-nums text-muted-foreground before:content-['~']" title={TITULO_ESTIMADO} data-testid="levado-linha-venc-estimado">{dataBR(l.data_vencimento)}</td>
+                  : <td className="whitespace-nowrap border-b px-1 text-center text-[10px] tabular-nums">{dataBR(l.data_vencimento)}</td>}
+                <td className="whitespace-nowrap border-b px-1 text-center text-[10px] tabular-nums text-muted-foreground" title="a data do pagamento no banco">{dataBR(extrato.data)}</td>
                 <td className={cn('whitespace-nowrap border-b px-1 text-right tabular-nums', l.vencEstimado || dd == null ? 'text-muted-foreground' : dd < 0 ? 'text-sky-700' : dd > 0 ? 'text-amber-700' : 'text-emerald-700')}
                   title={l.vencEstimado ? `contra vencimento estimado — ${TITULO_ESTIMADO}` : undefined} data-testid="levado-linha-delta-dias">
                   {dd == null ? '—' : `${dd > 0 ? '+' : dd < 0 ? '−' : ''}${Math.abs(dd)}`}</td>
-                <td className="truncate border-b px-1" title={tituloDaDescricao(l)} data-testid="levado-linha-descricao">{l.descricao ?? '—'}</td>
+                <td className="truncate border-b px-1" title={tituloDaDescricao(l, nf)} data-testid="levado-linha-descricao">{l.descricao ?? '—'}</td>
                 {larga && <td className="truncate border-b px-1 text-muted-foreground" title={l.fornecedor ?? undefined} data-testid="levado-linha-fornecedor">{l.fornecedor || '—'}</td>}
-                <td className="whitespace-nowrap border-b px-1 text-right tabular-nums" data-testid="levado-linha-nf">{nf}</td>
+                {larga && <td className="whitespace-nowrap border-b px-1 text-right tabular-nums" data-testid="levado-linha-nf">{nf}</td>}
                 {larga && <>
                   <td className="whitespace-nowrap border-b px-1 text-center" title={l.fazendaNome ?? undefined} data-testid="levado-linha-fazenda">{l.fazendaCodigo || '—'}</td>
                   <td className="whitespace-nowrap border-b px-1 text-center" data-testid="levado-linha-atividade">{atividadeCurta(l.escopoNegocio)}</td>

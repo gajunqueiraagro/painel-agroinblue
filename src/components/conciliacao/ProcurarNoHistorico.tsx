@@ -170,7 +170,7 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
           Procurar
         </button>
         {/* a contagem tem lugar reservado: "procurando…", "N achados" e vazio ocupam o mesmo (vazio = um espaço fixo) */}
-        <span className="ml-auto w-[64px] shrink-0 truncate text-right tabular-nums text-muted-foreground" title={contagem || undefined}
+        <span className="ml-auto w-[100px] shrink-0 truncate text-right tabular-nums text-muted-foreground" title={contagem || undefined}
           data-testid="procurar-historico-contagem">{contagem || ' '}</span>
       </div>
 

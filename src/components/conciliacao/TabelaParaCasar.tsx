@@ -4,6 +4,7 @@
  * ☐ · Comp. · Venc. · Pgto. · Descrição · Fornecedor · Faz. · NF · Valor · Status · Motivo · ação. Uma linha por lançamento, nada quebra:
  * texto com "…" e o inteiro no `title`; data, NF, valor e status nunca cortam (as larguras da lista do Financeiro).
  */
+import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import type { ReactNode } from 'react';
 import { docDaLinha } from '@/lib/financeiro/documentoHelper';
 import { valorAssinadoDaLinha } from '@/lib/financeiro/sinalPorConta';
@@ -27,7 +28,8 @@ export const ALTURA_DO_CABECALHO_PARA_CASAR = 18;
 /* 12:02 (a seta ⇅ sempre visível): Faz. 30 → 36 e a reserva de Descrição/Fornecedor 60 → 62 (o rótulo + a seta); o Motivo 120 → 110 paga (o selo
    tem "…" e o inteiro no title) — o piso segue 848 */
 /* CONC-SUGESTOES-V2 (mock aprovado 25/11): Δ dias LOGO DEPOIS de Venc./Pgto. (a mesma largura, 38) — o piso não muda */
-export const COLUNAS_PARA_CASAR: readonly (number | null)[] = [28, 46, 46, 46, 38, null, null, 36, 78, 94, 80, 60, 110, 62];
+/* gate 26/11: o vencimento ESTIMADO ("~dd/mm/aaaa", itálico) passava 4,9px da coluna — Venc. 46 → 52, o Motivo 110 → 104 paga (o piso não muda) */
+export const COLUNAS_PARA_CASAR: readonly (number | null)[] = [28, 46, 52, 46, 38, null, null, 36, 78, 94, 80, 60, 104, 62];
 export const N_COLUNAS_PARA_CASAR = COLUNAS_PARA_CASAR.length;
 /** O piso das duas listas: as fixas + 2 × 110 para Descrição e Fornecedor (830px: cabe no modal a 1024 e a 135% de 1240, ~848 úteis — sem
  *  rolagem de lado). Só abaixo dele (janela < ~900px) a lista rola de lado DENTRO da caixa dela. */
@@ -159,6 +161,7 @@ export function LinhaDoBancoParaCasar({ data, nome, textoCru, documento, valor, 
   data: string | null; nome: string; textoCru: string; documento: string | null; valor: number; colunas?: ColunasParaCasar;
 }) {
   const v = valorAssinadoDaLinha(valor);
+  const documentoEmDuas = useLarguraDaJanela() < 1000;
   const vazio = <td className="px-1 py-1" />;
   return (
     <tr className="border-b-2 border-primary bg-[#eaf0fa] font-semibold" style={{ height: ALTURA_DA_LINHA_PARA_CASAR + 3 }} data-testid="linha-do-banco">
@@ -166,8 +169,15 @@ export function LinhaDoBancoParaCasar({ data, nome, textoCru, documento, valor, 
       {vazio}
       <CelulaData iso={data} coluna="pgto" solta />
       {colunas.deltas && vazio}
-      <td className="truncate px-1 py-1 align-middle text-[12px] leading-tight" title={textoCru} data-testid="linha-do-banco-nome">{nome || '—'}</td>
-      <td className="whitespace-nowrap px-1 py-1 align-middle text-[9px] tabular-nums leading-tight" data-testid="linha-do-banco-documento">{documento ?? ''}</td>
+      {/* o `title` leva o que a célula mostra E o texto cru do banco (o gate: "…" só com o inteiro no title) */}
+      <td className="truncate px-1 py-1 align-middle text-[12px] leading-tight" title={nome && nome !== textoCru ? `${nome}\n${textoCru}` : textoCru || nome}
+        data-testid="linha-do-banco-nome">{nome || '—'}</td>
+      {/* CNPJ NUNCA CORTA: abaixo de 1000px de janela a coluna Fornecedor fica estreita — o documento desce em 2 linhas (raiz / filial) */}
+      <td className={`whitespace-nowrap px-1 align-middle text-[9px] tabular-nums ${documentoEmDuas ? 'py-0 leading-[10px]' : 'py-1 leading-tight'}`}
+        title={documento ?? undefined} data-testid="linha-do-banco-documento">
+        {documento && documentoEmDuas && documento.includes('/')
+          ? <>{documento.slice(0, documento.indexOf('/') + 1)}<br />{documento.slice(documento.indexOf('/') + 1)}</>
+          : (documento ?? '')}</td>
       {colunas.faz && vazio}
       {colunas.nf && vazio}
       <CelulaValor classe={v.classe}>{v.texto}</CelulaValor>

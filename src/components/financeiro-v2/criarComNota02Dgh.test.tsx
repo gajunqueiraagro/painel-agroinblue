@@ -17,6 +17,9 @@ vi.mock('@/integrations/supabase/client', () => ({
 import { deltasDoMovimento, textoDoDelta } from '@/components/conciliacao/TabelaParaCasar';
 import { CasarComBancoModal, fraseDoPagamento } from './CasarComBancoModal';
 
+/* gate 26/11: a tabela dos levados só tem as colunas extras (Fornecedor · NF · Faz. · Ativ. · Plano) de 1100px; o jsdom abre a 1024 */
+Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 });
+
 describe('D-g — os dois Δ contra o movimento do banco', () => {
   it('Azulão: banco 13/10 −2.903,00 × lançamento venc. 10/11 2.903,00 → Δ valor 0, Δ dias −28 (antes)', () => {
     expect(deltasDoMovimento({ data: '2026-10-13', valor: -2903 }, { valor: -2903, venc: '2026-11-10' })).toEqual({ deltaValor: 0, deltaDias: -28 });
@@ -54,7 +57,8 @@ describe('D-h — a faixa do pagamento contra o vencimento', () => {
     /* CONC-SUGESTOES-V2 C: o extrato é a 1ª linha DA MESMA grade — "Banco" · Pgto. · nome sem caixa alta (o cru no title) · Valor sob Valor */
     expect(ext).toHaveLength(13);
     expect([ext[0], ext[1], ext[3], ext[10]]).toEqual(['Banco', '13/10/2026', 'Azulao Parafusos e Ferram', '-2.903,00']);
-    expect(screen.getByTestId('levados-extrato-historico').getAttribute('title')).toBe('PIX AGENDAMENTO 10/10 · AZULAO PARAFUSOS E FERRAM');
+    /* o title leva o que a célula mostra E o texto cru do banco (gate 26/11) */
+    expect(screen.getByTestId('levados-extrato-historico').getAttribute('title')).toBe('Azulao Parafusos e Ferram\nPIX AGENDAMENTO 10/10 · AZULAO PARAFUSOS E FERRAM');
     const linha = screen.getByTestId('levado-linha');
     expect(linha.querySelectorAll('td')[0].textContent).toBe('10/11/2026');
     expect(screen.getByTestId('levado-linha-nf').textContent).toBe('000.077.066');

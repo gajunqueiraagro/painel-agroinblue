@@ -29,6 +29,9 @@ vi.mock('@/components/conciliacao/CriarLancamentoDaLinha', () => ({ CriarLancame
 import { SugestoesCasarModal } from './SugestoesCasarModal';
 import { CasarComBancoModal } from './CasarComBancoModal';
 
+/* gate 26/11: a tabela dos levados só tem as colunas extras (Fornecedor · NF · Faz. · Ativ. · Plano) de 1100px; o jsdom abre a 1024 */
+Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 });
+
 beforeEach(() => { RPC.chamadas = []; RPC.tabelas = {}; });
 
 const c = (p: Partial<CandidatoSugestao> & { lancamento_id: string; valor_assinado: number }): CandidatoSugestao => ({
@@ -73,7 +76,8 @@ describe('o modal "Sugestões para casar"', () => {
     expect(banco.textContent).toContain('15/09/2026');
     const nome = within(banco).getByTestId('linha-do-banco-nome');
     expect(nome.textContent).toBe('Pagamento boleto · Banco Rabobank International Brasil S'); /* o leitor tira a pontuação da ponta (P153) */
-    expect(nome.getAttribute('title')).toBe(EXT_RABO.historico);
+    /* o title leva o que a célula mostra E o texto cru (o gate de cortes: "…" só com o inteiro no title) */
+    expect(nome.getAttribute('title')).toBe(`Pagamento boleto · Banco Rabobank International Brasil S\n${EXT_RABO.historico}`);
     expect(banco.querySelector('td.celula-valor')?.textContent?.replace(/\s/g, ' ')).toContain('26.127,18');
   });
 
@@ -86,7 +90,7 @@ describe('o modal "Sugestões para casar"', () => {
     expect(t.style.tableLayout).toBe('fixed');
     /* UI-FONTE-GATE-01 (Chat 12/11 15:22): sem fazenda nem NF nas sugestões, Faz. e NF saem e a largura vai para Descrição/Fornecedor */
     expect([...t.querySelectorAll('col')].map((x) => (x instanceof HTMLElement ? x.style.width : '?')))
-      .toEqual(['28px', '46px', '46px', '46px', '38px', '', '', '94px', '80px', '60px', '110px', '62px']);
+      .toEqual(['28px', '46px', '52px', '46px', '38px', '', '', '94px', '80px', '60px', '104px', '62px']);
     expect([...t.querySelectorAll('th')].map((x) => (x.textContent ?? '').replace(/⇅/g, ''))).toEqual(['', 'Comp.', 'Venc.', 'Pgto.', 'Δ dias', 'Descrição', 'Fornecedor', 'Valor', 'Δ valor', 'Status', 'Motivo', '']);
     /* UI-FONTE-GATE-01: o cabeçalho alinha como a coluna (texto à esquerda, número à direita), nunca tudo no centro */
     expect([...t.querySelectorAll('th')].map((x) => (/\btext-left\b/.test(x.className) ? 'E' : /\btext-right\b/.test(x.className) ? 'D' : 'C')))

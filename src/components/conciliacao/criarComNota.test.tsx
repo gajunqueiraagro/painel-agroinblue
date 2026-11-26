@@ -58,6 +58,9 @@ vi.mock('@/components/financeiro-v2/EspelhoConciliacaoTab', () => ({ MOTIVO_CASA
 import { CriarLancamentoDaLinha, prefillDoExtratoComNota, oQueFazerComANota, type LevadoDaNota } from './CriarLancamentoDaLinha';
 import { CasarComBancoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 
+/* gate 26/11: a tabela dos levados só tem as colunas extras (Fornecedor · NF · Faz. · Ativ. · Plano) de 1100px; o jsdom abre a 1024 */
+Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 });
+
 /* a nota SINTÉTICA: nº 123456, emitida em 01/10/2026, R$ 16.238,00 em DUAS duplicatas (o extrato é UM pagamento: elas saem) */
 function notaSintetica(): { doXml: DoXml; lido: { nota: unknown } } {
   const r = lerNFe(utf8(montarNFe({ numero: '123456', dhEmi: '2026-10-01T10:00:00-04:00',
