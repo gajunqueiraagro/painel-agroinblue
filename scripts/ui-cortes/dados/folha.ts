@@ -6,6 +6,9 @@
  *   caracteres, registro de 59, chips demais, valor no teto, desligado com data, documento vencido e a vencer.
  */
 import type { ArquivoAberto, FolhaApi, Resultado } from '@/lib/folha/folhaApi';
+import type { FolhaMesApi } from '@/lib/folha/folhaMesApi';
+import { folhaDoMesDoBanco } from '@/lib/folha/folhaMes';
+import { feriasDoBanco } from '@/lib/folha/folhaFerias';
 import type {
   Atuacao, DocumentoDoFuncionario, Ficha, FuncionarioDaLista, Historico, ItemDoHistorico, Linha, ListaFuncionarios, Pendencia, Pendencias,
 } from '@/lib/folha/folhaTela';
@@ -156,3 +159,93 @@ export function apiDaFolha(forma: FormaDaFolha = 'nj', opcoes: { folhaOk?: boole
 }
 
 export const FAZENDAS_DA_FOLHA = FAZENDAS.map(f => ({ ...f, codigo: f.nome.slice(0, 3).toUpperCase(), cliente_id: 'cli' }));
+
+/* ── FOLHA-TELAS-03: a "Folha do mês" em memória (`FolhaMesApiProvider`), na forma do `fn_folha_mes` ───────────────────────────────
+   Os ativos da forma (NJ 27, Vera 4), com TODAS as situações de propósito: confere pago e a pagar, diferença, sem recibo, a conferir,
+   sem previsto, criado pelo recibo, "ligar" (entrou pelo favorecido) e o valor no teto. `tudo_confere` = a folha que libera o Confirmar;
+   `confirmada` = a mesma já confirmada (o Reabrir). As FÉRIAS: todas as situações (vencida, vence em 90 dias, a tirar pela escala e pela
+   admissão, ganhando, sem admissão) e as provisões. */
+export function apiDaFolhaMes(forma: FormaDaFolha = 'nj', caso: 'normal' | 'tudo_confere' | 'confirmada' = 'normal'): FolhaMesApi & { chamadas: Array<{ fn: string; args: unknown[] }> } {
+  const ativos = montarFuncionarios(forma).filter(f => f.situacao !== 'desligado');
+  const chamadas: Array<{ fn: string; args: unknown[] }> = [];
+  const SIT = ['confere', 'confere', 'diferenca', 'sem_recibo', 'a_conferir', 'sem_previsto', 'criado_pelo_recibo', 'confere'] as const;
+  return {
+    chamadas,
+    async mes(cliente, competencia, tipo) {
+      chamadas.push({ fn: 'mes', args: [cliente, competencia, tipo] });
+      const linhas = ativos.map((f, i) => {
+        const tudoBate = caso !== 'normal';
+        const sit = tudoBate ? 'confere' : SIT[i % SIT.length];
+        const base = i === 0 ? 99999.99 : 2900 + i * 137.5;
+        const previsto = sit === 'sem_previsto' ? null : tipo === 'mensal' ? base : Math.round(base * 50) / 100;
+        const recibo = sit === 'confere' || sit === 'criado_pelo_recibo' ? previsto : sit === 'diferenca' && previsto != null ? previsto + 180 : null;
+        const pago = sit === 'confere' && i % 2 === 0;
+        const ligado = tudoBate || i % 9 !== 4;
+        const lancamentos = previsto == null ? [] : [{ id: `lm${pad(i)}`, valor: previsto, status: pago ? 'realizado' : 'previsto', vencimento: `${competencia}-28`,
+          pagamento: pago ? '2026-12-05' : null, conciliado: pago, ligado }];
+        const falta = [sit === 'sem_previsto' ? 'lancamento' : null, !ligado && previsto != null ? 'ligar' : null,
+          sit === 'sem_recibo' || sit === 'sem_previsto' ? 'recibo' : null, previsto != null && !pago ? 'pagamento' : null].filter((x): x is string => x !== null);
+        const frase: Record<string, string> = { lancamento: 'lançamento previsto', ligar: 'ligar o lançamento', recibo: 'recibo do contador', pagamento: 'pagamento' };
+        return {
+          funcionario_id: f.id, nome: f.nome, situacao: f.situacao, vinculo: f.vinculo, vinculo_a_confirmar: i === 3,
+          previsto, recibo, diferenca: recibo != null && previsto != null ? Math.round((recibo - previsto) * 100) / 100 : null,
+          recibos: recibo != null ? [{ id: `rd${pad(i)}`, nome: `${100 + i}-${f.nome}.pdf`, bucket: 'folha-documentos', storage_path: `cli/rd${pad(i)}.pdf`, lancamento_id: `lm${pad(i)}` }] : [],
+          lancamentos, lancamento_status: lancamentos[0]?.status ?? null, situacao_folha: sit, falta, falta_frase: falta.map(c => frase[c]).join(' · ') || null,
+        };
+      });
+      const soma = (k: 'previsto' | 'recibo' | 'diferenca') => Math.round(linhas.reduce((s, l) => s + (l[k] ?? 0), 0) * 100) / 100;
+      const conta = (s: string) => linhas.filter(l => l.situacao_folha === s).length;
+      const comRecibo = linhas.filter(l => l.recibos.length > 0).length;
+      const v = {
+        competencia, tipo, linhas,
+        totais: { pessoas: linhas.length, previsto: soma('previsto'), recibo: soma('recibo'), diferenca: soma('diferenca'), confere: conta('confere'),
+          diferencas: conta('diferenca'), sem_recibo: conta('sem_recibo'), a_conferir: conta('a_conferir'), sem_previsto: conta('sem_previsto'),
+          criados_pelo_recibo: conta('criado_pelo_recibo'), a_ligar: linhas.filter(l => l.falta.includes('ligar')).length },
+        documentos: { recibos: { chegou: comRecibo > 0, n: comRecibo, de: linhas.length }, espelho: { chegou: false },
+          guia_inss: tipo === 'mensal' ? { chegou: true, valor: 4321.09, vencimento: '2026-12-19' } : { chegou: false }, guia_fgts: { chegou: false } },
+        calendario: [{ chave: 'salario', rotulo: 'Pagamento do salário', origem: 'regra', data: '2026-12-05', dias: 10 },
+          { chave: 'decimo_terceiro', rotulo: '13º · 1ª parcela', origem: 'regra', data: '2026-11-30', dias: 5 }],
+        folha: caso === 'confirmada' ? { id: 'fo-1', situacao: 'confirmada', confirmada_em: '2026-12-04T10:00:00Z' } : null,
+      };
+      const f = folhaDoMesDoBanco(v);
+      return f ? { ok: true, dados: f } : { ok: false, erro: 'bancada: folha do mês inválida' };
+    },
+    async confirmar(cliente, competencia, tipo, simular) {
+      chamadas.push({ fn: 'confirmar', args: [cliente, competencia, tipo, simular] });
+      return { ok: true, dados: simular ? { ok: true, simulado: true, pessoas: ativos.length } : { ok: true, folha_id: 'fo-1' } };
+    },
+    async reabrir(folhaId, motivo, simular) {
+      chamadas.push({ fn: 'reabrir', args: [folhaId, motivo, simular] });
+      return { ok: true, dados: { ok: true, simulado: simular } };
+    },
+    async ferias(cliente) {
+      chamadas.push({ fn: 'ferias', args: [cliente] });
+      const SITF = ['vencida', 'vence', 'a_tirar', 'ganhando', 'a_tirar', 'sem_admissao'] as const;
+      const linhas = ativos.map((f, i) => {
+        const sit = SITF[i % SITF.length];
+        const escala = sit === 'vencida' || (sit === 'a_tirar' && i % 2 === 0);
+        const sal = i === 0 ? 99999.99 : sit === 'sem_admissao' ? null : 2900 + i * 137.5;
+        const ano = 2024 - (i % 3);
+        const ini = sit === 'ganhando' ? '2026-06-10' : `${ano}-0${(i % 9) + 1}-10`;
+        const fim = sit === 'ganhando' ? '2027-06-09' : `${ano + 1}-0${(i % 9) + 1}-09`;
+        const ate = sit === 'vencida' ? '2026-10-30' : sit === 'vence' ? '2026-12-19' : sit === 'ganhando' || sit === 'sem_admissao' ? null : '2027-04-09';
+        return {
+          funcionario_id: f.id, nome: f.nome, admissao: sit === 'sem_admissao' ? null : `${ano - 1}-0${(i % 9) + 1}-10`, situacao: f.situacao,
+          origem: sit === 'sem_admissao' ? null : escala ? 'escala' : 'admissao',
+          aquisitivo_inicio: sit === 'sem_admissao' ? null : ini, aquisitivo_fim: sit === 'sem_admissao' ? null : fim, tirar_ate: ate,
+          dias: sit === 'vencida' ? -26 : sit === 'vence' ? 24 : ate ? 135 : null, direito: sit === 'sem_admissao' ? null : 30,
+          tirou: escala ? (sit === 'vencida' ? 0 : 10) : null, saldo: escala ? (sit === 'vencida' ? 30 : 20) : null, situacao_ferias: sit, avos_em_curso: sit === 'ganhando' ? 5 : 8,
+          salario: sal, provisao_ferias: sal == null || sit === 'sem_admissao' ? null : Math.round(sal * 4 / 3 * (8 / 12 + 1) * 100) / 100,
+          provisao_13: sal == null || sit === 'sem_admissao' ? null : Math.round(sal * 11 / 12 * 100) / 100,
+        };
+      });
+      const soma = (k: 'provisao_ferias' | 'provisao_13') => Math.round(linhas.reduce((t, l) => t + (l[k] ?? 0), 0) * 100) / 100;
+      const conta = (sit: string) => linhas.filter(l => l.situacao_ferias === sit).length;
+      const v = { linhas, totais: { pessoas: linhas.length, vencidas: conta('vencida'), vence_90: conta('vence'), pela_admissao: linhas.filter(l => l.origem === 'admissao').length,
+        pela_escala: linhas.filter(l => l.origem === 'escala').length, sem_admissao: conta('sem_admissao'), sem_salario: linhas.filter(l => l.salario == null).length,
+        provisao_ferias: soma('provisao_ferias'), provisao_13: soma('provisao_13') } };
+      const r = feriasDoBanco(v);
+      return r ? { ok: true, dados: r } : { ok: false, erro: 'bancada: férias inválidas' };
+    },
+  };
+}

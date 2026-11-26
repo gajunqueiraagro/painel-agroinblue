@@ -1627,7 +1627,17 @@ const CENARIOS = [
       { nome: 'folha-nj-pendencias-recibo', url: U('nj', '&aba=pendencias'), tamanhos: T, antes: async (p) => {
         await p.locator('[data-testid="folha-pendencias-filtros"] button', { hasText: /^Sem recibo/ }).click(); await p.waitForTimeout(500); } },
       ...['ligar_sugestao', 'cadastrar_desligado', 'descartar'].map((a) => ({ nome: `folha-resolver-${a}`, url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: resolver(a) })),
-      { nome: 'folha-nj-mes', url: U('nj', '&aba=mes'), tamanhos: T },
+      /* FOLHA-TELAS-03: a Folha do mês nas duas formas, o 13º 1ª parcela (o Segmentado) e a folha em que tudo confere */
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-mes`, url: U(v, '&aba=mes'), tamanhos: T })),
+      { nome: 'folha-nj-mes-13-1', url: U('nj', '&aba=mes'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-mes-faixa"] button', { hasText: /^13º · 1ª/ }).click(); await p.waitForTimeout(500); } },
+      { nome: 'folha-vera-mes-confere', url: U('vera', '&aba=mes&mes=confere'), tamanhos: T },
+      { nome: 'folha-vera-mes-confirmar-previa', url: U('vera', '&aba=mes&mes=confere'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-mes-confirmar"]').click(); await p.locator('[data-testid="folha-mes-previa"]').waitFor(); await p.waitForTimeout(300); } },
+      { nome: 'folha-vera-mes-confirmada', url: U('vera', '&aba=mes&mes=confirmada'), tamanhos: T },
+      { nome: 'folha-vera-mes-reabrir', url: U('vera', '&aba=mes&mes=confirmada'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-mes-reabrir"]').click(); await p.locator('[data-testid="folha-mes-reabrir-motivo"]').waitFor(); await p.waitForTimeout(300); } },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-ferias`, url: U(v, '&aba=ferias'), tamanhos: T })),
       { nome: 'folha-sem-acesso', url: U('nj', '&ok=0'), tamanhos: T },
       ...['ligado', 'sem'].map((c) => ({ nome: `folha-lancamento-${c}`, url: `tela=folha-lancamento&caso=${c}`, tamanhos: T, regiao: LANC,
         antes: async (p) => { await p.waitForTimeout(600); } })),
