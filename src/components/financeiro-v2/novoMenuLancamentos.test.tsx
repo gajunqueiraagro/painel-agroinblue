@@ -53,9 +53,9 @@ describe('o botão "+ Novo ▾"', () => {
 
 describe('o lugar na tela de Lançamentos', () => {
   const fonte = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
-  const bloco = fonte.slice(fonte.indexOf('const blocoDeAcoesDesktop = ('), fonte.indexOf('const actionButtons = ('));
-  it('a grade 2×3: o menu na célula do Novo, a do antigo "Da nota" vazia e reservada; nenhum botão "Da nota" solto', () => {
-    expect(bloco).toMatch(/grid w-\[190px\] shrink-0 grid-cols-2[\s\S]*?\{menuNovo\('w-full'\)\}[\s\S]*?<FinanceiroV2ExportMenu[\s\S]*?data-testid="celula-reservada"/);
+  it('LANC-FILTROS-02a: o menu no topo navy (e, no Ampliado, sem o topo, no cabeçalho da caixa de filtros); nenhum botão "Da nota" solto', () => {
+    expect(fonte).toContain(': <CabecalhoDaTela className="-mx-2.5" titulo="Lançamentos" acoes={menuNovo()} />');
+    expect(fonte).toContain('{modoIntensivo && menuNovo()}');
     expect(fonte).not.toMatch(/<Plus className="h-3 w-3" \/> Da nota/);
     expect(fonte).not.toMatch(/title="Novo Lançamento"/);
   });
