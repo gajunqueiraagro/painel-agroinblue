@@ -239,6 +239,8 @@ export interface ContaBancariaV2 {
   agencia: string | null;
   numero_conta: string | null;
   conta_digito: string | null;
+  /** CONTA-INATIVAR-DATA-01 — lida para separar o mapa de nomes (todas) do que se oferece (só as ativas) */
+  ativa?: boolean | null;
   /**
    * Apelidos memorizados da conta (coluna `aliases`, jsonb) — 133g item 8.
    *
@@ -398,6 +400,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   const ultimosFiltrosRef = useRef<{ filtros: FiltrosV2; pageNum: number } | null>(null);
   const loadLancamentosRef = useRef<((f: FiltrosV2, p?: number) => Promise<void>) | null>(null);
   const [contasBancarias, setContasBancarias] = useState<ContaBancariaV2[]>([]);
+  /* CONTA-INATIVAR-DATA-01 — TODAS as contas (ativas e inativas), só para o NOME na lista (o lançamento antigo de conta inativa mostra o nome,
+     não "—"); quem OFERECE conta para lançamento novo segue lendo `contasBancarias` (só as ativas) */
+  const [todasAsContas, setTodasAsContas] = useState<ContaBancariaV2[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorV2[]>([]);
   const [classificacoes, setClassificacoes] = useState<ClassificacaoItem[]>([]);
   const [safras, setSafras] = useState<Safra[]>([]);
@@ -416,11 +421,12 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     if (!clienteId) return;
     const { data } = await supabase
       .from('financeiro_contas_bancarias')
-      .select('id, nome_conta, banco, fazenda_id, tipo_conta, codigo_conta, nome_exibicao, agencia, numero_conta, conta_digito, aliases')
+      .select('id, nome_conta, banco, fazenda_id, tipo_conta, codigo_conta, nome_exibicao, agencia, numero_conta, conta_digito, aliases, ativa')
       .eq('cliente_id', clienteId)
-      .eq('ativa', true)
       .order('ordem_exibicao');
-    setContasBancarias((data as ContaBancariaV2[]) || []);
+    const todas = (data as ContaBancariaV2[]) || [];
+    setTodasAsContas(todas);
+    setContasBancarias(todas.filter((c) => c.ativa !== false));
     marcarCarregado('contas', clienteId);
   }, [clienteId, marcarCarregado]);
 
@@ -1640,6 +1646,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     /** P94 — o cliente cujos quatro cadastros (contas, fornecedores, plano, safras) ja' carregaram; nulo enquanto carrega */
     cadastrosDoCliente,
     contasBancarias,
+    todasAsContas,
     fornecedores,
     classificacoes,
     safras,

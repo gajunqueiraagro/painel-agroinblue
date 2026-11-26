@@ -1057,7 +1057,15 @@ if (tela === 'mesclar') {
     rpc: (fn: string, a: any) => fn === 'fn_conta_bancaria_painel' ? CONTAS_BANC.PAINEL
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Usuário Exemplo', email: null, situacao: 'membro ativo' }]
       : fn === 'fn_conciliacao_status_ano' ? CONTAS_BANC.reguaDoAno(Number(a.p_ano))
-      : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 12, ultimo: '2026-10-10' }] : null,
+      : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 12, ultimo: '2026-10-10' }]
+      /* CONTA-INATIVAR-DATA-01 — `&inativar=recusa|ok`: a prévia do "Inativa desde" (a recusa no pior caso: a frase mais longa e a lista) */
+      : fn === 'fn_conta_inativar_previa' ? (q.get('inativar') === 'ok'
+        ? { pode: true, frase: null, desde: a.p_desde, mes_do_saldo: '2026-01', saldo: 0, tem_saldo: true, abertos: 0, realizados: 0, extrato: 0, lancamentos: [] }
+        : { pode: false, desde: a.p_desde, mes_do_saldo: '2026-01', saldo: 0, tem_saldo: true, abertos: 23, realizados: 2, extrato: 0,
+            frase: 'A conta tem 25 lançamento(s) a partir de 01/02/2026 (23 em aberto, 2 realizado(s)): mova-os antes de inativar. Nada foi gravado.',
+            lancamentos: Array.from({ length: 25 }, (_, i) => ({ dia: `20${27 + Math.floor(i / 2)}-11-01`, valor: -16363.64 - i, status: i < 23 ? 'programado' : 'realizado',
+              descricao: `Parcela sintética do financiamento com a descrição bem comprida número ${i + 1}` })) })
+      : null,
     /* OPENFINANCE-PRONTO-NJ-01 — `&of=lista`: "Bancos conectados" como a Pluggy vê, no pior caso (nome comprido, Empresa, os 4 estados, a
        frase mais longa) */
     funcao: (nome: string, op: any) => (nome === 'openfinance-contas' && op?.body?.acao === 'conexoes' ? { data: { ok: true, conexoes: [

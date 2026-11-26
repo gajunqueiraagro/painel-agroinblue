@@ -1237,9 +1237,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      carregados, resolvido no RENDER. A linha carrega o id; o texto é da tela. */
   /* Nome curto da conta, para as duas colunas do modo Ampliado. Mesma via da fazenda: mapa
      do catálogo já carregado, resolvido no render. */
+  /* CONTA-INATIVAR-DATA-01 — o nome vem de TODAS as contas (o lançamento de uma conta inativa mostra o nome dela, não "—"); os filtros e o
+     Novo seguem oferecendo só as ativas (`hook.contasBancarias`) */
   const contaNomeMap = useMemo(
-    () => new Map((hook.contasBancarias ?? []).map(c => [c.id, c.nome_exibicao || c.nome_conta])),
-    [hook.contasBancarias],
+    () => new Map((hook.todasAsContas ?? hook.contasBancarias ?? []).map(c => [c.id, c.nome_exibicao || c.nome_conta])),
+    [hook.todasAsContas, hook.contasBancarias],
   );
 
   /**

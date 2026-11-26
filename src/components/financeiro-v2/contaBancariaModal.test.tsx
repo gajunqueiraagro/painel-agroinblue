@@ -7,7 +7,7 @@
  *   M5 mudar o saldo inicial: o aviso ambar e o saldo vai ao escritor
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const rpc = vi.hoisted(() => vi.fn());
@@ -181,5 +181,66 @@ describe('CAD-CONTAS-BANCARIAS-01 — o modal', () => {
     expect(screen.getByTestId('salvar-conta')).toBeDisabled();
     fireEvent.change(cod, { target: { value: '13' } });
     expect(screen.getByTestId('salvar-conta')).not.toBeDisabled();
+  });
+});
+
+/* CONTA-INATIVAR-DATA-01 (Gabriel 26/11) — "Inativa desde" na aba Dados da conta: a data (dia 1º) é obrigatória ao inativar, a prévia do
+   banco (`fn_conta_inativar_previa`) confere antes de gravar e a recusa trava o Salvar com a frase; reativar limpa; a conta nova nasce ativa. */
+describe('CONTA-INATIVAR-DATA-01 — Inativa desde', () => {
+  const previa = (pode: boolean, extra: Record<string, unknown> = {}) => ({
+    data: { pode, frase: pode ? null : 'A conta tem 2 lançamento(s) a partir de 01/02/2026 (2 em aberto, 0 realizado(s)): mova-os antes de inativar. Nada foi gravado.',
+      desde: '2026-02-01', mes_do_saldo: '2026-01', saldo: 0, tem_saldo: true, abertos: pode ? 0 : 2, realizados: 0, extrato: 0,
+      lancamentos: pode ? [] : [{ dia: '2027-09-01', valor: -22719.29, status: 'programado', descricao: 'Parcela' }], ...extra },
+    error: null,
+  });
+  const campoData = () => within(screen.getByTestId('campo-inativa-desde-bloco')).getByPlaceholderText(/dd\/mm\/aaaa|—/);
+  const escolher = (texto: string) => { const c = campoData(); fireEvent.change(c, { target: { value: texto } }); fireEvent.blur(c); };
+
+  it('M10 conta ativa: o campo fica no lugar, desabilitado; inativar sem a data trava o Salvar', async () => {
+    montar(CONTA);
+    expect(campoData()).toBeDisabled();
+    fireEvent.click(screen.getByTestId('campo-situacao'));
+    expect(campoData()).not.toBeDisabled();
+    expect(screen.getByTestId('salvar-conta')).toBeDisabled();
+    expect(screen.getByTestId('salvar-conta').getAttribute('title')).toContain('desde quando a conta está inativa (dia 1º de um mês)');
+  });
+
+  it('M11 a data vai ao dia 1º; a prévia confere e o Salvar manda ativa + inativa_desde', async () => {
+    rpc.mockImplementation(async (fn: string) => (fn === 'fn_conta_inativar_previa' ? previa(true)
+      : fn === 'fn_conta_bancaria_salvar' ? { data: { id: 'c1' }, error: null } : { data: null, error: null }));
+    montar(CONTA);
+    fireEvent.click(screen.getByTestId('campo-situacao'));
+    escolher('15/02/2026');
+    await waitFor(() => expect(rpc).toHaveBeenCalledWith('fn_conta_inativar_previa', { p_cliente_id: 'cli', p_conta_id: 'c1', p_desde: '2026-02-01' }));
+    await waitFor(() => expect(screen.getByTestId('campo-inativa-desde-frase')).toHaveTextContent('Confere: saldo R$'));
+    await waitFor(() => expect(screen.getByTestId('salvar-conta')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('salvar-conta'));
+    await waitFor(() => expect(salvos()).toHaveLength(1));
+    expect(salvos()[0].p_dados).toEqual({ ativa: false, inativa_desde: '2026-02-01' });
+  });
+
+  it('M12 a recusa da prévia: o Salvar travado com a frase do banco e a lista no title (mostra, não esconde)', async () => {
+    rpc.mockImplementation(async (fn: string) => (fn === 'fn_conta_inativar_previa' ? previa(false) : { data: null, error: null }));
+    montar(CONTA);
+    fireEvent.click(screen.getByTestId('campo-situacao'));
+    escolher('01/02/2026');
+    await waitFor(() => expect(screen.getByTestId('salvar-conta').getAttribute('title')).toContain('mova-os antes de inativar'));
+    expect(screen.getByTestId('salvar-conta')).toBeDisabled();
+    expect(screen.getByTestId('campo-inativa-desde-bloco').getAttribute('title')).toContain('01/09/2027');
+    fireEvent.click(screen.getByTestId('salvar-conta'));
+    expect(salvos()).toHaveLength(0);
+  });
+
+  it('M13 reativar manda ativa + inativa_desde nulo; a conta nova nasce ativa (interruptor travado)', async () => {
+    montar({ ...CONTA, ativa: false, inativa_desde: '2026-02-01' });
+    fireEvent.click(screen.getByTestId('campo-situacao'));
+    fireEvent.click(screen.getByTestId('salvar-conta'));
+    await waitFor(() => expect(salvos()).toHaveLength(1));
+    expect(salvos()[0].p_dados).toEqual({ ativa: true, inativa_desde: null });
+  });
+
+  it('M13b conta nova: o interruptor da situação fica travado', () => {
+    montar(null);
+    expect(screen.getByTestId('campo-situacao')).toBeDisabled();
   });
 });
