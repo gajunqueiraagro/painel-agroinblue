@@ -7,13 +7,16 @@
  *   pagamento (sem ela, vencimento ou competência) — no banco.
  * ⚠ A FAIXA É FIXA: o seletor de pessoa 280px, o tipo num Segmentado de 6 × 84px, o resumo da pessoa no resto ("…" + `title`); a 2ª linha
  *   é a do período. A TABELA é a régua da casa, `colgroup` do §6.
+ * ⚠ FOLHA-TELAS-03: RÉGUA DE FONTES NOVA (UI-FONTES-REGUA-01) — seletor, tipos e botão 11px/26px; o seletor de pessoa na largura do MAIOR
+ *   nome da lista (`larguraDoSeletor`); cabeçalho e datas 10px; linha 11px/24px.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { ThOrdenavel } from '@/components/ui/th-ordenavel';
-import { TH_REGUA, TD_REGUA, TD_REGUA_TEXTO, TD_REGUA_NUM, QUADRO_REGUA, RODAPE_REGUA, TextoReservado } from '@/components/ui/regua-tabela';
+import { QUADRO_REGUA, RODAPE_REGUA, TextoReservado } from '@/components/ui/regua-tabela';
+import { CONTROLE, TEXTO_ROTULO, TH_FONTES, LINHA_FONTES, TD_FONTES, TD_FONTES_TEXTO, TD_FONTES_NUM, TD_FONTES_DATA, larguraDoSeletor } from '@/components/ui/regua-fontes';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { anoInteiro, intervaloDoPeriodo, type Periodo } from '@/v2/lib/periodo';
 import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
@@ -80,31 +83,45 @@ export function AbaHistorico({ clienteId, funcionarioId, onEscolher, onFicha }: 
   const resumo = pessoa
     ? [rotuloSituacao(pessoa), pessoa.admissao ? `admitido ${dataBR(pessoa.admissao)}` : 'admissão a confirmar', atuacaoDoResumo].filter(Boolean).join(' · ')
     : '';
-  const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary transition-[filter] hover:brightness-110');
-  const opcoesPessoa = (lista?.funcionarios ?? []).map(f => ({ value: f.id, label: f.situacao === 'desligado' ? `${f.nome} (desligado)` : f.nome }));
+  const TH = cn(TH_FONTES, 'sticky top-0 z-10 bg-primary transition-[filter] hover:brightness-110');
+  const opcoesPessoa = useMemo(() => (lista?.funcionarios ?? []).map(f => ({ value: f.id, label: f.situacao === 'desligado' ? `${f.nome} (desligado)` : f.nome })), [lista]);
+  /* a medida do nome depende da fonte da página: medida antes de ela carregar, a largura mudava 1px no 1º filtro (gate de deslocamento).
+     Mede de novo UMA vez quando as fontes ficam prontas, e depois só se a lista mudar. */
+  const [fontesProntas, setFontesProntas] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    void document.fonts?.ready.then(() => { if (vivo) setFontesProntas(true); });
+    return () => { vivo = false; };
+  }, []);
+  /* o seletor mostra o nome INTEIRO: largura fixa pelo maior nome da lista (UI-FONTES-REGUA-01); enquanto lê, o lugar de 280px */
+  const larguraPessoa = useMemo(
+    () => (opcoesPessoa.length ? Math.max(200, larguraDoSeletor(opcoesPessoa.map(o => o.label))) : 280),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `fontesProntas` só pede a medida de novo
+    [opcoesPessoa, fontesProntas],
+  );
   const anoAtual = new Date().getFullYear();
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex shrink-0 flex-col gap-1.5 rounded-lg border bg-card px-2 py-1.5" data-testid="folha-historico-faixa">
         {/* Quando não cabe (até 1000px), a linha quebra — pela largura, nunca pelo estado (o seletor e as 6 opções têm largura fixa) */}
-        <div className="flex min-h-[24px] flex-wrap items-center gap-x-2 gap-y-1">
-          <div className="w-[280px] shrink-0">
+        <div className="flex min-h-[26px] flex-wrap items-center gap-x-2 gap-y-1">
+          <div className="shrink-0" style={{ width: larguraPessoa }} data-testid="folha-historico-pessoa">
             <SearchableSelect value={funcionarioId ?? ''} onValueChange={v => onEscolher(v || null)} semTodos allLabel="escolha o funcionário" allValue=""
-              options={opcoesPessoa} triggerClassName="h-[24px] text-[11px]" />
+              options={opcoesPessoa} triggerClassName={CONTROLE} />
           </div>
-          <Segmentado altura={22} fonte={10} valor={filtro} onEscolher={setFiltro} opcoes={FILTROS.map(f => ({
+          <Segmentado altura={26} fonte={11} valor={filtro} onEscolher={setFiltro} opcoes={FILTROS.map(f => ({
             valor: f.valor,
-            rotulo: <span className="inline-flex w-[74px] items-center justify-center gap-1">{f.rotulo}
-              <TextoReservado texto={hist ? String(contagemDoFiltroTipo(hist.por_tipo, f.valor)) : ''} reserva="999" className="text-[9.5px] opacity-80" /></span>,
+            rotulo: <span className="inline-flex w-[80px] items-center justify-center gap-1">{f.rotulo}
+              <TextoReservado texto={hist ? String(contagemDoFiltroTipo(hist.por_tipo, f.valor)) : ''} reserva="999" className="text-[10px] opacity-80" /></span>,
           }))} />
-          <span className="max-h-[22px] min-w-[160px] flex-1 overflow-hidden whitespace-normal text-[9.5px] leading-[11px] text-muted-foreground"
+          <span className={cn('max-h-[26px] min-w-[160px] flex-1 overflow-hidden whitespace-normal leading-[13px] text-muted-foreground', TEXTO_ROTULO)}
             title={resumo || undefined} data-testid="folha-historico-resumo">
             {pessoa && <>{rotuloSituacao(pessoa)} · {pessoa.admissao
               ? <>admitido <span className="whitespace-nowrap">{dataBR(pessoa.admissao)}</span></> : 'admissão a confirmar'}</>}
           </span>
           {funcionarioId && (
-            <button type="button" className="inline-flex h-[22px] shrink-0 items-center gap-1 whitespace-nowrap text-[10px] font-medium text-primary hover:underline"
+            <button type="button" className="inline-flex h-[26px] shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium text-primary hover:underline"
               onClick={() => onFicha(funcionarioId)}>ficha <ExternalLink className="h-3 w-3" /></button>
           )}
         </div>
@@ -115,7 +132,7 @@ export function AbaHistorico({ clienteId, funcionarioId, onEscolher, onFicha }: 
             <SeletorPeriodo modo="ano-mes" periodo={periodo ?? anoInteiro(anoAtual)} onPeriodoChange={setPeriodo} />
           </div>
           <button type="button" onClick={() => setPeriodo(null)} data-testid="folha-historico-todo"
-            className={cn('inline-flex h-[24px] w-[110px] shrink-0 items-center justify-center rounded-md border text-[10.5px] font-medium',
+            className={cn(CONTROLE, 'inline-flex w-[110px] shrink-0 items-center justify-center rounded-md border font-medium',
               periodo ? 'text-muted-foreground hover:bg-muted' : 'border-primary bg-primary text-primary-foreground')}>Todo o período</button>
         </div>
       </div>
@@ -134,35 +151,35 @@ export function AbaHistorico({ clienteId, funcionarioId, onEscolher, onFicha }: 
               </thead>
               <tbody>
                 {ordenadas.map(i => (
-                  <tr key={i.lancamento_id} className="h-[19px] border-b border-border/40 hover:bg-muted/40" data-testid="folha-historico-linha">
-                    <td className={cn(TD_REGUA_NUM, 'text-left')}>{competenciaBR(i.competencia)}</td>
-                    <td className={cn(TD_REGUA_NUM, 'text-left')} title={i.data_pagamento ? undefined : 'sem data de pagamento: o vencimento'}>{dataBR(i.data_pagamento ?? i.data)}</td>
-                    <td className={TD_REGUA_TEXTO} title={i.tipo}>{i.tipo}</td>
-                    <td className={TD_REGUA_TEXTO} title={i.descricao ?? undefined}>{i.descricao ?? '—'}</td>
-                    <td className={cn(TD_REGUA_TEXTO, i.pago_a_outro && 'font-semibold text-amber-800')} title={i.pago_a_outro ? `${i.favorecido ?? ''} — pago a outro favorecido` : i.favorecido ?? undefined}
+                  <tr key={i.lancamento_id} className={cn(LINHA_FONTES, 'border-b border-border/40 hover:bg-muted/40')} data-testid="folha-historico-linha">
+                    <td className={TD_FONTES_DATA}>{competenciaBR(i.competencia)}</td>
+                    <td className={TD_FONTES_DATA} title={i.data_pagamento ? undefined : 'sem data de pagamento: o vencimento'}>{dataBR(i.data_pagamento ?? i.data)}</td>
+                    <td className={TD_FONTES_TEXTO} title={i.tipo}>{i.tipo}</td>
+                    <td className={TD_FONTES_TEXTO} title={i.descricao ?? undefined}>{i.descricao ?? '—'}</td>
+                    <td className={cn(TD_FONTES_TEXTO, i.pago_a_outro && 'font-semibold text-amber-800')} title={i.pago_a_outro ? `${i.favorecido ?? ''} — pago a outro favorecido` : i.favorecido ?? undefined}
                       data-testid="folha-historico-pago-a">{i.favorecido ?? '—'}</td>
-                    <td className={TD_REGUA_NUM}>{n2(i.valor)}</td>
-                    <td className={cn(TD_REGUA, 'whitespace-nowrap', i.conciliado && 'text-emerald-700')}>{rotuloStatus(i.status, i.conciliado)}</td>
-                    <td className={cn(TD_REGUA, 'overflow-hidden whitespace-nowrap')} title={i.documentos.map(d => d.nome).join(' · ') || undefined}>
+                    <td className={TD_FONTES_NUM}>{n2(i.valor)}</td>
+                    <td className={cn(TD_FONTES, 'whitespace-nowrap', i.conciliado && 'text-emerald-700')}>{rotuloStatus(i.status, i.conciliado)}</td>
+                    <td className={cn(TD_FONTES, 'overflow-hidden whitespace-nowrap')} title={i.documentos.map(d => d.nome).join(' · ') || undefined}>
                       {i.documentos.length === 0 ? <span className="text-muted-foreground">—</span> : (
                         <span className="inline-flex items-center gap-[3px]">
                           {i.documentos.slice(0, 2).map(d => (
-                            <button key={`${d.origem}:${d.id}`} type="button" className="max-w-[60px] truncate rounded bg-sky-50 px-1 text-[9.5px] leading-[14px] text-sky-800 hover:underline"
+                            <button key={`${d.origem}:${d.id}`} type="button" className="max-w-[60px] truncate rounded bg-sky-50 px-1 text-[10px] leading-[15px] text-sky-800 hover:underline"
                               title={d.nome} onClick={() => void ver(d.bucket, d.storage_path, d.nome)}>{d.nome}</button>
                           ))}
-                          {i.documentos.length > 2 && <span className="text-[9.5px] font-semibold text-sky-800">+{i.documentos.length - 2}</span>}
+                          {i.documentos.length > 2 && <span className="text-[10px] font-semibold text-sky-800">+{i.documentos.length - 2}</span>}
                         </span>
                       )}
                     </td>
-                    <td className={cn(TD_REGUA, 'text-center')}>
-                      <button type="button" className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary hover:underline" onClick={() => setAbrindo(i.lancamento_id)}
+                    <td className={cn(TD_FONTES, 'text-center')}>
+                      <button type="button" className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary hover:underline" onClick={() => setAbrindo(i.lancamento_id)}
                         data-testid="folha-historico-abrir">abrir <ExternalLink className="h-3 w-3" /></button>
                     </td>
                   </tr>
                 ))}
                 {ordenadas.length === 0 && (
-                  <tr className="h-[19px]">
-                    <td colSpan={COLUNAS.length} className={cn(TD_REGUA, 'py-6 text-center text-muted-foreground')}>
+                  <tr className={LINHA_FONTES}>
+                    <td colSpan={COLUNAS.length} className={cn(TD_FONTES, 'py-6 text-center text-muted-foreground')}>
                       {!funcionarioId ? 'Escolha um funcionário.' : isLoading ? 'Carregando…' : error ? 'Não consegui ler o histórico. Tente de novo.'
                         : (hist?.itens.length ?? 0) === 0 ? 'Nenhum pagamento ligado a esta pessoa no período.' : 'Nenhum pagamento deste tipo.'}
                     </td>
@@ -175,7 +192,7 @@ export function AbaHistorico({ clienteId, funcionarioId, onEscolher, onFicha }: 
             <table className="w-full table-fixed border-collapse">
               <Colunas />
               <tbody>
-                <tr className="h-[22px] font-semibold">
+                <tr className="h-[24px] text-[11px] font-semibold">
                   <td colSpan={5} className="truncate px-1" title={erro ?? undefined}>
                     {erro ? <span className="text-red-200">{erro}</span>
                       : `${itens.length.toLocaleString('pt-BR')} ${itens.length === 1 ? 'pagamento' : 'pagamentos'} ligados${aOutro ? ` · ${aOutro.toLocaleString('pt-BR')} pagos a outro favorecido (contador, Caixa)` : ''}`}

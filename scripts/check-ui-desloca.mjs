@@ -396,6 +396,7 @@ const CENARIOS = [
     ['aba Histórico', async (p) => { await p.getByRole('tab', { name: /^Histórico/ }).click(); await espera(p, 700); }],
     ['aba Pendências', async (p) => { await p.getByRole('tab', { name: /^Pendências/ }).click(); await espera(p, 700); }],
     ['aba Folha do mês', async (p) => { await p.getByRole('tab', { name: /^Folha do mês/ }).click(); await espera(p, 500); }],
+    ['aba Férias', async (p) => { await p.getByRole('tab', { name: /^Férias/ }).click(); await espera(p, 500); }],
     ['aba Funcionários', async (p) => { await p.getByRole('tab', { name: /^Funcionários/ }).click(); await espera(p, 700); }],
   ] },
   ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-historico`, url: `tela=folha&v=${v}&barra=32&aba=historico&func=f00`, estados: [
@@ -404,6 +405,15 @@ const CENARIOS = [
     ['período março', clicar('[data-testid="folha-historico-faixa"] [data-testid="seletor-periodo-meses"] > button:nth-child(3)')],
     ['todo o período', clicar('[data-testid="folha-historico-todo"]')],
   ] })),
+  /* FOLHA-TELAS-03: a faixa da Folha do mês não se desloca ao trocar o tipo nem o mês (os 4 documentos, o arrastar e o Confirmar têm lugar fixo) */
+  ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-mes`, url: `tela=folha&v=${v}&barra=32&aba=mes`, regiao: '[data-testid="folha-mes-faixa"]', estados: [
+    ...['13º · 1ª parcela', '13º · 2ª parcela', 'Mensal'].map((t) => [`tipo ${t}`, clicar(`[data-testid="folha-mes-faixa"] button:has-text("${t}")`)]),
+    ['mês março', clicar('[data-testid="folha-mes-faixa"] [data-testid="seletor-periodo-meses"] > button:nth-child(3)')],
+  ] })),
+  /* a prévia do Confirmar abre na 3ª linha (26px fixos): a faixa não cresce nem empurra a tabela */
+  { nome: 'folha-vera-mes-confirmar', url: 'tela=folha&v=vera&barra=32&aba=mes&mes=confere', regiao: '[data-testid="folha-mes-faixa"]', estados: [
+    ['prévia do Confirmar', clicar('[data-testid="folha-mes-confirmar"]')],
+  ] },
   ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-pendencias`, url: `tela=folha&v=${v}&barra=32&aba=pendencias`, estados: [
     ...['Sem cadastro', 'Rescisão a conferir', 'Sugestão (descrição)', 'Sem recibo', 'Documento vence', 'Todas'].map((t) => [t, clicar(`[data-testid="folha-pendencias-filtros"] button:has-text("${t}")`)]),
   ] })),

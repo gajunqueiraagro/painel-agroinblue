@@ -1,7 +1,8 @@
 /**
  * FOLHA-01 · PR B (telas) — a FICHA do funcionário, ao lado da lista (D1 a): 340px SEMPRE, aberta ou não. Contrato §3.1.
  * ⚠ DUAS ABAS (Cadastro · Documentos) num Segmentado de largura fixa; o topo da ficha (nome + Editar + ✕) tem altura fixa.
- * ⚠ PIX, BANCO E CONTATO SÃO DO FORNECEDOR (o favorecido): aqui só leitura, sem 2ª fonte — editam-se no cadastro do fornecedor.
+ * ⚠ PIX, BANCO E CONTATO SÃO DO FAVORECIDO (fonte única): aqui só leitura — editam-se no Editar, aba Cadastro (FOLHA-FUNC-CADASTRO-01),
+ *   que grava no favorecido.
  * ⚠ "A ATUALIZAR" EM ÂMBAR: o campo que o contador ainda não mandou aparece "a confirmar", nunca vazio nem zero.
  */
 import { useState, type ReactNode } from 'react';
@@ -66,7 +67,7 @@ export function FichaFuncionario({ clienteId, funcionarioId, linha, onFechar, on
 }
 
 function Titulo({ children }: { children: ReactNode }) {
-  return <h4 className="mt-1.5 h-[16px] border-b border-border pt-[3px] text-[9.5px] font-bold uppercase leading-[12px] tracking-wide text-primary">{children}</h4>;
+  return <h4 className="mt-1.5 h-[16px] border-b border-border pt-[3px] text-[9.5px] font-bold leading-[12px] text-primary">{children}</h4>;
 }
 /** uma linha rótulo · valor (rótulo 96px); o valor (dado) ROLA no lugar — fora de tabela nada de "…" — e o inteiro no `title`; `aConfirmar` = âmbar */
 function Campo({ rotulo, valor, aConfirmar, testid }: { rotulo: string; valor: string | null; aConfirmar?: boolean; testid?: string }) {
@@ -116,7 +117,7 @@ function Cadastro({ ficha, linha, onHistorico }: { ficha: Ficha; linha: Funciona
       <Campo rotulo="Pix" valor={pix} />
       <Campo rotulo="Banco" valor={banco} />
       <Campo rotulo="Contato" valor={contato} />
-      <p className="h-[14px] text-[9.5px] leading-[14px] text-muted-foreground">Pix, banco e contato se editam no cadastro do fornecedor.</p>
+      <p className="h-[14px] text-[9.5px] leading-[14px] text-muted-foreground">Pix, banco e contato se editam no Editar (aba Cadastro).</p>
 
       <Titulo>Atuação (rateio do custo)</Titulo>
       {atuacoes.length === 0 ? <p className="h-[17px] text-[10.5px] italic text-amber-700">a confirmar</p> : atuacoes.map((a, i) => (

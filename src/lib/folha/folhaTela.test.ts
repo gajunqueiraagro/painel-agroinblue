@@ -8,7 +8,7 @@
  *   R6 o pedido do gravador: o registro INTEIRO, com o `recorrencia_origem_id` que veio; o "a atualizar" perde o que foi preenchido
  *   R7 a atuação soma 100 (a recusa do banco dita antes)
  *   R8 as ações de cada pendência e a frase da prévia do ligar
- *   R9 a aba Funcionários abaixo de 1000px tira Registro e Atuação (só pela largura, nunca pelo dado)
+ *   R9 a aba Funcionários abaixo de 1000px tira o Registro, abaixo de 760 o Vínculo e o A atualizar; a Fazenda fica (só pela largura, nunca pelo dado)
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -158,10 +158,11 @@ describe('R8 as pendências', () => {
 });
 
 describe('R9 as colunas da aba Funcionários pela largura', () => {
-  it('abaixo de 1000px saem Registro e Atuação; de 1000 em diante, as 9 do contrato; sem medida (0), as 9', () => {
-    expect(colunasParaALargura(800).map(c => c.coluna)).toEqual(['nome', 'cargo', 'vinculo', 'admissao', 'salario', 'situacao', 'a_atualizar']);
+  it('abaixo de 1000px sai o Registro (a Fazenda fica, FOLHA-TELAS-03); de 1000 em diante, as 9 do contrato; sem medida (0), as 9', () => {
+    expect(colunasParaALargura(800).map(c => c.coluna)).toEqual(['nome', 'cargo', 'vinculo', 'fazenda', 'admissao', 'salario', 'situacao', 'a_atualizar']);
     /* gate 24/11: a 1126 com a ficha (tabela ~610px) o Nome ficava com 22px — abaixo de 760 sai também o "A atualizar" */
-    expect(colunasParaALargura(756).map(c => c.coluna)).toEqual(['nome', 'cargo', 'vinculo', 'admissao', 'salario', 'situacao']);
+    /* abaixo de 760 saem também o "A atualizar" e o Vínculo (os dois estão na ficha) */
+    expect(colunasParaALargura(756).map(c => c.coluna)).toEqual(['nome', 'cargo', 'fazenda', 'admissao', 'salario', 'situacao']);
     expect(colunasParaALargura(610).reduce((s, c) => s + (c.largura ?? 0), 0)).toBeLessThanOrEqual(610 - 140);
     expect(colunasParaALargura(1000)).toHaveLength(9);
     expect(colunasParaALargura(0)).toHaveLength(9);
