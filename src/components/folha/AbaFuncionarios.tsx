@@ -37,18 +37,19 @@ import { FuncionarioDialog } from './FuncionarioDialog';
 
 type Coluna = 'nome' | 'cargo' | 'vinculo' | 'registro' | 'fazenda' | 'admissao' | 'salario' | 'situacao' | 'a_atualizar';
 interface DefColuna { coluna: Coluna; rotulo: string; largura: number | null; direita?: boolean; opcional?: number }
-/** FOLHA-REGUA-01 — px MEDIDOS no navegador a 10,5px (+ 8 de padding): Cargo 124 ("Operador de Maquinas" 114, "Auxiliar Administrativo" 111,
- *  os maiores do proto, inteiros) · Vínculo 64 · Registro 150 · Fazenda 48 ("SED +1" 38) · Admissão 72 ("00/00/0000" 63) · Salário 64
- *  ("99.999,99" 54) · Situação 66 (o selo "Desligado" 46 + 12 + 8) · A atualizar 150. `opcional` = a ordem em que entra quando sobra lugar. */
+/** FOLHA-REGUA-01 — px MEDIDOS no navegador (+ 8 de padding; o cabeçalho que ordena pede o rótulo + 16, gate de cortes): Cargo 122
+ *  ("Operador de Maquinas" 114, "Auxiliar Administrativo" 111, os maiores do proto, inteiros) · Vínculo 64 · Registro 150 · Fazenda 57 (o
+ *  cabeçalho "Fazenda"; o código "SED +1" tem 38) · Admissão 71 ("00/00/0000" 63) · Salário 62 ("99.999,99" 54) · Situação 62 (o selo
+ *  "Desligado" 46 + 12) · A atualizar 150. `opcional` = a ordem em que entra quando sobra lugar. */
 export const COLUNAS_FUNCIONARIOS: readonly DefColuna[] = [
   { coluna: 'nome', rotulo: 'Nome', largura: null },
-  { coluna: 'cargo', rotulo: 'Cargo', largura: 124 },
+  { coluna: 'cargo', rotulo: 'Cargo', largura: 122 },
   { coluna: 'vinculo', rotulo: 'Vínculo', largura: 64, opcional: 1 },
   { coluna: 'registro', rotulo: 'Registro (empregador)', largura: 150, opcional: 3 },
-  { coluna: 'fazenda', rotulo: 'Fazenda', largura: 48 },
-  { coluna: 'admissao', rotulo: 'Admissão', largura: 72 },
-  { coluna: 'salario', rotulo: 'Salário', largura: 64, direita: true },
-  { coluna: 'situacao', rotulo: 'Situação', largura: 66 },
+  { coluna: 'fazenda', rotulo: 'Fazenda', largura: 57 },
+  { coluna: 'admissao', rotulo: 'Admissão', largura: 71 },
+  { coluna: 'salario', rotulo: 'Salário', largura: 62, direita: true },
+  { coluna: 'situacao', rotulo: 'Situação', largura: 62 },
   { coluna: 'a_atualizar', rotulo: 'A atualizar', largura: 150, opcional: 2 },
 ];
 /** o lugar do Nome: o maior nome da Vera no proto (36 letras, 209px medidos a 10,5px/500) + 8 de padding. A 1126 com a ficha a tabela tem

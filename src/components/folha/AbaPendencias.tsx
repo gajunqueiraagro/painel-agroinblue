@@ -17,7 +17,7 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 import { QUADRO_REGUA, RODAPE_REGUA, TextoReservado } from '@/components/ui/regua-tabela';
-import { ROTULO_F, TH_F, LINHA_F, TD_F, TD_F_TEXTO, TD_F_DATA, LINHA_RODAPE_F, ALTURA_F, FONTE_F, BOTAO_PRINCIPAL_F, BOTAO_CONTORNO_F } from './reguaFolha';
+import { TH_F, LINHA_F, TD_F, TD_F_TEXTO, TD_F_DATA, LINHA_RODAPE_F, ALTURA_F, FONTE_F, BOTAO_PRINCIPAL_F, BOTAO_CONTORNO_F } from './reguaFolha';
 import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
 import { useFolhaApi, usePendenciasFolha, useRelerFolha } from '@/hooks/useFolha';
 import { cn } from '@/lib/utils';
@@ -74,6 +74,9 @@ export function AbaPendencias({ clienteId, onFicha }: { clienteId: string; onFic
     });
   };
 
+  const rodape = `${visiveis.length.toLocaleString('pt-BR')} ${visiveis.length === 1 ? 'pendência' : 'pendências'}`
+    + `${data && data.descartadas > 0 ? ` · ${data.descartadas.toLocaleString('pt-BR')} ${data.descartadas === 1 ? 'descartada' : 'descartadas'}` : ''}`
+    + ' · cada ação passa pela função do banco, com prévia e trilha';
   const opcoes: Array<{ valor: FiltroPendencia; rotulo: string }> = [
     { valor: 'todas', rotulo: 'Todas' }, ...TIPOS_DE_PENDENCIA.map(t => ({ valor: t, rotulo: ROTULO_PENDENCIA[t] })),
   ];
@@ -91,9 +94,6 @@ export function AbaPendencias({ clienteId, onFicha }: { clienteId: string; onFic
               <TextoReservado texto={data ? contagem[o.valor].toLocaleString('pt-BR') : ''} reserva="999" className="font-semibold" /></span>,
           }))} />
         ))}
-        <span className={cn('min-w-0 flex-1 truncate text-right text-muted-foreground', ROTULO_F)} title="cada ação passa pela função do banco, com prévia e trilha">
-          {data && data.descartadas > 0 ? `${data.descartadas.toLocaleString('pt-BR')} descartadas` : ''}
-        </span>
       </div>
 
       <div className="min-h-0 flex-1">
@@ -161,8 +161,8 @@ export function AbaPendencias({ clienteId, onFicha }: { clienteId: string; onFic
               <Colunas />
               <tbody>
                 <tr className={LINHA_RODAPE_F}>
-                  <td colSpan={5} className="truncate px-1">
-                    {`${visiveis.length.toLocaleString('pt-BR')} ${visiveis.length === 1 ? 'pendência' : 'pendências'} · cada ação passa pela função do banco, com prévia e trilha`}
+                  {/* FOLHA-REGUA-01: as descartadas vêm para o rodapé (na faixa dos filtros cortavam com "…" a 1126) */}
+                  <td colSpan={5} className="truncate px-1" title={rodape}>{rodape}
                   </td>
                 </tr>
               </tbody>
