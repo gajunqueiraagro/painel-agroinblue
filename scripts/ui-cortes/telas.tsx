@@ -311,6 +311,19 @@ function paginaDaBancada(base0: any[], a: any) {
   const falta = comPonto.filter((l) => String(l.pronto_pagar).startsWith('falta'));
   const soma = (xs: any[]) => Math.round(xs.reduce((t, l) => t + Math.abs(Number(l.valor)), 0) * 100) / 100;
   const por = Number(a?.p_por_pagina) || 200, pag = Number(a?.p_pagina) || 0;
+  /* LANC-FILTROS-02a — `&estresse=1`: o resumo com 9 dígitos em TODOS os cards (−R$ 99.999.999,99; contagens de 5 dígitos), SINTÉTICO —
+     nada corta nem empurra a 1126 e 1280 */
+  if (new URLSearchParams(location.search).get('estresse') === '1') {
+    const M = 99999999.99;
+    return {
+      pronto_pagar: { prontos: 99999, prontos_valor: M, faltando: 99999, faltando_valor: M },
+      versao: 'bancada', pagina: pag, por_pagina: por, total_linhas: caixa.length,
+      linhas: caixa.slice(pag * por, (pag + 1) * por).map((l) => ({ ...l, conciliado: false })),
+      totais: { entradas: M, saidas: M, transferencias: -M, entradas_sem_caixa: M, saidas_sem_caixa: M },
+      sem_caixa: { linhas: 0, total: 0 },
+      fornecedores: {},
+    };
+  }
   return {
     pronto_pagar: { prontos: comPonto.length - falta.length, prontos_valor: soma(comPonto.filter((l) => !String(l.pronto_pagar).startsWith('falta'))),
       faltando: falta.length, faltando_valor: soma(falta) },
@@ -2479,14 +2492,25 @@ if (tela === 'mesclar') {
   const montarFolha = async () => {
     const { FolhaTela } = await import('@/components/folha/FolhaTela');
     const { FolhaApiProvider } = await import('@/hooks/useFolha');
-    const { apiDaFolha, FAZENDAS_DA_FOLHA } = await import('./dados/folha');
+    const { FolhaMesApiProvider } = await import('@/hooks/useFolhaMes');
+    const { apiDaFolha, apiDaFolhaMes, FAZENDAS_DA_FOLHA, fichaCadastroDaFolha } = await import('./dados/folha');
+    const { FichaCadastroApiProvider } = await import('@/hooks/useFichaCadastro');
     g.__fazendaBancada = { fazendas: FAZENDAS_DA_FOLHA, fazendaAtual: null, isGlobal: true, fazendaId: '__global__' };
     const forma = q.get('v') === 'vera' ? 'vera' : 'nj';
     const abaQ = q.get('aba');
-    const aba = abaQ === 'historico' || abaQ === 'pendencias' || abaQ === 'mes' ? abaQ : 'funcionarios';
+    const aba = abaQ === 'historico' || abaQ === 'pendencias' || abaQ === 'mes' || abaQ === 'ferias' ? abaQ : 'funcionarios';
     const func = q.get('func');
     const entrada = { aba, funcionarioId: func, voltarAoLancamento: q.get('voltar') === '1' ? () => {} : null };
-    montar(<FolhaApiProvider api={apiDaFolha(forma, { folhaOk: q.get('ok') !== '0' })}><FolhaTela entrada={entrada} /></FolhaApiProvider>);
+    /* FOLHA-TELAS-03: `mes=confere` = a folha do mês em que tudo bate; `mes=confirmada` = a já confirmada (o Reabrir) */
+    const casoMes = q.get('mes');
+    const apiMes = apiDaFolhaMes(forma, casoMes === 'confere' ? 'tudo_confere' : casoMes === 'confirmada' ? 'confirmada' : 'normal');
+    montar(
+      <FolhaApiProvider api={apiDaFolha(forma, { folhaOk: q.get('ok') !== '0' })}>
+        <FichaCadastroApiProvider api={fichaCadastroDaFolha()}>
+          <FolhaMesApiProvider api={apiMes}><FolhaTela entrada={entrada} /></FolhaMesApiProvider>
+        </FichaCadastroApiProvider>
+      </FolhaApiProvider>,
+    );
   };
   void montarFolha();
 } else if (tela === 'folha-lancamento') {

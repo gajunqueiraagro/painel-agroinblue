@@ -7,11 +7,13 @@
  *  · `reconectar`  — ligada, mas o ÚLTIMO aviso do item pede o titular de novo (`item/error`, `item/login_error`, `item/waiting_user_input`,
  *                    `item/waiting_user_action`) depois do último aviso bom: o banco quer o consentimento de novo;
  *  · `link`        — não ligada, e há um link do titular VIVO para o cliente (`openfinance_convites`: não usado, não revogado, não vencido);
- *  · `conectar`    — não ligada, e a conta é de BANCO;
+ *  · `conectar`    — não ligada, a conta é CONTA CORRENTE/POUPANÇA (faixa "Conta corrente") e de BANCO (CONTAS-BANCARIAS-AJUSTES-01 b);
+ *  · `em_breve`    — CARTÃO de banco, não ligado: botão desabilitado com o motivo (a fatura pelo Open Finance é etapa seguinte);
  *  · `nao_se_aplica` ("—") — caixa físico, permuta, virtual, "Dinheiro"/"Outros", "Pessoal" e cartão de bandeira sem banco: a MESMA regra
- *                    da coluna Banco (`celulaBanco`): banco é o que está em `bancos_referencia` com código ≠ 000.
+ *                    da coluna Banco (`celulaBanco`): banco é o que está em `bancos_referencia` com código ≠ 000. INVESTIMENTO também é "—"
+ *                    (o sistema não lê investimento pelo Open Finance), com o motivo próprio no `title`.
  */
-import { ehCaixa, type BancoReferencia, type ContaBancariaCadastro } from '@/lib/financeiro/contasBancarias';
+import { ehCaixa, faixaDaConta, type BancoReferencia, type ContaBancariaCadastro } from '@/lib/financeiro/contasBancarias';
 import type { EventoDaFila } from '@/lib/openfinance/openfinanceTela';
 
 export type EstadoNaLinha =
@@ -19,7 +21,8 @@ export type EstadoNaLinha =
   | { tipo: 'reconectar'; itemId: string }
   | { tipo: 'link'; ate: string }
   | { tipo: 'conectar' }
-  | { tipo: 'nao_se_aplica' };
+  | { tipo: 'em_breve' }
+  | { tipo: 'nao_se_aplica'; motivo?: 'investimento' };
 
 export interface ContaPermitida { item_id: string; conta_bancaria_id: string | null; final4: string | null; ativo: boolean }
 export interface SaldoLido { conta_bancaria_id: string | null; lido_em: string }
@@ -70,6 +73,9 @@ export function estadoNaLinha(
     return { tipo: 'conectado', itemId: ligada.item_id, atualizadoEm: lido };
   }
   if (!bancoDaConta(conta, d.bancos)) return { tipo: 'nao_se_aplica' };
+  const faixa = faixaDaConta(conta);
+  if (faixa === 'inv') return { tipo: 'nao_se_aplica', motivo: 'investimento' };
+  if (faixa === 'cartao') return { tipo: 'em_breve' };
   const ate = linkVivo(d.convites, d.agoraIso);
   return ate ? { tipo: 'link', ate } : { tipo: 'conectar' };
 }
@@ -89,6 +95,9 @@ export function horaCurta(iso: string, agora: Date = new Date()): string {
   return longa.length > 5 ? longa.slice(0, 5) : longa;
 }
 
+export const FRASE_CARTAO_EM_BREVE = 'Cartão pelo Open Finance: em breve (hoje o sistema conecta só conta corrente e poupança)';
+export const FRASE_INVESTIMENTO_SEM_OF = 'Investimento: o sistema não lê investimento pelo Open Finance (só conta corrente e poupança)';
+
 /** o texto da célula, CURTO (a coluna é fixa); o `title` leva a frase inteira, com dia e hora */
 export function textoDoEstado(e: EstadoNaLinha, agora: Date = new Date()): { texto: string; titulo: string } {
   switch (e.tipo) {
@@ -98,7 +107,9 @@ export function textoDoEstado(e: EstadoNaLinha, agora: Date = new Date()): { tex
     case 'reconectar': return { texto: '⚠ Reconectar', titulo: 'O banco pede o titular de novo (confirmação ou consentimento vencido): clique para confirmar' };
     case 'link': return { texto: `Link enviado · ${horaCurta(e.ate, agora)}`, titulo: `Link do titular enviado · vale até ${horaDaLeitura(e.ate, agora)}` };
     case 'conectar': return { texto: 'Conectar', titulo: 'Conectar esta conta pelo Open Finance (só leitura do extrato)' };
-    default: return { texto: '—', titulo: 'Caixa físico, permuta, virtual ou conta sem banco: não há Open Finance' };
+    case 'em_breve': return { texto: 'Em breve', titulo: FRASE_CARTAO_EM_BREVE };
+    default: if (e.motivo === 'investimento') return { texto: '—', titulo: FRASE_INVESTIMENTO_SEM_OF };
+      return { texto: '—', titulo: 'Caixa físico, permuta, virtual ou conta sem banco: não há Open Finance' };
   }
 }
 

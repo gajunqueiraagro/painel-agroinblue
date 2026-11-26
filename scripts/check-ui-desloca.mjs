@@ -69,6 +69,22 @@ const noLugar = (sel) => async (p) => { await p.locator(sel).first().dispatchEve
 /* UI-MESES-PADRAO-01 — os botões de mês da Visão Geral financeira (o SeletorPeriodo da casa não tem testid por mês) */
 const MES_DA_VG = '[data-testid="vg-meses"] [data-testid="seletor-periodo-meses"] > button';
 /* o gesto e, depois, a casca da bancada de volta ao topo (o clique rola a PAGINA para trazer o botao a vista; o que se mede e' a tela) */
+/* LANC-FILTROS-02a — Class./Sem caixa/Pagamento no "Exibir ▾" do desktop: abre, clica, fecha (Esc); no celular o clique é direto */
+const naExibir = (g) => async (p) => {
+  const exibir = p.locator('[data-testid="btn-exibir"]');
+  const comExibir = await exibir.count() > 0 && await exibir.first().isVisible();
+  if (comExibir) { await exibir.first().click(); await espera(p, 300); }
+  await g(p);
+  if (comExibir) { await p.keyboard.press('Escape'); await espera(p, 300); }
+};
+/* o atalho do Período (desktop; no celular, abaixo de 768, o campo não existe e o estado não faz nada) */
+const noPeriodo = (atalho) => async (p) => {
+  const campo = p.locator('[data-testid="lanc-periodo"]');
+  if (await campo.count() === 0 || !await campo.first().isVisible()) return;
+  await campo.first().click(); await espera(p, 300);
+  await p.locator(`[data-atalho="${atalho}"]`).first().click(); await espera(p, 200);
+  await p.locator('[data-testid="lanc-periodo-aplicar"]').first().click(); await espera(p, 600);
+};
 const noTopo = (g) => async (p) => { await g(p); await p.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll('[data-casca]').forEach((c) => { c.scrollTop = 0; }); }); await espera(p, 150); };
 const ampliar = async (p) => { await p.locator('[data-testid="rodape-lancamentos"]').waitFor(); await espera(p, 900); await p.getByRole('button', { name: /^Ampliar$/ }).first().click(); await espera(p, 700); };
 const digitar = (sel, txt) => async (p) => { await p.locator(sel).first().fill(txt); await espera(p, 800); };
@@ -112,8 +128,12 @@ const CENARIOS = [
       ['por pagina 50', noTopo(botao(/^50$/))], ['por pagina 100', noTopo(botao(/^100$/))], ['por pagina 200', noTopo(botao(/^200$/))],
       ['proxima pagina', noTopo(clicar('[data-testid="pagina-proxima"]'))], ['proxima de novo', noTopo(clicar('[data-testid="pagina-proxima"]'))],
       ['pagina anterior', noTopo(clicar('[data-testid="pagina-anterior"]'))],
-      ['Classificação Macro', noTopo(botao(/^Macro$/))], ['Classificação Subcentro', noTopo(botao(/^Subcentro$/))], ['Classificação Centro', noTopo(botao(/^Centro$/))],
-      ['Sem caixa Só c/ DRE', noTopo(botao(/^Só c\/ DRE$/))], ['Sem caixa Ocultar', noTopo(botao(/^Ocultar$/))],
+      ['Classificação Macro', noTopo(naExibir(botao(/^Macro$/)))], ['Classificação Subcentro', noTopo(naExibir(botao(/^Subcentro$/)))], ['Classificação Centro', noTopo(naExibir(botao(/^Centro$/)))],
+      ['Sem caixa Só c/ DRE', noTopo(naExibir(botao(/^Só c\/ DRE$/)))], ['Sem caixa Ocultar', noTopo(naExibir(botao(/^Ocultar$/)))],
+      /* LANC-FILTROS-02a — o Período (atalhos do seletor) e o resumo: trocar o período não move a caixa, o resumo nem a tabela */
+      ['Período Este mês', noTopo(noPeriodo('este-mes'))],
+      ['Período 12 meses', noTopo(noPeriodo('ultimos-12'))],
+      ['resumo com 9 dígitos', { url: 'tela=financeiro&v=volume&n=450&estresse=1' }],
       /* TABELA-ALTURA-FIXA-01 — filtrar de muitos para poucos (6), um ou nenhum lançamento: o quadro não encolhe e a barra da página
          (Anterior/Próxima, "Por pág.") fica no mesmo lugar */
       ...[6, 1, 0].map((n) => [`filtro com ${n} lancamento(s)`, { url: `tela=financeiro&v=volume&n=450&linhas=${n}` }]),
@@ -376,6 +396,7 @@ const CENARIOS = [
     ['aba Histórico', async (p) => { await p.getByRole('tab', { name: /^Histórico/ }).click(); await espera(p, 700); }],
     ['aba Pendências', async (p) => { await p.getByRole('tab', { name: /^Pendências/ }).click(); await espera(p, 700); }],
     ['aba Folha do mês', async (p) => { await p.getByRole('tab', { name: /^Folha do mês/ }).click(); await espera(p, 500); }],
+    ['aba Férias', async (p) => { await p.getByRole('tab', { name: /^Férias/ }).click(); await espera(p, 500); }],
     ['aba Funcionários', async (p) => { await p.getByRole('tab', { name: /^Funcionários/ }).click(); await espera(p, 700); }],
   ] },
   ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-historico`, url: `tela=folha&v=${v}&barra=32&aba=historico&func=f00`, estados: [
@@ -384,6 +405,15 @@ const CENARIOS = [
     ['período março', clicar('[data-testid="folha-historico-faixa"] [data-testid="seletor-periodo-meses"] > button:nth-child(3)')],
     ['todo o período', clicar('[data-testid="folha-historico-todo"]')],
   ] })),
+  /* FOLHA-TELAS-03: a faixa da Folha do mês não se desloca ao trocar o tipo nem o mês (os 4 documentos, o arrastar e o Confirmar têm lugar fixo) */
+  ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-mes`, url: `tela=folha&v=${v}&barra=32&aba=mes`, regiao: '[data-testid="folha-mes-faixa"]', estados: [
+    ...['13º · 1ª parcela', '13º · 2ª parcela', 'Mensal'].map((t) => [`tipo ${t}`, clicar(`[data-testid="folha-mes-faixa"] button:has-text("${t}")`)]),
+    ['mês março', clicar('[data-testid="folha-mes-faixa"] [data-testid="seletor-periodo-meses"] > button:nth-child(3)')],
+  ] })),
+  /* a prévia do Confirmar abre na 3ª linha (26px fixos): a faixa não cresce nem empurra a tabela */
+  { nome: 'folha-vera-mes-confirmar', url: 'tela=folha&v=vera&barra=32&aba=mes&mes=confere', regiao: '[data-testid="folha-mes-faixa"]', estados: [
+    ['prévia do Confirmar', clicar('[data-testid="folha-mes-confirmar"]')],
+  ] },
   ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-pendencias`, url: `tela=folha&v=${v}&barra=32&aba=pendencias`, estados: [
     ...['Sem cadastro', 'Rescisão a conferir', 'Sugestão (descrição)', 'Sem recibo', 'Documento vence', 'Todas'].map((t) => [t, clicar(`[data-testid="folha-pendencias-filtros"] button:has-text("${t}")`)]),
   ] })),

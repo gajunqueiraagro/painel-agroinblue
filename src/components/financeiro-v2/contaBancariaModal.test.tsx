@@ -102,7 +102,7 @@ describe('CAD-CONTAS-BANCARIAS-01 — o modal', () => {
     fireEvent.click(screen.getByTestId('salvar-conta'));
     await waitFor(() => expect(salvos()).toHaveLength(1));
     expect(salvos()[0]).toEqual({ p_cliente_id: 'cli', p_conta_id: null, p_dados: { nome_conta: 'Conta Nova', ativa: true, fazenda_id: 'f1',
-      tipo_conta: 'cc', mes_inicio: '2026-01', saldo_inicial_oficial: 1000.5, sem_extrato_bancario: false } });
+      tipo_conta: 'cc', mes_inicio: '2026-01', saldo_inicial_oficial: 1000.5, sem_extrato_bancario: false, codigo_conta: '01' } });
   });
 
   it('M5 mudar o saldo inicial: aviso e o saldo vai ao escritor', async () => {
@@ -159,5 +159,27 @@ describe('CAD-CONTAS-BANCARIAS-01 — o modal', () => {
     expect(screen.queryByTestId('campo-dia-fechamento')).not.toBeInTheDocument();
     expect(screen.queryByTestId('explicacao-da-fatura')).not.toBeInTheDocument();
   });
-});
 
+  /* CONTAS-BANCARIAS-AJUSTES-01 (c) — a nova vem com o próximo livre do tipo; código que não tem 2 dígitos fica vermelho e trava o Salvar */
+  it('M8 o código curto: sugerido na nova, conferido quando muda', () => {
+    montar(null);
+    const cod = screen.getByTestId('campo-codigo-conta') as HTMLInputElement;
+    expect(cod.value).toBe('01');
+    fireEvent.change(cod, { target: { value: '013' } });
+    expect(cod).toHaveAttribute('aria-invalid', 'true');
+    expect(cod.title).toBe('2 dígitos · o próximo livre do tipo: 01');
+    fireEvent.change(cod, { target: { value: '07' } });
+    expect(cod).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('M9 a conta de hoje com 3 dígitos abre sem vermelho; mudar o código para 3 dígitos trava', () => {
+    montar({ ...CONTA, codigo_conta: '013' });
+    const cod = screen.getByTestId('campo-codigo-conta') as HTMLInputElement;
+    expect(cod).not.toHaveAttribute('aria-invalid');
+    fireEvent.change(cod, { target: { value: '014' } });
+    expect(cod).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByTestId('salvar-conta')).toBeDisabled();
+    fireEvent.change(cod, { target: { value: '13' } });
+    expect(screen.getByTestId('salvar-conta')).not.toBeDisabled();
+  });
+});

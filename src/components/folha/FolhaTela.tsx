@@ -2,8 +2,8 @@
  * FOLHA-01 · PR B (telas) — FINANCEIRO › FOLHA DE PAGAMENTO (gabarito: mock-folha-01-v1.html, aprovado 19/11 07:07; contrato do Code 6
  * folha-20261119-0727-…-CONTRATO.md §3 e §6).
  *
- * ⚠ AS QUATRO ABAS FICAM NO LUGAR DESDE JÁ: Funcionários, Histórico e Pendências têm conteúdo neste PR; "Folha do mês" é o PR C e mostra só
- *   o título (o molde do Patrimônio).
+ * ⚠ AS ABAS FICAM NO LUGAR DESDE JÁ; o FOLHA-TELAS-03 deu conteúdo à "Folha do mês" (`AbaFolhaMes`, `fn_folha_mes`) e criou "Férias"
+ *   (`AbaFerias`, `fn_folha_ferias_lista`), entre ela e o Histórico.
  * ⚠ O CABEÇALHO É O DA CASA (`CabecalhoDaTela`, UI-MESES-PADRAO-01: navy, uma linha, as abas como 2ª linha); o corpo é o `--corpo`
  *   (#D9DFE8) com os cards brancos. As abas do cabeçalho substituem o "Segmentado 4 × 120" do §6: é o padrão aprovado depois (19/11 07:12),
  *   e elas não mudam de largura ao trocar (mesmo peso).
@@ -15,11 +15,15 @@ import { ArrowLeft } from 'lucide-react';
 import { CabecalhoDaTela, type AbaDoCabecalho } from '@/components/ui/cabecalho-da-tela';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFolhaOk, usePendenciasFolha } from '@/hooks/useFolha';
+import { useFeriasDaFolha } from '@/hooks/useFolhaMes';
+import { feriasAProgramar } from '@/lib/folha/folhaFerias';
+import { AbaFolhaMes } from './AbaFolhaMes';
+import { AbaFerias } from './AbaFerias';
 import { AbaFuncionarios } from './AbaFuncionarios';
 import { AbaHistorico } from './AbaHistorico';
 import { AbaPendencias } from './AbaPendencias';
 
-export type AbaDaFolha = 'funcionarios' | 'mes' | 'historico' | 'pendencias';
+export type AbaDaFolha = 'funcionarios' | 'mes' | 'ferias' | 'historico' | 'pendencias';
 
 export interface EntradaDaFolha {
   aba?: AbaDaFolha;
@@ -47,10 +51,14 @@ export function FolhaTela({ entrada }: { entrada?: EntradaDaFolha | null }) {
   const liberada = ok.data === true;
   const pend = usePendenciasFolha(liberada ? clienteId : null);
   const nPend = pend.data?.itens.length ?? null;
+  /* FOLHA-TELAS-03: o número da aba Férias = vencidas + vencendo em 90 dias (o mesmo do topo da aba) */
+  const ferias = useFeriasDaFolha(liberada ? clienteId : null);
+  const nFerias = ferias.data ? feriasAProgramar(ferias.data.totais) : null;
 
   const abas: AbaDoCabecalho<AbaDaFolha>[] = [
     { chave: 'funcionarios', rotulo: 'Funcionários' },
-    { chave: 'mes', rotulo: 'Folha do mês', title: 'chega no próximo passo (PR C)' },
+    { chave: 'mes', rotulo: 'Folha do mês' },
+    { chave: 'ferias', rotulo: nFerias ? `Férias · ${nFerias.toLocaleString('pt-BR')}` : 'Férias' },
     { chave: 'historico', rotulo: 'Histórico' },
     { chave: 'pendencias', rotulo: nPend == null ? 'Pendências' : `Pendências · ${nPend.toLocaleString('pt-BR')}` },
   ];
@@ -82,12 +90,8 @@ export function FolhaTela({ entrada }: { entrada?: EntradaDaFolha | null }) {
       ) : (
         <div className="flex min-h-0 flex-1 flex-col px-3 pb-2 pt-2">
           {aba === 'funcionarios' && <AbaFuncionarios clienteId={clienteId} funcionarioId={funcionarioId} onEscolher={setFuncionarioId} onHistorico={abrirHistorico} />}
-          {aba === 'mes' && (
-            <div className="min-h-0 flex-1 rounded-lg border bg-card px-3 py-2" data-testid="folha-aba-mes">
-              <h2 className="text-[11px] font-semibold">Folha do mês</h2>
-              <p className="mt-1 text-[10px] text-muted-foreground">A competência, os recibos e as guias, o previsto × o recibo e o confirmar chegam no próximo passo.</p>
-            </div>
-          )}
+          {aba === 'mes' && <AbaFolhaMes clienteId={clienteId} onFicha={abrirFicha} />}
+          {aba === 'ferias' && <AbaFerias clienteId={clienteId} onFicha={abrirFicha} />}
           {aba === 'historico' && <AbaHistorico clienteId={clienteId} funcionarioId={funcionarioId} onEscolher={setFuncionarioId} onFicha={abrirFicha} />}
           {aba === 'pendencias' && <AbaPendencias clienteId={clienteId} onFicha={abrirFicha} />}
         </div>

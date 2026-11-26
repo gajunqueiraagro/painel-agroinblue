@@ -34,7 +34,8 @@ import { diasDoCartao } from '@/lib/financeiro/diasDoCartao';
 import { diaDoVencimentoDoCartao, explicacaoDaFatura } from '@/lib/financeiro/pagamentoNoCartao';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import {
-  brl, diaDoCampo, faltasDoFormulario, formularioDaConta, mudancas, mudaOSaldoInicial, nomeDaConta, subtituloDaConta,
+  brl, codigoDeDoisDigitos, diaDoCampo, faltasDoFormulario, formularioDaConta, mudancas, mudaOSaldoInicial, nomeDaConta, proximoCodigoLivre,
+  subtituloDaConta, tipoContaDoFormulario,
   type BancoReferencia, type ContaBancariaCadastro, type FormatoNaTela, type FormularioConta, type TipoNaTela,
 } from '@/lib/financeiro/contasBancarias';
 
@@ -102,7 +103,9 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
 
   useEffect(() => {
     if (!aberto) return;
-    setForm(formularioDaConta(conta, fazendas[0]?.id ?? '', internaAtual));
+    const f0 = formularioDaConta(conta, fazendas[0]?.id ?? '', internaAtual);
+    /* CONTAS-BANCARIAS-AJUSTES-01 (c): a conta nova já vem com o próximo código livre do tipo (2 dígitos; editável) */
+    setForm(conta ? f0 : { ...f0, codigo: proximoCodigoLivre(contas, tipoContaDoFormulario(f0, null)) });
     setAba(abaInicial); setNovoNome(''); setArquivo(null); setErro(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reabre o formulario quando o modal abre ou troca de conta
   }, [aberto, conta?.id]);
@@ -111,7 +114,17 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
   const caixa = form.tipo === 'caixa';
   const cartao = form.tipo === 'cartao';
   const diff = useMemo(() => mudancas(original, form), [original, form]);
-  const faltas = faltasDoFormulario(form, nova);
+  /* (c) o próximo código livre do tipo (o da conta aberta não conta); o código confere 2 dígitos na nova e quando muda */
+  const sugestaoCodigo = proximoCodigoLivre(contas, tipoContaDoFormulario(form, conta), conta?.id ?? null);
+  const codigoMudou = nova || form.codigo.trim() !== (original?.codigo ?? '').trim();
+  const codigoRuim = codigoMudou && !codigoDeDoisDigitos(form.codigo);
+  const faltas = faltasDoFormulario(form, nova, { original: original?.codigo ?? '', sugestao: sugestaoCodigo });
+  /* trocar o tipo na conta nova troca a sugestão, se o código ainda é a sugestão do tipo de antes */
+  const escolherTipo = (v: TipoNaTela) => setForm(f => {
+    const antes = proximoCodigoLivre(contas, tipoContaDoFormulario(f, conta), conta?.id ?? null);
+    const depois = { ...f, tipo: v };
+    return nova && f.codigo.trim() === antes ? { ...depois, codigo: proximoCodigoLivre(contas, tipoContaDoFormulario(depois, conta)) } : depois;
+  });
   const nadaMudou = !nova && Object.keys(diff).length === 0 && !arquivo;
 
   /* ─── leituras ─────────────────────────────────────────────────────────── */
@@ -224,10 +237,11 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
     ? `Última alteração ${dataBr(painel.data.ultima_alteracao.em)}${autor.data ? ` por ${autor.data}` : ''}` : '';
   const rodapeTexto = erro ? erro : faltas.length > 0 && !nova ? `Falta: ${faltas.join(', ')}` : nova ? 'Campos com * são obrigatórios' : ultimaAlteracao;
 
-  const campo = (k: keyof FormularioConta, rotulo: string, opts: { obrig?: boolean; span?: string; placeholder?: string; testId?: string; desabilitado?: boolean } = {}) => (
+  const campo = (k: keyof FormularioConta, rotulo: string, opts: { obrig?: boolean; span?: string; placeholder?: string; testId?: string; desabilitado?: boolean; erro?: string } = {}) => (
     <label className={cn('min-w-0', opts.span)}>
       <Rotulo texto={rotulo} obrig={opts.obrig} />
-      <Input className={REGUA_CAMPO} value={String(form[k] ?? '')} placeholder={opts.desabilitado ? 'não se aplica' : opts.placeholder}
+      <Input className={cn(REGUA_CAMPO, opts.erro && 'border-destructive focus-visible:ring-destructive')} value={String(form[k] ?? '')}
+        placeholder={opts.desabilitado ? 'não se aplica' : opts.placeholder} title={opts.erro} aria-invalid={opts.erro ? true : undefined}
         disabled={opts.desabilitado} onChange={e => muda(k, e.target.value as never)} data-testid={opts.testId} />
     </label>
   );
@@ -267,7 +281,8 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
             <BlocoFormulario titulo="Identificação" testId="bloco-identificacao">
               <div className={cn(GRADE_FORMULARIO, 'grid-cols-4')}>
                 {campo('nome', 'Nome da conta', { obrig: true, span: 'col-span-2', testId: 'campo-nome-conta' })}
-                {campo('codigo', 'Código curto', { placeholder: nova ? 'gerado ao criar' : '' })}
+                {campo('codigo', 'Código curto', { obrig: true, placeholder: sugestaoCodigo, testId: 'campo-codigo-conta',
+                  erro: codigoRuim ? `2 dígitos · o próximo livre do tipo: ${sugestaoCodigo}` : undefined })}
                 <div className="min-w-0">
                   <Rotulo texto="Situação" />
                   <div className="flex h-7 items-center gap-1.5 text-[11px]">
@@ -276,7 +291,7 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
                 </div>
                 <div className="col-span-2 min-w-0">
                   <Rotulo texto="Tipo" obrig />
-                  <Segmentado altura={28} valor={form.tipo} onEscolher={v => muda('tipo', v)} opcoes={TIPOS} />
+                  <Segmentado altura={28} valor={form.tipo} onEscolher={escolherTipo} opcoes={TIPOS} />
                 </div>
                 <div className="col-span-2 min-w-0">
                   <Rotulo texto="Fazenda" obrig />

@@ -26,15 +26,17 @@ import { FuncionarioDoLancamento } from './FuncionarioDoLancamento';
 import { FolhaApiProvider } from '@/hooks/useFolha';
 import { secoesVisiveis } from '@/v2/lib/acessoTelas';
 import { NAV_GRUPOS } from '@/v2/lib/navGrupos';
-import { apiDaFolha, FAZENDAS_DA_FOLHA } from '../../../scripts/ui-cortes/dados/folha';
+import { apiDaFolha, FAZENDAS_DA_FOLHA, fichaCadastroDaFolha } from '../../../scripts/ui-cortes/dados/folha';
+import { FichaCadastroApiProvider } from '@/hooks/useFichaCadastro';
+import type { FichaCadastroApi } from '@/lib/folha/fichaCadastroApi';
 import type { FolhaApi } from '@/lib/folha/folhaApi';
 
 const g = globalThis as unknown as { __fazendaBancada?: unknown };
 g.__fazendaBancada = { fazendas: FAZENDAS_DA_FOLHA, fazendaAtual: null, isGlobal: true, fazendaId: '__global__' };
 
-function montar(api: FolhaApi, filho: ReactNode = <FolhaTela />) {
+function montar(api: FolhaApi, filho: ReactNode = <FolhaTela />, fichaApi: FichaCadastroApi = fichaCadastroDaFolha()) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<MemoryRouter><QueryClientProvider client={qc}><FolhaApiProvider api={api}>{filho}</FolhaApiProvider></QueryClientProvider></MemoryRouter>);
+  return render(<MemoryRouter><QueryClientProvider client={qc}><FolhaApiProvider api={api}><FichaCadastroApiProvider api={fichaApi}>{filho}</FichaCadastroApiProvider></FolhaApiProvider></QueryClientProvider></MemoryRouter>);
 }
 const aba = (nome: RegExp) => screen.getByRole('tab', { name: nome });
 /** a linha pelo nome EXATO (a lista vem ordenada por nome; a busca acha mais de um) */
@@ -90,7 +92,7 @@ describe('T2 a aba Funcionários', () => {
     const sal = await screen.findByTestId('folha-ficha-salario');
     expect(sal.textContent).toBe('a confirmar');
     expect(sal.className).toContain('text-amber-700');
-    expect(screen.getByText('Pix, banco e contato se editam no cadastro do fornecedor.')).toBeTruthy();
+    expect(screen.getByText('Pix, banco e contato se editam no Editar (aba Cadastro).')).toBeTruthy();
   });
   it('os documentos da ficha: vencido em vermelho, a vencer em âmbar', async () => {
     montar(apiDaFolha('nj'));
@@ -224,11 +226,11 @@ describe('T7a as regras (puras)', () => {
 });
 
 /** o modal sozinho, com a ficha do funcionário trocada pelo caso */
-function montarDialogo(funcionarioId: string, ajustar?: (f: Ficha) => Ficha) {
+function montarDialogo(funcionarioId: string, ajustar?: (f: Ficha) => Ficha, fichaApi: FichaCadastroApi = fichaCadastroDaFolha()) {
   const api = apiDaFolha('vera');
   const original = api.ficha.bind(api);
   api.ficha = async id => { const r = await original(id); return r.ok && ajustar ? { ok: true, dados: ajustar(r.dados) } : r; };
-  montar(api, <FuncionarioDialog clienteId="cli" funcionarioId={funcionarioId} aoFechar={() => {}} aoCriar={() => {}} />);
+  montar(api, <FuncionarioDialog clienteId="cli" funcionarioId={funcionarioId} aoFechar={() => {}} aoCriar={() => {}} />, fichaApi);
   return api;
 }
 async function abaSalario() {
@@ -288,7 +290,77 @@ describe('T7b o modal: a data da contratação', () => {
   });
   it('"a atualizar" não diz "salário" com salário gravado', async () => {
     montarDialogo('f00', f => ({ ...f, funcionario: { ...f.funcionario, a_atualizar: ['salario', 'situacao'] } }));
-    await waitFor(() => expect(screen.getByTestId('funcionario-dialog').textContent).toContain('a atualizar: situação'));
-    expect(screen.getByTestId('funcionario-dialog').textContent).not.toContain('salário,');
+    /* FOLHA-FUNC-CADASTRO-01: o topo junta o que falta de todos os blocos — a marca 'situação' segue, a 'salário' não */
+    await waitFor(() => expect(screen.getByTestId('funcionario-a-atualizar').textContent).toContain('situação'));
+    expect(screen.getByTestId('funcionario-a-atualizar').textContent).not.toContain('salário');
+  });
+});
+
+/* ── T8 FOLHA-FUNC-CADASTRO-01 (Gabriel 25/11 09:06): a aba Cadastro completa; pagamento e contato gravam no FAVORECIDO ───────────────── */
+import {
+  camposQueMudaram, formDoFavorecido, oQueFaltaPorBloco, pedidoDosExtras, seloDoBloco, titularDaConta, EXTRAS_VAZIO, FAVORECIDO_VAZIO, FORMA_PIX, FORMA_TED,
+  type FavorecidoDaFicha,
+} from '@/lib/folha/fichaCadastro';
+import { FORM_VAZIO } from '@/lib/folha/folhaTela';
+
+const FAV: FavorecidoDaFicha = { id: 'fav1', nome: 'Fav', tipo_recebimento: FORMA_PIX, pix_tipo_chave: 'CPF', pix_chave: '1', banco: 'B', agencia: '1', conta: '2',
+  tipo_conta: 'Salário', cpf_cnpj_pagamento: '00000000191', celular: '9', email: null, logradouro: 'Rua', cep: '00000000' };
+describe('T8a as regras da ficha (puras)', () => {
+  it('o selo: "Completa" ou "Falta …"; Pix pede a chave, TED pede a conta; sem favorecido, contato e pagamento pedem o favorecido', () => {
+    const form = { ...FORM_VAZIO, nome: 'X', cpf: '000.000.001-91', nascimento: '1990-01-01', admissao: '2020-01-01', cargo: 'C', pis: '1', ctps: '2' };
+    const x = { ...EXTRAS_VAZIO, sexo: 'M', estado_civil: 'casado', jornada: '44h', fazenda_registro_id: 'f', rg: 'r', dia: '5u' };
+    const f = oQueFaltaPorBloco(form, x, formDoFavorecido(FAV), true);
+    expect(Object.values(f).map(seloDoBloco)).toEqual(['Completa', 'Completa', 'Completa', 'Completa', 'Completa']);
+    expect(oQueFaltaPorBloco(form, x, { ...formDoFavorecido(FAV), pix_chave: '' }, true).pagamento).toEqual(['chave Pix']);
+    expect(oQueFaltaPorBloco(form, x, { ...formDoFavorecido(FAV), tipo_recebimento: FORMA_TED, conta: '' }, true).pagamento).toEqual(['conta bancária']);
+    expect(oQueFaltaPorBloco(form, x, FAVORECIDO_VAZIO, false)).toMatchObject({ contato: ['favorecido'], pagamento: ['favorecido'] });
+    expect(seloDoBloco(['PIS', 'RG'])).toBe('Falta PIS, RG');
+  });
+  it('o favorecido recebe SÓ o que mudou (CPF do titular e CEP só com os dígitos)', () => {
+    const p = formDoFavorecido(FAV);
+    expect(camposQueMudaram(FAV, p)).toEqual({});
+    expect(camposQueMudaram(FAV, { ...p, banco: 'Outro', cep: '00000-000' })).toEqual({ banco: 'Outro' });
+    expect(camposQueMudaram(FAV, { ...p, cpf_cnpj_pagamento: '111.444.777-35' })).toEqual({ cpf_cnpj_pagamento: '11144477735' });
+  });
+  it('o titular confere o CPF do funcionário; o dia "5u" = 5º dia útil', () => {
+    expect(titularDaConta('000.000.001-91', '00000000191')).toBe('proprio');
+    expect(titularDaConta('000.000.001-91', '111.444.777-35')).toBe('outro');
+    expect(titularDaConta('000.000.001-91', '')).toBe('vazio');
+    expect(pedidoDosExtras({ ...EXTRAS_VAZIO, dia: '5u', dependentes: '2' })).toMatchObject({ dia_pagamento: 5, dia_pagamento_util: true, dependentes: 2 });
+    expect(pedidoDosExtras({ ...EXTRAS_VAZIO, dia: '10' })).toMatchObject({ dia_pagamento: 10, dia_pagamento_util: false });
+  });
+});
+
+describe('T8b a aba Cadastro', () => {
+  it('os blocos com selo e o topo juntando o que falta; títulos sem caixa alta', async () => {
+    montarDialogo('f00');
+    expect(await screen.findByTestId('selo-pagamento')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('selo-pagamento').textContent).toBe('Completa'));
+    expect(screen.getByTestId('selo-documentos').textContent).toBe('Falta CTPS');
+    expect(screen.getByTestId('funcionario-a-atualizar').textContent).toContain('CTPS');
+    expect(screen.getByTestId('funcionario-bloco-pagamento').querySelector('h3')?.textContent).toBe('Pagamento');
+  });
+  it('Salvar: as DUAS prévias, depois as duas gravações; o favorecido recebe só o banco mudado; os campos novos vão no pedido', async () => {
+    const fichaApi = fichaCadastroDaFolha();
+    const api = montarDialogo('f00', undefined, fichaApi);
+    await waitFor(() => expect((screen.getByTestId('funcionario-banco') as HTMLInputElement).value).toContain('Banco Exemplo'));
+    fireEvent.change(screen.getByTestId('funcionario-banco'), { target: { value: '001 Outro Banco' } });
+    fireEvent.click(screen.getByTestId('funcionario-salvar'));
+    await waitFor(() => expect(fichaApi.chamadas).toHaveLength(2));
+    expect(fichaApi.chamadas.map(c => [c.args[1], c.args[2]])).toEqual([[{ banco: '001 Outro Banco' }, true], [{ banco: '001 Outro Banco' }, false]]);
+    const fun = api.chamadas.filter(c => c.fn === 'gravarFuncionario');
+    expect(fun.map(c => c.args[2])).toEqual([true, false]);
+    expect(fun[1]?.args[1]).toMatchObject({ sexo: 'M', estado_civil: 'uniao_estavel', jornada: '44h', dia_pagamento: 5, dia_pagamento_util: true });
+  });
+  it('sem mudar o pagamento, o favorecido não é chamado; titular de outro CPF = aviso', async () => {
+    const fichaApi = fichaCadastroDaFolha();
+    const api = montarDialogo('f00', undefined, fichaApi);
+    await waitFor(() => expect(screen.getByTestId('funcionario-titular-confere').textContent).toContain('próprio funcionário'));
+    fireEvent.change(screen.getByTestId('funcionario-titular'), { target: { value: '111.444.777-35' } });
+    expect(screen.getByTestId('funcionario-titular-confere').textContent).toContain('outra pessoa');
+    fireEvent.change(screen.getByTestId('funcionario-titular'), { target: { value: '000.000.000-00' } });
+    fireEvent.click(screen.getByTestId('funcionario-salvar'));
+    await waitFor(() => expect(api.chamadas.filter(c => c.fn === 'gravarFuncionario')).toHaveLength(2));
+    expect(fichaApi.chamadas).toHaveLength(0);
   });
 });

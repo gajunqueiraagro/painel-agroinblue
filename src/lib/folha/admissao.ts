@@ -19,6 +19,8 @@ export const desdeInicial = (temLinhas: boolean, admissao: string | null): strin
 export function avisoDoDesde(desde: string, admissao: string | null): string | null {
   return desde && admissao && desde < admissao ? `antes da admissão (${dataBR(admissao)})` : null;
 }
+/** a "cara" de uma vigência (fazendas, atividades e %): duas vigências com a mesma chave são a MESMA atuação */
+const chaveDaVigencia = (itens: readonly AtuacaoDesde[]): string => itens.map(a => `${a.fazenda_id}|${a.atividade}|${a.pct}`).sort().join(';');
 /** FOLHA-ADMISSAO-01 — a atuação que VALE em `hoje` e desde quando: a vigência mais recente até `hoje`; as vigências anteriores IGUAIS
  *  a ela (mesma fazenda, atividade e %) são a mesma atuação, então o "desde" é o da primeira delas ("vale desde 07/05/2022" e não a
  *  vigência repetida de 09/2026). Só vigências futuras (ou nenhuma) → null. */
@@ -28,8 +30,25 @@ export function atuacaoVigente(atuacoes: readonly AtuacaoDesde[], hoje: string):
   const datas = [...porDesde.keys()].filter(d => d <= hoje).sort();
   const ultima = datas[datas.length - 1];
   if (ultima === undefined) return null;
-  const chave = (d: string | undefined): string => (porDesde.get(d ?? '') ?? []).map(a => `${a.fazenda_id}|${a.atividade}|${a.pct}`).sort().join(';');
+  const chave = (d: string | undefined): string => chaveDaVigencia(porDesde.get(d ?? '') ?? []);
   let i = datas.length - 1;
   while (i > 0 && chave(datas[i - 1]) === chave(ultima)) i--;
   return { desde: datas[i] ?? ultima, itens: porDesde.get(ultima) ?? [] };
+}
+
+/**
+ * FOLHA-REGUA-01 (Gabriel 26/11 08:14, FASE 0): a ficha mostrava a MESMA atuação duas vezes — no banco são DUAS VIGÊNCIAS de conteúdo igual
+ * (a da carga e a regravada pela tela; as duas "desde 07/2026"). A regra é a do `atuacaoVigente`: a vigência que repete a ANTERIOR (mesma
+ * `chaveDaVigencia`) é a mesma atuação — não aparece de novo e vale a data da mais antiga. Só exibição: nada muda no banco.
+ * Devolve as vigências da mais nova para a mais antiga, cada uma com as suas linhas (a de maior % primeiro).
+ */
+export function vigenciasDaAtuacao(atuacoes: readonly AtuacaoDesde[]): Array<{ desde: string | null; itens: AtuacaoDesde[] }> {
+  const porDesde = new Map<string, AtuacaoDesde[]>();
+  for (const a of atuacoes) porDesde.set(a.desde ?? '', [...(porDesde.get(a.desde ?? '') ?? []), a]);
+  const out: Array<{ desde: string | null; itens: AtuacaoDesde[] }> = [];
+  for (const [desde, itens] of [...porDesde.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    if (out.length && chaveDaVigencia(out[out.length - 1].itens) === chaveDaVigencia(itens)) continue;
+    out.push({ desde: desde || null, itens: [...itens].sort((a, b) => b.pct - a.pct) });
+  }
+  return out.reverse();
 }

@@ -66,11 +66,13 @@ export function ThDaLista({ recuo, ordenar, fixa, semTexto = false, separador = 
 }
 
 /** A linha: clicável (abre) ou não, e marcada pela caixinha. `testid`/`dadoAcao`: só as listas da Conciliação (o Financeiro não os passa). */
-export function LinhaDaLista({ marcada, abrir, testid, dadoAcao, classe, children }: { marcada: boolean; abrir?: () => void; testid?: string; dadoAcao?: string;
+/** `zebra` (LANC-FILTROS-02a, só a lista de Lançamentos): a linha ÍMPAR da lista — pelo índice no dado, nunca `nth-child` (a lista é virtual)
+ *  — ganha o fundo suave em TODAS as células, inclusive as congeladas (que têm fundo próprio). Marcada, vale a marca. */
+export function LinhaDaLista({ marcada, abrir, testid, dadoAcao, zebra = false, classe, children }: { marcada: boolean; abrir?: () => void; testid?: string; dadoAcao?: string; zebra?: boolean;
   /** CONC-SUGESTOES-V2: o destaque da linha (a exata das Sugestões) — classes a mais no `tr` */
   classe?: string; children: ReactNode }) {
   return (
-    <tr className={`linha-da-lista border-b hover:bg-muted/50 transition-colors${abrir ? ' cursor-pointer' : ''} ${marcada ? 'bg-primary/5' : ''}${classe ? ` ${classe}` : ''}`}
+    <tr className={`linha-da-lista border-b hover:bg-muted/50 transition-colors${abrir ? ' cursor-pointer' : ''} ${marcada ? 'bg-primary/5' : ''}${zebra && !marcada ? ' [&>td]:bg-[#fafbfd]' : ''}${classe ? ` ${classe}` : ''}`}
       onClick={abrir} data-testid={testid} data-acao={dadoAcao}>
       {children}
     </tr>
