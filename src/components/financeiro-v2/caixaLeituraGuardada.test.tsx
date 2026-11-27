@@ -72,7 +72,7 @@ beforeEach(() => {
 });
 
 const montar = (aoLancarNota?: (f: File) => void) => render(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Sintético" api={api} parcela={parcela} ler={ler}
-  entrada={entrada} hoje="2026-11-18" podeLancar aoLancarNota={aoLancarNota} aoFechar={() => {}} />);
+  entrada={entrada} hoje="2026-11-18" aoLancarNota={aoLancarNota} aoFechar={() => {}} />);
 const linhaDe = async (re: RegExp) => {
   const ls = await screen.findAllByTestId('linha-da-caixa');
   const l = ls.find((x) => re.test(x.textContent ?? ''));
