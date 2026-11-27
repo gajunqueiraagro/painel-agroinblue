@@ -21,6 +21,8 @@ import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
 import { FormaPeloExtratoDialog } from '@/components/financeiro-v2/FormaPeloExtratoDialog';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import { ListaDeFinanciamentos } from '@/components/financiamentos/ListaDeFinanciamentos';
+import { VincularAUmContrato } from '@/components/financiamentos/VincularAUmContrato';
+import { PendenciasDeVinculo } from '@/components/financiamentos/PendenciasDeVinculo';
 import { LinhaCreditoDialog } from '@/components/financiamentos/LinhaCreditoDialog';
 import { faixaDaLinha } from '@/lib/financiamentos/linhaDeCredito';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
@@ -582,6 +584,30 @@ if (tela === 'mesclar') {
   montar(<FornecedorFormDialog open onClose={() => {}} editing={linha as any} allFornecedores={[]} fazendas={[{ id: 'f1', nome: 'Faz. Exemplo' }] as any} clienteId="cli" onSaved={() => {}}
     lerCadastro={async () => []} lerLinha={async () => linha}
     lerUso={async () => ({ cadastradoEm: '2026-01-05T10:00:00Z', lancamentos: 6, comprasParceladas: 1, documentos: 4, ultimoLancamento: '2026-09-30' } as any)} />);
+} else if (tela === 'vinculo-contrato') {
+  /* FINANC-VINCULO-OBRIGATORIO-01 FASE 1 (mock aprovado com ajuste) — `v=lista`: "Vincular a um contrato" (nenhum escolhido; o de parcela de valor
+     igual com o selo), `v=escolhido`: um escolhido (a frase do encargo), `v=pendencias`: a lista de todas, com o ano. Pior caso SINTÉTICO: nº de
+     20, credor de 39, descrição de 43, valores na casa das dezenas de milhões. */
+  const CONTRATOS = [
+    { id: 'f1', numero_contrato: 'C_102.022.070.010200', descricao: 'Custeio pecuário de reforma de pastagem ex', credor_id: 'b1', data_contrato: '2025-11-21', valor_total: 48500000, status: 'ativo', natureza: 'financiamento' },
+    { id: 'f2', numero_contrato: '197006191819500', descricao: 'Custeio agrícola sintético', credor_id: 'b2', data_contrato: '2026-04-30', valor_total: 2000000, status: 'ativo', natureza: 'financiamento' },
+    { id: 'f3', numero_contrato: '237/1702/2025/005', descricao: 'Investimento', credor_id: 'b1', data_contrato: '2025-09-30', valor_total: 3300000, status: 'ativo', natureza: 'financiamento' },
+    { id: 'f4', numero_contrato: '541.203.246', descricao: 'Capital de giro', credor_id: 'b3', data_contrato: '2025-07-23', valor_total: 800000, status: 'quitado', natureza: 'financiamento' },
+  ];
+  const CREDORES = [{ id: 'b1', nome: 'Banco Exemplo de Desenvolvimento Regional' }, { id: 'b2', nome: 'Banco Exemplo BBA' }, { id: 'b3', nome: 'Cooperativa Exemplo' }];
+  const PEND = Array.from({ length: 24 }, (_x, k) => ({ lancamento_id: `l${k}`, data: `20${20 + (k % 7)}-${String((k % 12) + 1).padStart(2, '0')}-15`, valor: 12345678.9 / (k + 1),
+    tipo: ['juros', 'amortizacao', 'captacao'][k % 3], subcentro: ['Juros de Financiamento Pecuária', 'Amortização Financiamento Agricultura', 'Entrada de Financiamento Administrativo'][k % 3],
+    fornecedor: 'Banco Exemplo de Desenvolvimento Regional', descricao: 'Pagamento de juros da operação de custeio pecuário exemplo' }));
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financiamentos' ? CONTRATOS : t === 'financeiro_fornecedores' ? CREDORES : [],
+    rpc: (fn: string) => fn === 'fn_financiamentos_situacao_lote' ? {} : fn === 'fn_financiamento_vinculos_pendentes'
+      ? { ok: true, anos: [2026, 2025, 2024, 2023, 2022, 2021, 2020].map((ano) => ({ ano, n: 88, valor: 2334125.64 })), itens: PEND }
+      : fn === 'fn_lancamento_financiamento' ? null : null,
+  };
+  const exata = { parcelaId: 'q3', financiamentoId: 'f2', numeroContrato: '197006191819500', numeroParcela: 3, vencimento: '2027-04-30', papel: 'juros' };
+  montar(v === 'pendencias' ? <PendenciasDeVinculo clienteId="cli" aoFechar={() => {}} />
+    : <VincularAUmContrato lancamentoId="l1" clienteId="cli" tipo="juros" subcentro="Juros de Financiamento Pecuária" valor={12345678.9} data="2026-10-30"
+        exata={exata} aoFechar={() => {}} aoVincular={() => {}} onCriarContrato={() => {}} />);
 } else if (tela === 'financiamentos-lista') {
   /* FIN-FINANC-LAYOUT-03 — a aba Financiamentos da lista (o `ListaDeFinanciamentos`, que só desenha: os contratos chegam prontos), no
      pior caso SINTÉTICO com os TAMANHOS REAIS do proto (12/11: descrição até 43 caracteres, credor até 39, nº até 20): o nº de contrato mais

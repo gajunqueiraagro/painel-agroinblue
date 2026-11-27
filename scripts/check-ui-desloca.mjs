@@ -881,8 +881,13 @@ const CENARIOS = [
     ] },
   /* NOTA-ITENS-SUGESTAO (Gabriel 27/11) — Itens › Contas: responder obra × manutenção (e trocar a resposta) não move a tabela, o total por conta
      (as linhas ficam reservadas) nem os botões */
+  /* FINANC-VINCULO-OBRIGATORIO-01 — escolher o contrato (a frase da prévia e o botão) não move a lista nem o rodapé */
+  { nome: 'contrato-vinculo', url: 'tela=vinculo-contrato&v=lista', estados: [
+      ['um contrato escolhido', clicar('[data-testid="vinculo-contrato"]')],
+    ] },
   { nome: 'nota-itens-sugestao-contas', url: 'tela=lancamento&m=novo&v=xmlsug3',
-    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="contas-total-por-conta"]').waitFor(); await espera(p, 600); },
+    /* SUGESTAO-ITENS-02 — dentro do modal "Classificar itens" (o atalho; o Total por conta tem as linhas reservadas) */
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="classificar-itens"]').click(); await p.locator('[data-testid="classificar-itens-modal"]').waitFor(); await espera(p, 600); },
     estados: [
       ['respondido: manutenção', clicar('[data-testid="pergunta-5-manutencao"]')],
       ['respondido: obra/reforma', clicar('[data-testid="pergunta-5-obra"]')],

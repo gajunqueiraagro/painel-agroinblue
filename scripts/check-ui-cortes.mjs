@@ -2240,12 +2240,28 @@ const CENARIOS = [
      a pergunta, o "Usar divisão" libera (nada se desloca) */
   { nome: 'lancamento-xml-sugestao-uma', url: 'tela=lancamento&m=novo&v=xmlsug1', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'lancamento-xml-sugestao-varias', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* SUGESTAO-ITENS-02 (mock `sugestao-itens-02-classificar.html` aprovado, fonte 12/11) — a aba fica com o RESUMO + "Classificar itens ▸"; o modal
+     (1180×660) com a Conta larga, o atalho opcional, o Total fixo e o rodapé; respondido o atalho; e o "Escolher outra conta…" do Juntar */
   { nome: 'lancamento-xml-sugestao-itens', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
-    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="contas-total-por-conta"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="classificar-itens"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
+  { nome: 'lancamento-xml-sugestao-classificar', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[data-testid="classificar-itens-modal"]', exceto: '[data-testid="contas-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="classificar-itens"]').click(); await p.locator('[data-testid="classificar-itens-modal"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(400); } },
   { nome: 'lancamento-xml-sugestao-respondida', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
-    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
-    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="pergunta-5-manutencao"]').click(); await p.waitForTimeout(300); } },
+    semRolagem: { dentro: '[data-testid="classificar-itens-modal"]', exceto: '[data-testid="contas-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="classificar-itens"]').click(); await p.locator('[data-testid="pergunta-5-manutencao"]').click(); await p.waitForTimeout(300); } },
+  { nome: 'lancamento-xml-sugestao-outra-conta', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="classificar-itens"]').click(); await p.locator('[data-testid="contas-juntar"]').click();
+      await p.locator('[data-testid="contas-juntar-outra-conta"]').click(); await p.locator('[data-testid="contas-juntar-outra"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(400); } },
+  /* FINANC-VINCULO-OBRIGATORIO-01 FASE 1 — "Vincular a um contrato" (nenhum escolhido; selo do valor igual), um escolhido, e a lista das pendências */
+  { nome: 'contrato-vinculo-lista', url: 'tela=vinculo-contrato&v=lista', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[data-testid="vincular-a-um-contrato"]', exceto: '[data-testid="vinculo-lista"]' } },
+  { nome: 'contrato-vinculo-escolhido', url: 'tela=vinculo-contrato&v=lista', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[data-testid="vincular-a-um-contrato"]', exceto: '[data-testid="vinculo-lista"]' },
+    antes: async (p) => { await p.locator('[data-testid="vinculo-contrato"]').first().click(); await p.waitForTimeout(300); } },
+  { nome: 'contrato-vinculo-pendencias', url: 'tela=vinculo-contrato&v=pendencias', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[data-testid="pendencias-de-vinculo"]', exceto: '[data-testid="pendencias-lista"]' } },
   { nome: 'lancamento-xml-Geral-dividida', url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => {
       await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); await clicarTexto('Contas')(p);
