@@ -13,6 +13,8 @@
  * ⚠ O PADRAO DA TABELA E' O A31: cabecalho navy 9,5px, linha de 18px a 10px, uma linha por nota; numero, valor e data nunca
  *   cortam, texto longo corta com o inteiro no `title`.
  */
+import { CardDaReceita } from '@/components/fiscal/CardDaReceita';
+import type { EstadoDaReceita } from '@/lib/fiscal/estadoDaReceita';
 import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -212,7 +214,7 @@ export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 're
 }
 
 export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedores, onAbrirLancamento, onAbrirNota, lancadas, linhasIniciais, avisoInicial,
-  arquivosIniciais, notasDaReceita, onNotasDaReceita }: {
+  arquivosIniciais, notasDaReceita, onNotasDaReceita, estadoReceita, podeCadastrarCertificado = false, onCadastrarCertificado }: {
   open: boolean;
   onClose: () => void;
   clienteId: string | null;
@@ -232,6 +234,10 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
   /** D1 — "escolher entre as N da Receita": o botão no cabeçalho (só aparece com N > 0) */
   notasDaReceita?: number | null;
   onNotasDaReceita?: () => void;
+  /** NOTAS-RECEITA-CARD-SEMPRE-01 — o estado da busca da Receita: com ele, o card fica SEMPRE na faixa (nunca some) */
+  estadoReceita?: EstadoDaReceita;
+  podeCadastrarCertificado?: boolean;
+  onCadastrarCertificado?: () => void;
 }) {
   const [linhas, setLinhas] = useState<LinhaDeNota[]>(() => linhasIniciais ?? []);
   const [lendo, setLendo] = useState(false);
@@ -355,7 +361,11 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
       <DialogContent className="max-w-[1080px] p-0 gap-0 overflow-hidden" data-testid="novo-de-xml">
         <div className="flex h-9 items-center bg-primary px-4 pr-10">
           <DialogTitle className="text-[13px] font-semibold leading-none text-primary-foreground">Novo a partir da nota</DialogTitle>
-          {!!notasDaReceita && onNotasDaReceita && (
+          {estadoReceita ? (
+            <div className="ml-auto min-w-0">
+              <CardDaReceita estado={estadoReceita} podeCadastrar={podeCadastrarCertificado} onAbrir={onNotasDaReceita} onCadastrar={onCadastrarCertificado} />
+            </div>
+          ) : !!notasDaReceita && onNotasDaReceita && (
             <button type="button" className="ml-auto h-[20px] rounded-[3px] bg-primary-foreground/15 px-2 text-[10px] font-semibold text-primary-foreground hover:bg-primary-foreground/25"
               onClick={onNotasDaReceita} data-testid="xml-notas-da-receita" title="Escolher entre as notas que a Receita mandou">
               {notasDaReceita > 99 ? '99+' : notasDaReceita} da Receita ›

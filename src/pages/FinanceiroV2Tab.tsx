@@ -1,4 +1,6 @@
 import { casaNaBusca } from '@/lib/texto/busca';
+import { useEstadoDaReceita } from '@/hooks/useEstadoDaReceita';
+import { usePermissions } from '@/hooks/usePermissions';
 import { CabecalhoDaTela } from '@/components/ui/cabecalho-da-tela';
 import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
 import { rotuloDoIntervalo, type AtividadeDaSafra, type Intervalo } from '@/lib/periodo/intervaloDeDatas';
@@ -304,6 +306,8 @@ interface Props {
    *  Atendido uma vez ao montar; quem pediu limpa o pedido em `onNotasDaReceitaPedidoAtendido`. */
   notasDaReceitaNaAba?: AbaDaReceita | null;
   onNotasDaReceitaPedidoAtendido?: () => void;
+  /** NOTAS-RECEITA-CARD-SEMPRE-01 — "Cadastrar certificado" do card da Receita: leva a Cadastros › Produtores */
+  onIrParaProdutores?: () => void;
 }
 
 
@@ -315,7 +319,7 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido, onCloseDialog, ocEditFavorecido, onAbrirOperacaoOCFinanceiro, notasDaReceitaNaAba, onNotasDaReceitaPedidoAtendido }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido, onCloseDialog, ocEditFavorecido, onAbrirOperacaoOCFinanceiro, notasDaReceitaNaAba, onNotasDaReceitaPedidoAtendido, onIrParaProdutores }: Props) {
   const { fazendas, fazendaAtual, loading: fazendasCarregando } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const hook = useFinanceiroV2(pageSize);
@@ -777,6 +781,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   /* BOLETO D3d — a nota que veio da caixa por e-mail: ao fechar o "+ Da nota", a caixa reabre (a linha já mostra "já lançada · Vincular") */
   const voltarParaCaixa = useRef(false);
   const notasPedemAcao = receita.data ? pedemAcao(receita.data.lista) : null;
+  /* NOTAS-RECEITA-CARD-SEMPRE-01 — o card da Receita nunca some: o estado (certificado, busca, pausa) pela regra única */
+  const estadoReceita = useEstadoDaReceita(clienteAtual?.id ?? null, receita.isError ? 0 : notasPedemAcao);
+  const { isManager: podeCadastrarCertificado } = usePermissions();
   /* FIN-NOTA-PDF-01b — o prefill do XML (`prefillDaNota`) OU o do modal da nota (`prefillDoModal`: a nota + tudo o que foi escolhido) */
   const [prefillXml, setPrefillXml] = useState<React.ComponentProps<typeof LancamentoV2Dialog>['prefill'] | null>(null);
   const [linhaXmlAberta, setLinhaXmlAberta] = useState<string | null>(null);
@@ -1929,7 +1936,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      Documento. A entrada do Voltar não muda posição, tamanho nem linha de nenhum outro botão, e o cabeçalho tem a mesma altura
      com e sem ele. */
   const menuNovo = (className?: string) => (
-    <NovoMenuLancamentos className={className} boletosPedemAcao={boletosPedemAcao} notasDaReceita={notasPedemAcao}
+    <NovoMenuLancamentos className={className} boletosPedemAcao={boletosPedemAcao} notasDaReceita={notasPedemAcao} estadoReceita={estadoReceita}
       onEmBranco={openNew} onDaNota={() => setXmlAberto(true)} onDosBoletos={() => setCaixaAberta(true)} />
   );
   /* ⚠ `actionButtons` (o bloco em linhas) ficou SÓ para o ramo MOBILE, que não foi redesenhado; com a flag ligada ele é o gêmeo. */
@@ -3540,6 +3547,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         arquivosIniciais={xmlDaReceita}
         notasDaReceita={receita.data?.lista.length ?? null}
         onNotasDaReceita={() => { setXmlAberto(false); setReceitaAberta(true); camadas.abrir('receita'); void receita.refetch(); }}
+        estadoReceita={estadoReceita}
+        podeCadastrarCertificado={podeCadastrarCertificado && !!onIrParaProdutores}
+        onCadastrarCertificado={onIrParaProdutores ? () => { setXmlAberto(false); onIrParaProdutores(); } : undefined}
       />
       {receitaAberta && (
         <Camada coberta={camadas.coberta('receita')}>

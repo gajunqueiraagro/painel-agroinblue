@@ -1529,6 +1529,7 @@ export default function V2Index() {
         /* DRE-PAINEL-01 — o "Ver notas" da leitura do DRE abre as Notas da Receita em "A lançar". */
         notasDaReceitaNaAba={pedidoNotasDaReceita}
         onNotasDaReceitaPedidoAtendido={() => setPedidoNotasDaReceita(null)}
+        onIrParaProdutores={() => setSection('produtores')}
         onAbrirOperacaoOCFinanceiro={(ocId: string, tipo?: string | null) => {
           setDrillReturn(null);
           abrirOperacaoOC(ocId, 'financeiro', tipo ?? 'compra', origemDaVolta(window.location.search));
