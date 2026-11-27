@@ -29,7 +29,8 @@ const rotuloDoCaixa = (e: EstadoDoPagamento) => (e.semCaixa ? 'sem movimento de 
 
 export function QuemPagaTerceiro({ lancamentoId, clienteId, tipoOperacao, status, documentos, aoMudarQuemPaga, aoGravar,
   ler = lerPagoPorTerceiro, marcar = marcarPagoPorTerceiro, desfazer = desfazerPagoPorTerceiro }: {
-  lancamentoId: string;
+  /** null = lançamento novo (ainda sem id): a linha aparece desligada no MESMO lugar (CONSERTO 27/11: nada se desloca) */
+  lancamentoId: string | null;
   clienteId: string;
   tipoOperacao: string | null;
   status: string | null;
@@ -55,28 +56,36 @@ export function QuemPagaTerceiro({ lancamentoId, clienteId, tipoOperacao, status
 
   useEffect(() => {
     let ativo = true;
+    if (!lancamentoId) { setVivo(null); return; }
     void ler(lancamentoId).then((v) => { if (!ativo) return; setVivo(v); if (v) { setQuem('terceiro'); aoMudarQuemPaga('terceiro'); } });
     return () => { ativo = false; };
   }, [lancamentoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* a prévia ao vivo (a MESMA função com simular): só quando dá para pedir; a resposta velha não escreve depois */
-  const pronto = quem === 'terceiro' && !vivo && !!parceiro && motivo.trim().length >= 3;
+  const pronto = !!lancamentoId && quem === 'terceiro' && !vivo && !!parceiro && motivo.trim().length >= 3;
   useEffect(() => {
     if (!pronto) { setPrevia(null); return; }
     let ativo = true;
-    void marcar({ lancamentoId, parceiroId: parceiro, motivo: motivo.trim(), data: data || null, documentoId: anexo === SEM_ANEXO ? null : anexo }, true)
+    void marcar({ lancamentoId: lancamentoId ?? '', parceiroId: parceiro, motivo: motivo.trim(), data: data || null, documentoId: anexo === SEM_ANEXO ? null : anexo }, true)
       .then((r) => { if (!ativo) return; if (r.ok === false) { setPrevia(null); setErro(r.frase); } else { setPrevia(r.previa); setErro(null); } });
     return () => { ativo = false; };
   }, [pronto, lancamentoId, parceiro, motivo, data, anexo]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (vivo === undefined) return null;
-  if (!vivo && !podeEscolherQuemPaga(tipoOperacao, status)) return null;
+  /* CONSERTO (Gabriel 27/11 10:07) — a linha "Quem paga" tem LUGAR FIXO (26 px) em TODO lançamento: onde não se aplica, aparece desligada
+     com o porquê curto ao lado (o padrão "desligada, nada some" da Forma de pagamento), e a Forma começa logo abaixo, sempre no mesmo lugar */
+  const desligada: string | null = vivo === undefined ? 'lendo…'
+    : vivo ? null
+    : !lancamentoId ? 'salve o lançamento primeiro'
+    : tipoOperacao !== '2-Saídas' ? 'só em saídas'
+    : !podeEscolherQuemPaga(tipoOperacao, status) ? 'já pago: não muda'
+    : null;
 
   const escolher = (q: QuemPaga) => { setQuem(q); setErro(null); aoMudarQuemPaga(q); };
   const gravar = async () => {
     if (!parceiro) { setErro('Escolha quem pagou.'); return; }
     if (motivo.trim().length < 3) { setErro('Escreva o motivo (quem pagou e de onde desconta).'); return; }
     setGravando(true); setErro(null);
+    if (!lancamentoId) return;
     const r = await marcar({ lancamentoId, parceiroId: parceiro, motivo: motivo.trim(), data: data || null, documentoId: anexo === SEM_ANEXO ? null : anexo }, false);
     setGravando(false);
     if (r.ok === false) setErro(r.frase);
@@ -84,6 +93,7 @@ export function QuemPagaTerceiro({ lancamentoId, clienteId, tipoOperacao, status
   };
   const confirmarDesfazer = async () => {
     if (motivoDesfazer.trim().length < 3) { setErro('Escreva por que desfaz.'); return; }
+    if (!lancamentoId) return;
     setGravando(true); setErro(null);
     const r = await desfazer(lancamentoId, motivoDesfazer.trim(), false);
     setGravando(false);
@@ -91,27 +101,25 @@ export function QuemPagaTerceiro({ lancamentoId, clienteId, tipoOperacao, status
   };
 
   return (
-    <div className="space-y-1.5" data-testid="quem-paga">
-      <div className="flex h-[26px] items-center gap-2">
-        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">Quem paga
+    <div className="space-y-1.5" data-testid="quem-paga" data-desligada={desligada ? '' : undefined}>
+      <div className="flex h-[26px] items-center gap-2" data-testid="quem-paga-linha">
+        <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">Quem paga
           <Ajuda titulo="Quem paga" oQueE="Nós = sai do nosso banco. Terceiro = alguém pagou em nosso nome (ex.: o empreiteiro comprou o material e desconta da empreitada)."
             porQue="A despesa é verdadeira (DRE), mas não sai do banco: não pode ficar em “a pagar”, na aprovação nem na procura do extrato."
-            comoFazer="Escolha Terceiro, diga quem pagou e o motivo, confira a prévia e clique em “Marcar como pago por terceiro”. Desfazer volta como estava." />
+            comoFazer="Só nas saídas ainda não pagas, depois de salvas. Escolha Terceiro, diga quem pagou e o motivo, confira a prévia e clique em “Marcar como pago por terceiro”. Desfazer volta como estava." />
         </span>
-        <Segmentado<QuemPaga> valor={quem} onEscolher={(v) => { if (!vivo) escolher(v); }} fonte={10}
-          opcoes={[{ valor: 'nos', rotulo: 'Nós', desabilitada: !!vivo }, { valor: 'terceiro', rotulo: 'Terceiro (desconta de contrato)' }]} />
-      </div>
-
-      {vivo && (
-        <div className="flex h-[38px] items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="quem-paga-marcado">
-          {/* duas linhas RESERVADAS: quebra, nunca "…" fora de tabela */}
-          <span className="h-[28px] min-w-0 flex-1 overflow-hidden leading-[14px]" title={`Pago por terceiro em ${dataBR(vivo.dataPagamento)} · ${vivo.motivo}`}>
-            Pago por terceiro em {dataBR(vivo.dataPagamento)} · {vivo.motivo}
+        <Segmentado<QuemPaga> valor={quem} onEscolher={(v) => { if (!vivo && !desligada) escolher(v); }} fonte={10}
+          opcoes={[{ valor: 'nos', rotulo: 'Nós', desabilitada: !!vivo || !!desligada }, { valor: 'terceiro', rotulo: 'Terceiro (desconta de contrato)', desabilitada: !!desligada }]} />
+        {desligada && <span className="min-w-0 truncate text-[10px] text-muted-foreground" data-testid="quem-paga-porque">{desligada}</span>}
+        {vivo && (
+          <span className="flex min-w-0 flex-1 items-center gap-2" data-testid="quem-paga-marcado">
+            <span className="min-w-0 truncate text-[10px] font-semibold text-amber-800" title={`Pago por terceiro em ${dataBR(vivo.dataPagamento)} · ${vivo.motivo}`}>
+              pago em {dataBR(vivo.dataPagamento)}</span>
+            {!desfazendo && <Button type="button" variant="outline" size="sm" className="h-[22px] shrink-0 text-[10px]" onClick={() => { setDesfazendo(true); setErro(null); }}
+              data-testid="quem-paga-desfazer">Desfazer</Button>}
           </span>
-          {!desfazendo && <Button type="button" variant="outline" size="sm" className="h-[22px] text-[10px]" onClick={() => { setDesfazendo(true); setErro(null); }}
-            data-testid="quem-paga-desfazer">Desfazer</Button>}
-        </div>
-      )}
+        )}
+      </div>
       {vivo && desfazendo && (
         <div className="grid grid-cols-[110px_minmax(0,1fr)_auto] items-center gap-2" data-testid="quem-paga-desfazer-form">
           <span className={REGUA_ROTULO}>Por que desfaz</span>
@@ -119,10 +127,11 @@ export function QuemPagaTerceiro({ lancamentoId, clienteId, tipoOperacao, status
             placeholder="ex.: confirmado que pagamos nós" data-testid="quem-paga-desfazer-motivo" />
           <Button type="button" size="sm" className="h-7 text-[10px]" disabled={gravando} onClick={() => void confirmarDesfazer()}
             data-testid="quem-paga-desfazer-confirmar">Desfazer</Button>
+          {erro && <p className="col-span-3 text-[10px] leading-[14px] text-destructive" data-testid="quem-paga-erro">{erro}</p>}
         </div>
       )}
 
-      {!vivo && quem === 'terceiro' && (
+      {!vivo && !desligada && quem === 'terceiro' && (
         <div className="space-y-1.5 rounded-md border p-2" data-testid="quem-paga-form">
           <div className="grid grid-cols-[110px_minmax(0,1fr)] items-center gap-x-2 gap-y-1.5">
             <span className={REGUA_ROTULO}>Quem pagou</span>
@@ -157,14 +166,15 @@ export function QuemPagaTerceiro({ lancamentoId, clienteId, tipoOperacao, status
               {previa.avisos.map((a) => <p key={a} className="text-[10px] font-semibold text-amber-800" data-testid="quem-paga-aviso">{a}</p>)}
             </>) : <p className="text-[10px] text-muted-foreground">Escolha quem pagou para ver a prévia (nada é gravado antes do botão).</p>}
           </div>
-          <div className="flex h-[26px] items-center justify-end">
-            <Button type="button" size="sm" className="h-7 text-[10px]" disabled={gravando || !previa} onClick={() => void gravar()} data-testid="quem-paga-gravar">
+          <div className="flex h-[26px] items-center justify-end gap-2">
+            {/* o erro mora AQUI, no formulário aberto (antes havia uma linha vazia reservada sempre embaixo: o "buraco") */}
+            <p className="min-w-0 flex-1 truncate text-[10px] text-destructive" title={erro ?? undefined} data-testid="quem-paga-erro">{erro ?? ''}</p>
+            <Button type="button" size="sm" className="h-7 shrink-0 text-[10px]" disabled={gravando || !previa} onClick={() => void gravar()} data-testid="quem-paga-gravar">
               Marcar como pago por terceiro
             </Button>
           </div>
         </div>
       )}
-      <p className="h-[28px] overflow-hidden text-[10px] leading-[14px] text-destructive" data-testid="quem-paga-erro">{erro ?? ''}</p>
     </div>
   );
 }

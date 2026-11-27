@@ -284,6 +284,11 @@ const CENARIOS = [
   ...[2, 18, 36].map((np) => ({ nome: `contrato-parcelamento-${np}`, url: `tela=contrato&v=parcelamento&np=${np}&docs=1`, tamanhos: TAMANHOS_DO_CONTRATO })),
   ...['Geral', 'Pagamento', 'Documentos'].flatMap((aba) => ['novo', 'editar'].map((m) => ({ nome: `lancamento-${m}-${aba}`, url: `tela=lancamento&m=${m}`, antes: clicarTexto(aba) }))),
   /* DOC-NOTA-XML-PDF-01 — a aba Documentos com a nota em PDF + XML numa linha (selos), a nota so' em XML e um boleto */
+  /* CONSERTO "Quem paga" (Gabriel 27/11 10:07) — a linha de lugar fixo nos 3 jeitos (ligada na saída a pagar; desligada na entrada, com o
+     porquê; marcada, com "pago em" e Desfazer): nada corta, régua de fonte. A posição 0 px é provada por scripts/ui-cortes/provaQuemPaga.mjs. */
+  ...[['ligada', 'tipo=saida&status=programado'], ['desligada', 'tipo=entrada&status=programado'], ['marcada', 'tipo=saida&status=programado&terceiro=marcado']]
+    .map(([n, q]) => ({ nome: `lancamento-quem-paga-${n}`, url: `tela=lancamento&m=editar&${q}`, regiao: '[data-testid="quem-paga-linha"]',
+      tamanhos: [[1280, 800], [1440, 900], [1920, 1080]], antes: clicarTexto('Pagamento') })),
   { nome: 'lancamento-editar-Documentos-nota', url: 'tela=lancamento&m=editar&docs=nota', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Documentos') },
   /* NOTA-ENTREGA-FUTURA-01 (B) — a compra com entrega futura: Papel · Documento…, "gera a conta"/"sem financeiro", o Saldo a entregar (nome longo, 2 itens)
      e o Resumo com Compra · Entregas · LCDPR */

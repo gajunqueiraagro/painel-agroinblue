@@ -3601,9 +3601,10 @@ export function LancamentoV2Dialog({
             <section className={sectionClass}>
               <TituloDoBloco nome="Pagamento" />
               {/* NOTA-PAGA-POR-TERCEIRO-01 (Fatia A, mock aprovado 23/11) — "Quem paga: Nós · Terceiro": só na edição; gravou = fecha e a lista relê */}
-              {isEdit && lancamento?.id && clienteAtual?.id && (
-                <QuemPagaTerceiro lancamentoId={lancamento.id} clienteId={clienteAtual.id} tipoOperacao={tipoOperacao}
-                  status={lancamento.status_transacao ?? null}
+              {/* CONSERTO 27/11 — a linha fica em TODO lançamento (novo, entrada, já pago: desligada no mesmo lugar) */}
+              {clienteAtual?.id && (
+                <QuemPagaTerceiro lancamentoId={isEdit ? lancamento?.id ?? null : null} clienteId={clienteAtual.id} tipoOperacao={tipoOperacao}
+                  status={lancamento?.status_transacao ?? null}
                   documentos={(documentosApi.documentos ?? []).map((d) => ({ id: d.id, nome: d.nome }))}
                   aoMudarQuemPaga={setQuemPaga}
                   aoGravar={(frase) => { toast.success(frase); notificarLancamentosMudaram(clienteAtual.id); onClose(); }} />

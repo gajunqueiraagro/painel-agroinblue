@@ -3744,6 +3744,9 @@ if (m === 'editar' && v === 'salnota') props.lancamento = { ...SAL, conta_bancar
   descricao: 'Parcela 3 - None', numero_documento: '4964', status_transacao: 'programado' };
 /* P143 — `&forma=…`: a forma GRAVADA fora da lista (o "valor atual" do Editar; o bug do 150a759d) */
 if (m === 'editar' && q.get('forma') && props.lancamento) props.lancamento = { ...props.lancamento, forma_pagamento: q.get('forma') };
+/* CONSERTO "Quem paga" (27/11) — `tipo=entrada` e `status=realizado`: o lançamento em que o "Quem paga" NÃO se aplica (a linha fica, desligada) */
+if (m === 'editar' && q.get('tipo') && props.lancamento) props.lancamento = { ...props.lancamento, tipo_operacao: q.get('tipo') === 'entrada' ? '1-Entradas' : '2-Saídas' };
+if (m === 'editar' && q.get('status') && props.lancamento) props.lancamento = { ...props.lancamento, status_transacao: q.get('status') ?? undefined };
 if (m === 'editar' && (v === 'salcartao' || v === 'salpago')) props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 3284.88, data_competencia: '2026-08-10',
   data_vencimento: '2026-08-10', forma_pagamento: 'Cartão', ...(v === 'salpago' ? { status_transacao: 'realizado', data_pagamento: '2026-08-12' } : {}) };
 /* CARTAO-LANCAMENTO-01 — `cartaoavista`: a compra à vista no cartão (mock v2: R$ 312,40 em 30/10; dados SINTÉTICOS) — o vencimento da fatura,
