@@ -17,6 +17,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { EscolherConta } from '@/components/shared/EscolherConta';
+import { Ajuda } from '@/components/ui/ajuda';
+import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import type { Atividade } from '@/lib/financeiro/ultimaAtividade';
 import { QUADRO_REGUA } from '@/components/ui/regua-tabela';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
@@ -140,10 +142,15 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
   /** o Cancelar do modal */
   onFechar?: () => void;
 }) {
+  const comSugestao = !!sugestoes;
   const R = REGUA[variante];
   const noModal = variante === 'modal';
+  /* abaixo de 1000px de janela o modal não cabe as 7 colunas: Qtd e Origem saem (a origem fica no title da conta) — P101 */
+  const largura = useLarguraDaJanela();
+  const estreito = noModal && largura < 1000;
+  const comQtd = noModal && !estreito;
+  const comOrigem = comSugestao && !estreito;
   const sugestaoDe = useMemo(() => new Map((sugestoes ?? []).map((s) => [s.nItem, s])), [sugestoes]);
-  const comSugestao = !!sugestoes;
   const inicial = useMemo(() => contasDePartidaDosItens(itens, sugeridas, contaDeHoje, todasNaConta, comSugestao),
     [itens, sugeridas, contaDeHoje, todasNaConta, comSugestao]);
   const [mapa, setMapa] = useState<ReadonlyMap<number, string>>(pendente ?? inicial);
@@ -220,8 +227,8 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
     ? `${semConta.length} ${semConta.length === 1 ? 'item sem conta: vai' : 'itens sem conta: vão'} na conta do lançamento${deHoje ? ` (${deHoje})` : ''} — não trava o salvar`
     : null;
   const colunas = noModal
-    ? <colgroup><col style={{ width: 34 }} /><col style={{ width: 226 }} /><col style={{ width: 64 }} /><col style={{ width: 92 }} />
-        {comSugestao && <col style={{ width: 180 }} />}<col />{comSugestao && <col style={{ width: 196 }} />}</colgroup>
+    ? <colgroup><col style={{ width: 34 }} /><col style={{ width: estreito ? 180 : 226 }} />{comQtd && <col style={{ width: 64 }} />}<col style={{ width: 92 }} />
+        {comSugestao && <col style={{ width: 180 }} />}<col />{comOrigem && <col style={{ width: 196 }} />}</colgroup>
     : comSugestao
       ? <colgroup><col style={{ width: 22 }} /><col /><col style={{ width: 70 }} /><col style={{ width: 126 }} /><col style={{ width: 176 }} /><col style={{ width: 140 }} /></colgroup>
       : <colgroup><col style={{ width: 22 }} /><col /><col style={{ width: 70 }} /><col style={{ width: 250 }} /></colgroup>;
@@ -265,10 +272,12 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
     <div className={cn('flex h-full min-h-0 flex-col', noModal ? 'gap-2' : 'gap-1.5')} data-testid="contas-dos-itens">
       {/* ── o topo: no modal, a instrução + Juntar; na aba, a barra fina + a frase + os botões ──────────────────────────────────── */}
       {noModal ? (
-        <div className="flex h-[30px] shrink-0 items-center gap-2 text-[12px]">
-          <span className="min-w-0 flex-1 whitespace-nowrap" data-testid="contas-frase">
-            {recusa && !fraseSemConta ? recusa : 'A sugestão vem pronta; troque à vontade (o plano de contas inteiro). Obra/manutenção é só atalho.'}
-          </span>
+        <div className="flex h-[30px] shrink-0 items-center gap-2 text-[11px]">
+          <span className="min-w-0 whitespace-nowrap" data-testid="contas-frase">{recusa && !fraseSemConta ? recusa : 'Troque a conta à vontade.'}</span>
+          <Ajuda titulo="Classificar itens" oQueE="A conta de cada item da nota; a sugestão vem pronta (regra sua, mesmo produto, fornecedor, NCM, família)."
+            porQue="Uma nota com itens de contas diferentes vira um lançamento dividido: o DRE fica certo por item."
+            comoFazer="Troque a conta pelo plano inteiro. Obra/reforma · Manutenção é só atalho. Item sem conta vai na conta do lançamento." />
+          <span className="flex-1" />
           {botaoJuntar}
         </div>
       ) : (
@@ -308,11 +317,11 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
           {colunas}
           <thead><tr>
             <th className={cn(R.th, 'text-right')}>Nº</th><th className={cn(R.th, 'text-left')}>{noModal ? 'Descrição do item' : 'Descrição na nota'}</th>
-            {noModal && <th className={cn(R.th, 'text-right')}>Qtd</th>}
+            {comQtd && <th className={cn(R.th, 'text-right')}>Qtd</th>}
             <th className={cn(R.th, 'text-right')}>{noModal ? 'Valor' : 'Líquido'}</th>
             {comSugestao && <th className={cn(R.th, 'text-left')}>{noModal ? 'Atalho (opcional)' : 'Obra ou manutenção?'}</th>}
             <th className={cn(R.th, 'text-left')}>Conta</th>
-            {comSugestao && <th className={cn(R.th, 'text-left')}>Origem da sugestão</th>}
+            {(noModal ? comOrigem : comSugestao) && <th className={cn(R.th, 'text-left')}>Origem da sugestão</th>}
           </tr></thead>
         </table>
         <div className="min-h-0 flex-1 overflow-y-auto" data-testid="contas-rolagem">
@@ -330,7 +339,7 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
                   <tr key={i.nItem} className="border-b border-border/50 even:bg-muted/30" data-testid="contas-linha">
                     <td className={cn(R.td, 'text-right tabular-nums text-muted-foreground')}>{i.nItem}</td>
                     <td className={cn(R.td, 'truncate')} title={i.descricao}>{i.descricao}</td>
-                    {noModal && <td className={cn(R.td, 'whitespace-nowrap text-right tabular-nums')}>{qtdDoItem(i)}</td>}
+                    {comQtd && <td className={cn(R.td, 'whitespace-nowrap text-right tabular-nums')}>{qtdDoItem(i)}</td>}
                     <td className={cn(R.td, 'whitespace-nowrap text-right tabular-nums')}>{reais(i.liquidoCent)}</td>
                     {comSugestao && (
                       <td className={R.td}>
@@ -341,7 +350,8 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
                     )}
                     <td className={R.td}>
                       <div className={cn('flex min-w-0 items-center gap-1', !c && 'rounded bg-amber-50 ring-1 ring-amber-300')}
-                        title={!c ? 'Sem sugestão — escolha a conta (sem ela, vai na conta do lançamento).' : undefined}>
+                        title={!c ? 'Selecione o subcentro... — sem sugestão: escolha a conta (sem ela, vai na conta do lançamento).'
+                          : noModal && !comOrigem && origem ? `${nome(c)} · ${origem}` : undefined}>
                         <i className="h-2 w-2 shrink-0 rounded-full" style={{ background: c ? cor(c) : COR_SEM_CONTA }} />
                         <div className="min-w-0 flex-1">
                           <ContaDoItem nItem={i.nItem} valor={c} classificacoes={classificacoes} tipoOperacao={tipoOperacao} disabled={somenteLeitura || gravando}
@@ -349,7 +359,7 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
                         </div>
                       </div>
                     </td>
-                    {comSugestao && (
+                    {(noModal ? comOrigem : comSugestao) && (
                       <td className={cn(R.td, 'truncate text-muted-foreground')} title={s?.porque || origem || undefined} data-testid={`origem-do-item-${i.nItem}`}>{origem}</td>
                     )}
                   </tr>
@@ -399,7 +409,7 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
       {/* ── o rodapé do modal: o aviso pequeno do que está sem conta (não trava) + Cancelar + Usar divisão ─────────────────────── */}
       {noModal && (
         <div className="flex h-[40px] shrink-0 items-center gap-2 text-[12px]">
-          <span className="min-w-0 flex-1 whitespace-nowrap text-amber-800" data-testid="contas-aviso-sem-conta">{fraseSemConta ?? ''}</span>
+          <span className="min-w-0 flex-1 text-[11px] leading-[13px] text-amber-800" data-testid="contas-aviso-sem-conta">{fraseSemConta ?? ''}</span>
           <Button type="button" size="sm" variant="outline" className="h-[28px] shrink-0 px-3 text-[12px]" onClick={onFechar} data-testid="contas-cancelar">Cancelar</Button>
           {botaoDividir}
         </div>
@@ -489,7 +499,9 @@ export function ClassificarItens(props: Omit<ComponentProps<typeof ContasDosIten
       <ResumoDasContasDosItens itens={itens} mapa={pendente ?? partida} classificacoes={classificacoes} onClassificar={() => setAberto(true)}
         desabilitado={gravando || somenteLeitura} />
       <Dialog open={aberto} onOpenChange={setAberto}>
-        <DialogContent className="flex h-[min(660px,calc(100vh-16px))] w-[min(1180px,calc(100vw-16px))] max-w-none flex-col gap-2 p-4" data-testid="classificar-itens-modal">
+        {/* `data-painel-por-cima` (exceção declarada do gate, a mesma da gaveta do modal de análise): este modal fica POR CIMA do lançamento de propósito */}
+        <DialogContent className="flex h-[min(660px,calc(100vh-16px))] w-[min(1180px,calc(100vw-16px))] max-w-none flex-col gap-2 p-4" data-testid="classificar-itens-modal"
+          data-painel-por-cima>
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-[13px]">Classificar itens · {itens.length} itens</DialogTitle>
             <DialogDescription className="sr-only">A conta de cada item da nota.</DialogDescription>
