@@ -426,7 +426,7 @@ export const SITUACAO_NA_TELA: Record<SituacaoNaLista, { rotulo: string; cor: st
   pode_estar: { rotulo: 'Pode estar lançada', cor: 'bg-orange-100 text-orange-800', dica: 'há lançamento sem nota com o mesmo valor (do mesmo CNPJ ou sem fornecedor): "Lançar" mostra antes de criar' },
   no_sistema: { rotulo: 'Já no sistema', cor: 'bg-zinc-200 text-zinc-700', dica: 'a chave desta nota já está numa nota do sistema' },
   pede_ciencia: { rotulo: 'Pede ciência', cor: 'bg-amber-100 text-amber-800', dica: 'só o resumo da Receita; o XML completo vem depois da ciência (F3.3)' },
-  fora_do_prazo: { rotulo: 'Fora do prazo', cor: 'bg-zinc-100 text-zinc-700 ring-1 ring-amber-300', dica: 'só o resumo; a Receita só aceita a ciência até 10 dias depois da nota (cStat 596): o XML completo vem pelo fornecedor (e-mail) ou pela Caixa de entrada' },
+  fora_do_prazo: { rotulo: 'Fora do prazo', cor: 'bg-zinc-100 text-zinc-700 ring-1 ring-amber-300', dica: 'fora do prazo de ciência: a Receita só libera o XML completo com a ciência até 10 dias depois da nota; o XML completo pode chegar pelo e-mail do fornecedor (Caixa de entrada)' },
   esperando_xml: { rotulo: 'Esperando XML', cor: 'bg-sky-100 text-sky-800', dica: 'ciência enviada; o XML chega na próxima busca' },
   cancelada: { rotulo: 'Cancelada', cor: 'bg-red-100 text-red-800', dica: 'o emitente cancelou na Receita: nada a lançar' },
   ignorada: { rotulo: 'Ignorada', cor: 'bg-zinc-200 text-zinc-700', dica: 'marcada para não lançar' },

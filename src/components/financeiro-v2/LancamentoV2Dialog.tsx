@@ -3718,7 +3718,7 @@ export function LancamentoV2Dialog({
                       /* a altura segue a JANELA (nunca o conteúdo): medido, o corpo do modal tem 100vh − 131 e a grade começa a 239
                          (207 + os 32 da linha "Quem paga", que ficou de LUGAR FIXO no conserto de 27/11) com 15 de respiro embaixo —
                          assim o modal não rola e só a lista rola, com o cabeçalho preso nela */
-                      altura="clamp(140px, calc(100vh - 387px), 236px)"
+                      altura="clamp(96px, calc(100vh - 387px), 236px)"
                     />
                   )}
 
