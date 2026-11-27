@@ -52,7 +52,7 @@ export function FaixaDoFornecedor({ xml, fechada, cadastro = null, onTrocar, onE
   fechada: boolean;
   /** NOTA-FORNECEDOR-COMPARAR-01 — atualizar o cadastro pela nota SO' pela comparacao (campo · hoje · da nota, confirmar): `oferece` =
    *  a nota traz algo que o cadastro nao tem (achado pelo CNPJ); `atualizado` = ja' confirmado nesta abertura. Nunca grava ao salvar. */
-  cadastro?: { oferece: boolean; atualizado: boolean; abrindo: boolean; onComparar: () => void } | null;
+  cadastro?: { oferece: boolean; dadosNovos?: number; atualizado: boolean; abrindo: boolean; onComparar: () => void } | null;
   onTrocar: () => void;
   onEscolher: (fornecedorId: string) => void;
   onCriar: () => void;
@@ -167,13 +167,15 @@ export function FaixaDoFornecedor({ xml, fechada, cadastro = null, onTrocar, onE
   }
   /* achado pelo CNPJ, unico e ativo: so' ha' faixa quando a nota traz algo que o cadastro nao tem (endereco, IE, fantasia) */
   if (r.achadoPor === 'documento' && cadastro && (cadastro.oferece || cadastro.atualizado)) {
-    const frase = `Fornecedor achado pelo ${rotuloDoc} · "${nome}" · a nota traz dados que o cadastro não tem`;
+    const n = cadastro.dadosNovos ?? 0;
+    const novos = n > 0 ? `a nota traz ${n} ${n === 1 ? 'dado novo' : 'dados novos'} para o cadastro` : 'a nota traz dados que o cadastro não tem';
+    const frase = `Fornecedor achado pelo ${rotuloDoc} · "${nome}" · ${novos}`;
     return (
       <Faixa testid="xml-faixa-fornecedor" titulo={frase}>
         <span className="flex min-w-0 items-center">
           <span className="shrink-0 whitespace-pre">{`Fornecedor achado pelo ${rotuloDoc} · `}</span>
           <span className="min-w-[72px] shrink-[10] truncate font-medium" title={nome} data-testid="xml-nome-do-fornecedor">"{nome}"</span>
-          <span className="min-w-0 truncate whitespace-pre">{' · a nota traz dados que o cadastro não tem'}</span>
+          <span className="min-w-0 truncate whitespace-pre">{` · ${novos}`}</span>
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-2">{comparar}</span>
       </Faixa>

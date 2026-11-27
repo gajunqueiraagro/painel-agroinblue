@@ -71,6 +71,13 @@ export function linhasDaComparacao(hoje: CadastroParaComparar, proposta: Cadastr
   });
 }
 
+/** AVISO-FORNECEDOR-IGUAL-01 (Gabriel 27/11 17:02, NF 1.119: a faixa dizia "a nota traz dados…" e o modal mostrava os 7 "igual") — quantos
+ *  campos a nota MUDARIA no cadastro, pela MESMA comparação do modal (`linhasDaComparacao`: maiúscula, acento, espaço e pontuação de
+ *  CEP/CNPJ/IE não contam). 0 = a faixa não aparece. */
+export function dadosNovosDaNota(hoje: CadastroParaComparar, proposta: CadastroParaComparar): number {
+  return linhasDaComparacao(hoje, proposta).filter((l) => l.estado !== 'igual').length;
+}
+
 /** O que vai a' RPC: so' as colunas dos grupos marcados (e so' as que a nota traz). */
 export function camposMarcados(proposta: CadastroParaComparar, marcados: ReadonlySet<string>): Partial<Record<CampoDoCadastro, string>> {
   const saida: Partial<Record<CampoDoCadastro, string>> = {};

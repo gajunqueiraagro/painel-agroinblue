@@ -5,6 +5,7 @@
  * ⚠ O `LancamentoV2Dialog` E' MONTADO DE VERDADE; so' as bordas sao falsas (banco, cliente, modais filhos). O que se prova e'
  *   o que a tela MOSTRA e o que ela manda GRAVAR.
  */
+import { propostaDoEmitente } from '@/lib/fornecedores/compararCadastro';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -107,6 +108,14 @@ function doXmlDe(o: OpcoesNota, fornecedores: FornecedorV2[], extra: { idPeloNom
   return { proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente, resolucao, ocorrencias: extra.ocorrencias ?? [], arquivo: arquivoXmlDaNota(bytes, 'NFe-12345.XML') };
 }
 
+/** AVISO-FORNECEDOR-IGUAL-01 — o cadastro de hoje IGUAL ao emitente da nota (só caixa, espaço e pontuação do CEP diferentes) */
+const cadastroIgualANota = (d: ReturnType<typeof doXmlDe>, ajuste: Record<string, string | null> = {}) => {
+  if (!d.emitente) throw new Error('a nota do teste sem emitente');
+  const p = propostaDoEmitente(d.emitente);
+  const caixa = (v: string | null | undefined) => (v ? `  ${v.toUpperCase()} ` : v ?? null);
+  return { ...Object.fromEntries(Object.entries(p).map(([k, v]) => [k, k === 'cep' && v ? v.replace(/\D/g, '') : caixa(v)])), ...ajuste };
+};
+
 beforeEach(() => {
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
@@ -118,6 +127,7 @@ beforeEach(() => {
   consultas.fornecedorPeloNome.mockImplementation(async () => ({ ok: true, valor: null }));
   consultas.sugestaoPelosItens.mockImplementation(async () => ({ ok: true, valor: { itens: [], fornecedor: null } }));
   consultas.notaJaLancada.mockImplementation(async () => ({ ok: true, valor: [] }));
+  consultas.cadastroParaComparar.mockImplementation(async () => ({ nome: 'Agropecuaria Exemplo', cpf_cnpj: null }));
 });
 
 function montarModal(props: Partial<React.ComponentProps<typeof LancamentoV2Dialog>>, fornecedores: FornecedorV2[] = [AGRO]) {
@@ -285,6 +295,7 @@ describe('tela A — a lista de notas', () => {
 /* ═══ TELA B ═══════════════════════════════════════════════════════════════════════ */
 describe('tela B — o Novo lançamento preenchido pela nota', () => {
   it('o prefill inteiro no DOM, com a pilula e as origens', async () => {
+    consultas.cadastroParaComparar.mockResolvedValue(cadastroIgualANota(doXmlDe({}, [AGRO])));
     montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO])) });
     await screen.findByDisplayValue('16.238,00');
     expect(screen.getByTestId('pilula-do-xml').textContent).toBe('do XML · NF 000.012.345');
@@ -608,21 +619,27 @@ describe('tela B — a faixa do fornecedor', () => {
     expect(consultas.cadastroParaComparar).not.toHaveBeenCalled();
   });
 
-  it('achado pelo CNPJ: a faixa so aparece quando a nota completa algo; o Salvar nao preenche o cadastro calado', async () => {
-    consultas.camposQueOEmitenteCompleta.mockResolvedValue(['municipio']);
-    const m = montarModal({ prefill: { ...comConta(doXmlDe({ duplicatas: null }, [AGRO])), data_vencimento: '2026-10-30' } }, [AGRO]);
+  /* AVISO-FORNECEDOR-IGUAL-01 (Gabriel 27/11 17:02, NF 1.119) — a faixa decide pela MESMA comparação do modal (normalizada): o cadastro igual à
+     nota (só maiúscula/acento/espaço/pontuação diferentes) = sem faixa; 1 campo diferente = "1 dado novo" */
+
+  it('achado pelo CNPJ, 1 campo diferente: a faixa "1 dado novo"; o Salvar nao preenche o cadastro calado', async () => {
+    const d = doXmlDe({ duplicatas: null }, [AGRO]);
+    consultas.cadastroParaComparar.mockResolvedValue(cadastroIgualANota(d, { municipio: 'Outra Cidade' }));
+    const m = montarModal({ prefill: { ...comConta(d), data_vencimento: '2026-10-30' } }, [AGRO]);
     await screen.findByDisplayValue('16.238,00');
-    await waitFor(() => expect(screen.getByTestId('xml-faixa-fornecedor').textContent).toBe('Fornecedor achado pelo CNPJ · "Agropecuaria Exemplo" · a nota traz dados que o cadastro não temcomparar e atualizar o cadastro'));
+    await waitFor(() => expect(screen.getByTestId('xml-faixa-fornecedor').textContent).toBe('Fornecedor achado pelo CNPJ · "Agropecuaria Exemplo" · a nota traz 1 dado novo para o cadastrocomparar e atualizar o cadastro'));
     fireEvent.click(botaoSalvar());
     await waitFor(() => expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1));
     expect(consultas.completarCadastroPeloXml).not.toHaveBeenCalled();
-    consultas.camposQueOEmitenteCompleta.mockResolvedValue([]);
   });
 
-  it('achado pelo CNPJ e nada a completar: nenhuma faixa', async () => {
-    montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO])) }, [AGRO]);
+  it('achado pelo CNPJ e o cadastro IGUAL à nota (só caixa/espaço/pontuação diferentes): nenhuma faixa', async () => {
+    const d = doXmlDe({}, [AGRO]);
+    consultas.cadastroParaComparar.mockResolvedValue(cadastroIgualANota(d));
+    montarModal({ prefill: prefillDaNota(d) }, [AGRO]);
     await screen.findByDisplayValue('16.238,00');
-    await waitFor(() => expect(consultas.camposQueOEmitenteCompleta).toHaveBeenCalled());
+    await waitFor(() => expect(consultas.cadastroParaComparar).toHaveBeenCalledWith('cli', 'agro'));
+    await new Promise((r) => setTimeout(r, 30));
     expect(screen.queryByTestId('xml-faixa-fornecedor')).toBeNull();
   });
 
@@ -820,6 +837,7 @@ describe('A — dividir pelos itens no NOVO lançamento', () => {
      texto), "Usar divisão" some; o Salvar não divide e grava a correção como regra dos itens (cliente + fornecedor + produto → Nutrição) */
   it('BUG-01: trocar a conta da Geral leva TODOS os itens junto (sem divisão) e o Salvar aprende a correção', async () => {
     bancoQueAceita();
+    consultas.cadastroParaComparar.mockResolvedValue(cadastroIgualANota(doXmlDe({ duplicatas: null }, [AGRO])));
     const PLANO: ClassificacaoItem[] = [
       { id: 'pl-cant', subcentro: 'Alimentação e Cantina Pecuária', centro_custo: 'Administração', grupo_custo: 'Administração', macro_custo: 'Custeio Produção', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
       { id: 'pl-nutri', subcentro: 'Nutrição Rebanho', centro_custo: 'Nutrição', grupo_custo: 'Nutrição', macro_custo: 'Custeio Produção', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' }];
