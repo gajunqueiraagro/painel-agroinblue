@@ -875,6 +875,17 @@ const CENARIOS = [
     estados: [
       ['nota sem duplicata, conta do cartao', { url: 'tela=lancamento&m=novo&v=notacartao' }],
       ['o XML', { url: 'tela=lancamento&m=novo&v=xml' }],
+      /* NOTA-ITENS-SUGESTAO — a faixa com a origem (1 conta) e o aviso pequeno (3 contas + 1 a decidir): a mesma faixa, uma linha */
+      ['a sugestão pelos itens, 1 conta', { url: 'tela=lancamento&m=novo&v=xmlsug1' }],
+      ['a sugestão pelos itens, 3 contas + a decidir', { url: 'tela=lancamento&m=novo&v=xmlsug3' }],
+    ] },
+  /* NOTA-ITENS-SUGESTAO (Gabriel 27/11) — Itens › Contas: responder obra × manutenção (e trocar a resposta) não move a tabela, o total por conta
+     (as linhas ficam reservadas) nem os botões */
+  { nome: 'nota-itens-sugestao-contas', url: 'tela=lancamento&m=novo&v=xmlsug3',
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="contas-total-por-conta"]').waitFor(); await espera(p, 600); },
+    estados: [
+      ['respondido: manutenção', clicar('[data-testid="pergunta-5-manutencao"]')],
+      ['respondido: obra/reforma', clicar('[data-testid="pergunta-5-obra"]')],
     ] },
   /* D-a (Gabriel 29/10 08:32) — CADA MODO CONTRA A PRÓPRIA BASE: a nota JÁ LANÇADA tem outro conjunto de abas (5, numeradas) que a NOVA (3) —
      o desenho aprovado; trocar de modo é trocar de tela, não "deslocar". As variantes já lançadas se medem aqui, contra a já lançada recém-aberta;

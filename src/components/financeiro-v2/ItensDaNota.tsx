@@ -41,7 +41,7 @@ function unitario(u: string | null): string {
 const acrescimos = (i: ItemFiscal) => i.freteCent + i.seguroCent + i.outrasCent + (i.ipi?.valorCent ?? 0) + (i.icmsSt?.valorCent ?? 0) + (i.fcpSt?.valorCent ?? 0);
 const imp = (v: { valorCent?: number } | null) => (v?.valorCent ? reais(v.valorCent) : '0,00');
 
-export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'itens-da-nota', vistaContas }: {
+export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'itens-da-nota', vistaContas, visaoInicial }: {
   cabecalho: CabecalhoDaNota;
   lidos: ItensLidos;
   /** FIN-CLASSIF-DIVIDIDA-01b — a vista "Contas" (a conta de cada item e o dividir): so' no lancamento salvo que pode dividir */
@@ -49,8 +49,10 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
   /** o subcentro do lancamento (a conta que vale para DRE e caixa) — so' para dizer na barra */
   contaDoLancamento?: string | null;
   testId?: string;
+  /** NOTA-ITENS-SUGESTAO — o "ver por item" da faixa abre direto na vista Contas */
+  visaoInicial?: Visao;
 }) {
-  const [visao, setVisao] = useState<Visao>('valores');
+  const [visao, setVisao] = useState<Visao>(visaoInicial && (visaoInicial !== 'contas' || vistaContas) ? visaoInicial : 'valores');
   const t = lidos.totais;
   const prova = conferirSoma(lidos);
   const rateado = lidos.itens.some((i) => i.rateado);

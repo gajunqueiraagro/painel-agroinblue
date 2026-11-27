@@ -2230,6 +2230,17 @@ const CENARIOS = [
   { nome: 'lancamento-xml-Itens-contas', url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
     antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); await clicarTexto('Contas')(p); } },
+  /* NOTA-ITENS-SUGESTAO (Gabriel 27/11, mock aprovado 10:47) — a faixa com a ORIGEM (1 conta), o aviso pequeno "N itens em X classificações ·
+     ver por item" (3 contas + 1 a decidir) e, pelo "ver por item", Itens › Contas com obra/manutenção, origem e total por conta; respondida
+     a pergunta, o "Usar divisão" libera (nada se desloca) */
+  { nome: 'lancamento-xml-sugestao-uma', url: 'tela=lancamento&m=novo&v=xmlsug1', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'lancamento-xml-sugestao-varias', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'lancamento-xml-sugestao-itens', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="contas-total-por-conta"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
+  { nome: 'lancamento-xml-sugestao-respondida', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="pergunta-5-manutencao"]').click(); await p.waitForTimeout(300); } },
   { nome: 'lancamento-xml-Geral-dividida', url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => {
       await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); await clicarTexto('Contas')(p);

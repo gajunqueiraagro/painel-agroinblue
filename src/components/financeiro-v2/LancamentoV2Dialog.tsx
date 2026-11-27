@@ -116,7 +116,8 @@ import {
   MOTIVO_DA_DIVISAO_NA_CRIACAO, partesPendentes, percentuaisDosItens, porContaDosItens, porQueNaoDivideNaCriacao, voltarUmaConta, voltarUmaContaDoCadastro,
   type DivisaoLida, type ParteNova, type ResultadoDaDivisao,
 } from '@/lib/financeiro/divisaoDaClassificacao';
-import { aprender, historicoDoEmitente, sugerir } from '@/lib/financeiro/sugestaoDeContaDosItens';
+import { contasSugeridasDosItens, type ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
+import { lembrarContasDosItens, sugestaoDosItensDaNota } from '@/lib/financeiro/nfeConsultas';
 import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
 import { fraseParcelasComoNaNota, type CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
@@ -694,7 +695,16 @@ export function LancamentoV2Dialog({
   const [contasDosItensMudadas, setContasDosItensMudadas] = useState<ReadonlyMap<number, string> | null>(null);
   const resultadoDoSalvarEDividir = useRef<ResultadoDaDivisao | null>(null);
   useEffect(() => { setContasDosItensMudadas(null); }, [open, lancamento?.id]);
-  const [contasAprendidas, setContasAprendidas] = useState<ReadonlyMap<number, string>>(new Map());
+  /* NOTA-ITENS-SUGESTAO (Gabriel 27/11, lote 114360) — a sugestão POR ITEM da escada ÚNICA do banco: no NOVO, a que veio com a nota
+     (`xml.proposta.sugestaoDosItens`); no Editar, a da nota gravada. Nenhuma regra na tela (a "aprendida" do navegador saiu). */
+  const [sugestoesDosItens, setSugestoesDosItens] = useState<ItemSugerido[] | null>(null);
+  const contasAprendidas = useMemo(() => contasSugeridasDosItens(sugestoesDosItens ?? []), [sugestoesDosItens]);
+  /* Q3 — as contas que o operador escolheu na vista Contas (resposta obra × manutenção, conta trocada) e o "Juntar tudo numa conta" */
+  const [escolhasDosItens, setEscolhasDosItens] = useState<ReadonlyMap<number, string>>(new Map());
+  const [juntadaEm, setJuntadaEm] = useState<string | null>(null);
+  /* "ver por item" da faixa: a aba Itens abre na vista Contas */
+  const [itensEmContas, setItensEmContas] = useState(false);
+  useEffect(() => { setEscolhasDosItens(new Map()); setJuntadaEm(null); setItensEmContas(false); }, [open, lancamento?.id]);
   /* NOTA-CONTAS-NA-CRIACAO-01 A — a divisao pelos itens escolhida no NOVO lancamento: PENDENTE na tela (nada vai ao banco antes do Salvar);
      o Salvar cria e divide (o parcelado numa transacao so'; o a' vista cancela o recem-criado se a divisao recusar) */
   const [divisaoNaCriacao, setDivisaoNaCriacao] = useState<ReadonlyMap<number, string> | null>(null);
@@ -2723,32 +2733,64 @@ export function LancamentoV2Dialog({
     if (recusa) { setErroAntesDeSalvar(recusa); return; }
     setErroAntesDeSalvar(null);
     setDivisaoNaCriacao(new Map(mapa));
-    const c = classificacoesDoModal.find((x) => x.id === contaDaMaiorParte(itensDaNota.lidos.itens, mapa));
-    if (c) {
-      /* a safra so' fica se a maior parte e' da MESMA atividade (a regra de trocar a atividade na Geral; o campo esta' oculto enquanto pendente,
-         e a safra de outra atividade seria recusada no Salvar — PR-FIN-SAFRA-ESCOPO-01) */
-      const escopo = (c.escopo_negocio || '').trim();
-      setClassificacao((atual) => ({ ...atual, plano_conta_id: c.id ?? null, subcentro: c.subcentro, macro_custo: c.macro_custo, grupo_custo: c.grupo_custo || '',
-        centro_custo: c.centro_custo, escopo_negocio: c.escopo_negocio || '', atividade: atividadeValida(c.escopo_negocio),
-        safra_id: escopo === 'administrativo' || escopo !== (atual.escopo_negocio || '').trim() ? '' : atual.safra_id }));
-    }
+    setJuntadaEm(null);
+    porNaContaDoLancamento(contaDaMaiorParte(itensDaNota.lidos.itens, mapa));
   };
-  /* a sugestao aprendida dos itens (as divisoes ja' feitas pelos itens, do mesmo emitente) */
+  /** A conta escolhida vira a do lancamento (o Subcentro da Geral). */
+  const porNaContaDoLancamento = (planoContaId: string | null) => {
+    const c = classificacoesDoModal.find((x) => x.id === planoContaId);
+    if (!c) return;
+    /* a safra so' fica se a maior parte e' da MESMA atividade (a regra de trocar a atividade na Geral; o campo esta' oculto enquanto pendente,
+       e a safra de outra atividade seria recusada no Salvar — PR-FIN-SAFRA-ESCOPO-01) */
+    const escopo = (c.escopo_negocio || '').trim();
+    setClassificacao((atual) => ({ ...atual, plano_conta_id: c.id ?? null, subcentro: c.subcentro, macro_custo: c.macro_custo, grupo_custo: c.grupo_custo || '',
+      centro_custo: c.centro_custo, escopo_negocio: c.escopo_negocio || '', atividade: atividadeValida(c.escopo_negocio),
+      safra_id: escopo === 'administrativo' || escopo !== (atual.escopo_negocio || '').trim() ? '' : atual.safra_id }));
+  };
+  /* NOTA-ITENS-SUGESTAO — a conta sugerida pelos itens chega só com o id e o subcentro: no NOVO que nasce da nota, o resto da linha do
+     plano (macro, grupo, centro, atividade) vem do plano carregado — a mesma regra do "Usar divisão". Só no novo da nota: nunca mexe no
+     que um lançamento salvo já tem. */
+  const contaSemHierarquia = !lancamento && !!xml && !!classificacao.plano_conta_id && !classificacao.macro_custo ? classificacao.plano_conta_id : null;
+  useEffect(() => {
+    if (contaSemHierarquia) porNaContaDoLancamento(contaSemHierarquia);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- so' quando a conta sem a linha do plano aparece (ou o plano chega)
+  }, [contaSemHierarquia, classificacoesDoModal]);
+  /** NOTA-ITENS-SUGESTAO — "Juntar tudo numa conta": sem divisão; a conta escolhida vira a do lançamento. */
+  const juntarNaCriacao = (planoContaId: string) => {
+    setErroAntesDeSalvar(null);
+    setDivisaoNaCriacao(null);
+    setJuntadaEm(planoContaId);
+    porNaContaDoLancamento(planoContaId);
+  };
+  /** Q3 — depois do Salvar (os itens já gravados pela chave): a conta que o operador ESCOLHEU e que valeu (na divisão, ou a juntada) vira a
+   *  regra do item (`fn_item_regra_gravar`); na próxima nota o mesmo produto já vem decidido. Falha não desfaz nada (só o console). */
+  const lembrarEscolhasDosItens = async () => {
+    const cli = clienteAtual?.id;
+    if (!cli || !xml || !escolhasDosItens.size) return;
+    const valeu = (n: number, p: string) => (divisaoNaCriacao ? divisaoNaCriacao.get(n) === p : juntadaEm === p);
+    const m = new Map([...escolhasDosItens].filter(([n, p]) => valeu(n, p)));
+    if (!m.size) return;
+    const falhas = await lembrarContasDosItens(cli, xml.proposta.documento.chaveAcesso, m, `Escolhido no lançamento da ${xml.proposta.rotuloNota}`);
+    if (falhas.length) console.error('[lembrarContasDosItens]', falhas);
+  };
+  /* a sugestao dos itens (a escada unica do banco) */
   const chaveDaNotaDosItens = itensDaNota?.cabecalho.chave ?? null;
-  const emitenteDosItens = itensDaNota?.cabecalho.emitenteDocumento ?? null;
+  const temItensDaNota = !!itensDaNota;
+  const sugestaoDaProposta = xml?.proposta.sugestaoDosItens ?? null;
   useEffect(() => {
     let vivo = true;
-    setContasAprendidas(new Map());
+    setSugestoesDosItens(null);
     const cli = clienteAtual?.id;
-    if ((!podeDividir && !podeDividirNaCriacao) || !cli || !itensDaNota) return;
-    void historicoDoEmitente(cli, emitenteDosItens, chaveDaNotaDosItens).then((h) => {
-      if (!vivo || !h.length) return;
-      const validas = new Set(classificacoesDoModal.filter((c) => c.tipo_operacao === tipoOperacao).map((c) => c.id));
-      setContasAprendidas(sugerir(itensDaNota.lidos.itens, aprender(h), (id) => validas.has(id)));
+    if ((!podeDividir && !podeDividirNaCriacao) || !cli || !temItensDaNota) return;
+    /* no NOVO a sugestão já veio com a nota (a mesma escada, com os itens do arquivo) */
+    if (podeDividirNaCriacao && sugestaoDaProposta) { setSugestoesDosItens(sugestaoDaProposta.itens); return; }
+    void sugestaoDosItensDaNota(cli, chaveDaNotaDosItens).then((r) => {
+      if (!vivo) return;
+      if (r.ok === false) { console.error('[sugestaoDosItensDaNota]', r.motivo); return; }
+      setSugestoesDosItens(r.valor);
     });
     return () => { vivo = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- a nota e o emitente bastam: a lista do plano so' valida
-  }, [podeDividir, podeDividirNaCriacao, clienteAtual?.id, chaveDaNotaDosItens, emitenteDosItens]);
+  }, [podeDividir, podeDividirNaCriacao, clienteAtual?.id, chaveDaNotaDosItens, sugestaoDaProposta, temItensDaNota]);
   const contasIniciaisDosItens = useMemo(() => {
     const gravadas = divisao ? contasDasPartes(divisao.partes) : new Map<number, string>();
     return gravadas.size ? gravadas : contasAprendidas;
@@ -2868,7 +2910,7 @@ export function LancamentoV2Dialog({
       if (falha) return desfazerCriacao(cli, idCriado, `a nota não foi anexada: ${falha.erro ?? 'falha'}`);
     }
     const frase = await dividirNaCriacao(cli, idCriado, mapa);
-    if (!frase) onLancamentoCriado?.();
+    if (!frase) { await lembrarEscolhasDosItens(); onLancamentoCriado?.(); }
     return frase;
   };
   const aposCriarDoXml = async () => {
@@ -2877,6 +2919,7 @@ export function LancamentoV2Dialog({
     if (clienteAtual?.id) {
       const erroItens = await gravarItensSemTravar(clienteAtual.id, xml.arquivo);
       if (erroItens) toast.error(`Lançamento gravado, mas os itens da nota não foram guardados: ${erroItens}`);
+      else await lembrarEscolhasDosItens();
     }
     onLancamentoCriado?.();
   };
@@ -3056,6 +3099,19 @@ export function LancamentoV2Dialog({
                     title={`NCM ${xml.proposta.ncmDeBem}: máquina, implemento ou veículo. Se for bem durável, ligue em Patrimônio.${xml.proposta.classificacao?.subcentro ? ` Última classe deste fornecedor: ${xml.proposta.classificacao.subcentro}.` : ''}`}>
                     <span className="min-w-0 truncate">Pode ser bem do patrimônio (NCM {xml.proposta.ncmDeBem}) — ligar em Patrimônio</span>
                   </div>
+                ) : xml.proposta.sugestaoDosItens ? (
+                  /* NOTA-ITENS-SUGESTAO (mock aprovado 27/11 10:47) — a faixa diz a ORIGEM ("pelos itens (N): …", "último deste fornecedor …");
+                     com os itens em várias contas, o AVISO PEQUENO "N itens em X classificações · ver por item" (a mesma faixa, uma linha) */
+                  (xml.proposta.sugestaoDosItens.frase && (xml.proposta.sugestaoDosItens.varias || xmlAmbar('subcentro') || !xml.proposta.classificacao)) ? (
+                    <div className="flex h-6 min-w-0 items-center gap-2 overflow-hidden rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-subcentro"
+                      title={xml.proposta.sugestaoDosItens.porque || xml.proposta.sugestaoDosItens.frase}>
+                      <span className="min-w-0 truncate">{xml.proposta.sugestaoDosItens.frase}</span>
+                      {itensDaNota && (podeDividirNaCriacao || podeDividir) && xml.proposta.sugestaoDosItens.itens.some((i) => i.fonte !== 'fornecedor' || i.pergunta) && (
+                        <button type="button" className="ml-auto shrink-0 font-medium underline underline-offset-2 hover:text-amber-950" data-testid="ver-por-item"
+                          onClick={() => { setItensEmContas(true); setAbaAtiva('itens'); }}>ver por item</button>
+                      )}
+                    </div>
+                  ) : null
                 ) : xmlAmbar('subcentro') && (
                   <div className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-subcentro"
                     title={`Classificação sugerida: ${xml.proposta.classificacao?.subcentro ?? ''} · ${xml.proposta.origens.subcentro ?? ''}`}>
@@ -3892,16 +3948,19 @@ export function LancamentoV2Dialog({
             {itensDaNota && (
               <TabsContent value="itens" className="mt-0 h-full focus-visible:outline-none" data-testid="aba-itens-da-nota">
                 <ItensDaNota cabecalho={itensDaNota.cabecalho} lidos={itensDaNota.lidos} contaDoLancamento={subcentro || null}
+                  visaoInicial={itensEmContas && (podeDividir || podeDividirNaCriacao) ? 'contas' : undefined}
                   vistaContas={podeDividir ? (
                     <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao}
                       contaDeHoje={lancDividido ? null : (classificacao.plano_conta_id ?? null)} sugeridas={contasIniciaisDosItens} atividadeSugerida={classificacao.atividade}
                       gravando={!!motivoDaDivisao} onDividir={(mapa) => setMotivoDaDivisao({ tipo: 'itens', mapa })}
-                      pendente={contasDosItensMudadas} onMudou={setContasDosItensMudadas} />
+                      pendente={contasDosItensMudadas} onMudou={setContasDosItensMudadas}
+                      sugestoes={lancDividido ? undefined : sugestoesDosItens ?? undefined} />
                   ) : podeDividirNaCriacao ? (
                     /* NOTA-CONTAS-NA-CRIACAO-01 A — no NOVO: a mesma vista; "Dividir … ao salvar" deixa a divisao PENDENTE (o Salvar grava) */
                     <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao} aoSalvar
                       contaDeHoje={classificacao.plano_conta_id ?? null} sugeridas={divisaoNaCriacao ?? contasAprendidas} atividadeSugerida={classificacao.atividade}
-                      gravando={saving} onDividir={aplicarDivisaoNaCriacao} />
+                      gravando={saving} onDividir={aplicarDivisaoNaCriacao}
+                      sugestoes={sugestoesDosItens ?? undefined} onJuntar={sugestoesDosItens ? juntarNaCriacao : undefined} onEscolhas={setEscolhasDosItens} />
                   ) : undefined} />
               </TabsContent>
             )}

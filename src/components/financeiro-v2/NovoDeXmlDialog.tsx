@@ -31,9 +31,11 @@ import { proporLancamento, type FazendaComIE, type PropostaDeLancamento } from '
 import { resolverEmitente, type FornecedorParaResolver, type ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { dataCurta, diaMes, documentoFormatado, numeroDaNota, reais } from '@/lib/financeiro/nfe/formatos';
 import {
-  aliasesDasFazendas, fazendaPeloHistoricoDoFornecedor, fazendasDoTomador, fornecedorPeloNome, iePorFazenda, notaJaLancada, notaJaRegistrada, ultimaClassificacaoDoFornecedor, type OcorrenciaDaNota,
+  aliasesDasFazendas, fazendaPeloHistoricoDoFornecedor, fazendasDoTomador, fornecedorPeloNome, iePorFazenda, notaJaLancada, notaJaRegistrada, sugestaoPelosItens, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
 import { arquivoXmlDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
+import { itensDoPdf as itensDaNotaDoPdf, itensDoXml } from '@/lib/financeiro/nfe/itensDaNota';
+import { sugestaoParaAProposta } from '@/lib/financeiro/nfe/sugestaoNaProposta';
 import { parcelasParaCasar } from '@/lib/financeiro/nfe/jaLancada';
 import { dataInteira, fraseDaChaveNaoConfere, type NotaLidaOk, type NotaParaLancar } from './NotaFiscalDialog';
 import { ItensDasNotasGuardadasDialog } from './ItensDasNotasGuardadasDialog';
@@ -173,15 +175,24 @@ export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 're
     resolucao = resolverEmitente(nota.emitente, fornecedores, pelo.ok === false ? null : pelo.valor);
   }
   /* NOTA-NFSE-LEITURA-02 (D2 a) — a fazenda pelo historico do fornecedor so' quando a nota nao a diz (sem IE do destinatario) */
-  const [registrada, ultima, fazendaDoHistorico, fazendasDoTomadorDaNota] = await Promise.all([
+  /* NOTA-ITENS-SUGESTAO (Gabriel 27/11, lote 114360) — a classificação nasce dos ITENS pela escada ÚNICA do banco (itens > NCM > família >
+     último deste fornecedor > nada), com os itens lidos do próprio arquivo; a mesma das 5 portas (Novo · do XML, Criar pelo extrato, Lançar nota
+     do Caixa, Notas da Receita, Ler a NF). Falhou = a faixa diz e o campo fica vazio (é sugestão: não trava o lançamento). */
+  const itensLidos = lido.origem === 'xml' ? itensDoXml(bytes) : itensDaNotaDoPdf(nota, lido.extras ?? {});
+  const itensDaNota = itensLidos?.itens ?? [];
+  const [registrada, sugerida, fazendaDoHistorico, fazendasDoTomadorDaNota] = await Promise.all([
     notaJaRegistrada(cli, nota.chave),
-    resolucao.propostoId ? ultimaClassificacaoDoFornecedor(cli, resolucao.propostoId) : Promise.resolve(null),
+    sugestaoPelosItens(cli, { emitenteDocumento: nota.emitente.documento, destIe: nota.destinatario.ie ?? null, emissao: nota.emissao || null,
+      favorecidoId: resolucao.propostoId, itens: itensDaNota }),
     nota.destinatario.ie ? Promise.resolve(null) : fazendaPeloHistoricoDoFornecedor(cli, nota.emitente.documento),
     nota.destinatario.ie ? Promise.resolve([]) : fazendasDoTomador(cli, nota.destinatario.documento, nota.servico?.competencia || nota.emissao),
   ]);
   if (registrada.ok === false) falhas.push(`se a nota já está registrada (${registrada.motivo})`);
   const ocorrencias = registrada.ok === false ? [] : registrada.valor;
-  const proposta = proporLancamento({ nota, avisosDoLeitor: avisos, fazendas: fazendasComIE, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima, fazendaDoHistorico, fazendasDoTomador: fazendasDoTomadorDaNota });
+  if (sugerida.ok === false) console.error('[sugestaoPelosItens]', sugerida.motivo);
+  const sugestaoDosItens = sugestaoParaAProposta(sugerida.ok === false ? { falha: sugerida.motivo } : sugerida.valor, itensDaNota, nota.emissao);
+  const proposta = proporLancamento({ nota, avisosDoLeitor: avisos, fazendas: fazendasComIE, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null,
+    sugestaoDosItens, fazendaDoHistorico, fazendasDoTomador: fazendasDoTomadorDaNota });
   if (proposta.ok === false) return { ...base, nota, avisos, recusa: proposta.frase };
   const ehPdf = lido.origem === 'pdf';
   const doXml: DoXml = {
