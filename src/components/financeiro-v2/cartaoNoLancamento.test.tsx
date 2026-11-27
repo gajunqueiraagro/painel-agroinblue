@@ -85,7 +85,9 @@ async function abrir(p: Partial<React.ComponentProps<typeof LancamentoV2Dialog>>
 }
 /** os pares (rótulo, valor) do bloco Pagamento do resumo */
 const pagamentoNoResumo = () => Object.fromEntries([...screen.getByTestId('resumo-pagamento').querySelectorAll('tr')].flatMap((tr) => {
-  const td = [...tr.querySelectorAll('td')].map((c) => c.textContent ?? '');
+  /* RESUMO-LATERAL-FORMA-01 — a Forma aparece CURTA ("Cartão"); a gravada inteira está no title da célula: é ela que este teste confere */
+  const cel = [...tr.querySelectorAll('td')];
+  const td = cel.map((c, k) => (k % 2 === 1 && cel[k - 1]?.textContent === 'Forma' && c.getAttribute('title') ? c.getAttribute('title') ?? '' : c.textContent ?? ''));
   return [[td[0], td[1]], [td[2], td[3]]];
 }));
 const irParaPagamento = () => {

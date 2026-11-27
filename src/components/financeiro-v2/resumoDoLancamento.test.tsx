@@ -99,3 +99,30 @@ describe('P121 — o Resumo do lançamento, os 3 casos do mock', () => {
     expect(container.querySelectorAll('[class*="overflow-auto"], [class*="overflow-y-auto"], [class*="overflow-scroll"]')).toHaveLength(0);
   });
 });
+
+/* RESUMO-LATERAL-FORMA-01 (Gabriel 27/11 17:00, NF 469.017: "Forma: Cartão de c…" cortado) — toda forma, inclusive as grafias antigas
+   gravadas, sai CURTA (os nomes curtos do sistema, ≤ 8 letras: cabe nos 69px do Par) e inteira no title; o lugar é o mesmo (o esqueleto
+   não muda de uma forma para outra). A medida em px é do `check:ui-cortes` (cena `lancamento-resumo-formas`). */
+describe('RESUMO-LATERAL-FORMA-01 — a Forma curta, inteira no title', () => {
+  const CASOS: [string, string][] = [
+    ['PIX', 'Pix'], ['Cartão de crédito', 'Cartão'], ['Boleto', 'Boleto'], ['Débito Automático', 'DA'], ['Débito', 'Débito'],
+    ['Transferência', 'TED'], ['Dinheiro', 'Dinheiro'], ['Outro', 'Outro'],
+    ['Cartão de Credito', 'Cartão'], ['PIX/Transferência Bancária', 'Pix'], ['Débito em Conta', 'Débito'], ['Cartão de Débito', 'Cartão'],
+  ];
+  it.each(CASOS)('"%s" → "%s" (o inteiro no title)', (forma, curta) => {
+    montar({ ...ALVORADA, forma });
+    const el = screen.getByTestId('resumo-forma');
+    expect(el.textContent).toBe(curta);
+    expect(curta.length).toBeLessThanOrEqual(8);
+    expect(el.closest('td')?.getAttribute('title')).toBe(forma);
+  });
+  it('sem forma: "—"; e o esqueleto é o MESMO com a forma mais longa (lugar fixo)', () => {
+    const r0 = montar({ ...ALVORADA, forma: null });
+    expect(screen.getByTestId('resumo-forma').textContent).toBe('—');
+    r0.unmount();
+    const { container, unmount } = montar({ ...ALVORADA, forma: 'PIX' });
+    const curta = esqueleto(container); unmount();
+    const r2 = montar({ ...ALVORADA, forma: 'PIX/Transferência Bancária' });
+    expect(esqueleto(r2.container)).toBe(curta);
+  });
+});
