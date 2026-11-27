@@ -85,6 +85,19 @@ export async function xmlDaCaixaDaReceita(clienteId: string, chave: string): Pro
 }
 
 /** os produtores do cliente com certificado ativo e válido (quem pode consultar a nota pela chave) */
+/**
+ * NOTAS-RECEITA-BLOQUEIO-01 (Gabriel 27/11) — quando o produtor pode pedir de novo à Receita (`fiscal_dfe_controle.nao_antes_de`, o MESMO
+ * relógio do portão do banco). Futuro = o botão mostra "próxima às HH:MM" e NÃO chama (antes chamava e o banco recusava). Falhou = null.
+ */
+export async function proximaBuscaDoTitular(titularId: string): Promise<string | null> {
+  const { data, error } = await db().from('fiscal_dfe_controle').select('nao_antes_de').eq('titular_id', titularId).maybeSingle();
+  if (error || !data) return null;
+  const v = Reflect.get(data, 'nao_antes_de');
+  return typeof v === 'string' && Date.parse(v) > Date.now() ? v : null;
+}
+/** "HH:MM" no fuso de quem olha */
+export const horaCurta = (iso: string): string => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
 export async function titularesComCertificado(clienteId: string): Promise<string[]> {
   const { data, error } = await db().from('fiscal_certificados').select('titular_id, valido_ate').eq('cliente_id', clienteId).eq('situacao', 'ativo');
   if (error) { console.error('[danfeDasNotasGuardadas] certificados', error); return []; }
