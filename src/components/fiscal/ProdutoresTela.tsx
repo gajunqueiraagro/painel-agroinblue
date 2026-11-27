@@ -327,10 +327,12 @@ function FichaDoProdutor({ titular, titulares, futura, clienteId, cliente, aoCri
       </div>
       {/* O RODAPÉ — a frase (pendência/recusa) no lugar reservado; Inativar · Desfazer · Salvar à direita */}
       <div className="flex h-[40px] shrink-0 items-center gap-2 border-t bg-card px-3">
-        <p className={cn('min-w-0 flex-1 truncate text-[10px]', rodape ? 'text-destructive' : 'text-muted-foreground')} title={rodape ?? undefined} data-testid="produtor-rodape">
+        {/* GATE-PRODUTORES-CERT-01 (Code 4 25/11): fora de tabela nada termina em "…" — a frase QUEBRA em 2 linhas reservadas (13px × 2 nos 40px
+            do rodapé), nunca corta; a pendência/recusa segue com o texto inteiro no title */}
+        <p className={cn('line-clamp-2 min-w-0 flex-1 whitespace-normal text-[10px] leading-[13px]', rodape ? 'text-destructive' : 'text-muted-foreground')} title={rodape ?? undefined} data-testid="produtor-rodape">
           {/* CERT-ABA-UX-01 (Amanda 16/11): o certificado grava ao subir; o Salvar/Desfazer do rodapé são só dos dados da ficha */}
           {rodape ?? (mudou ? 'há mudanças não gravadas: Salvar mostra a prévia'
-            : aba === 'certificado' ? 'o certificado grava ao subir; Salvar e Desfazer são só dos dados da ficha' : '')}
+            : aba === 'certificado' ? 'o certificado grava ao subir; Salvar e Desfazer valem só para a ficha' : '')}
         </p>
         {titular && (
           <Button variant="outline" size="sm" className="h-[26px] w-[74px] text-[11px]" onClick={() => void trocarAtivo()} disabled={gesto.indo}

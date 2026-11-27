@@ -22,6 +22,7 @@
 import { useConteudoEstavel } from '@/lib/react/conteudoEstavel';
 import { TabelaDosLevados } from '@/components/conciliacao/TabelaDosLevados';
 import { lerComplementoDasLinhas, type ComplementoDaLinha } from '@/lib/conciliacao/complementoDasLinhas';
+import { lerVencimentosDeclarados, vencimentoEstimado } from '@/lib/conciliacao/motorAmpliado';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fechaAoCentavo, podeCriarPelaDiferenca } from '@/lib/conciliacao/tolerancia';
 import { EscolherContaDaTaxa } from '@/components/conciliacao/EscolherContaDaTaxa';
@@ -39,6 +40,9 @@ import { ConciliarDiferencaModal } from '@/components/conciliacao/ConciliarDifer
 import { MOTIVO_CASAR_LABEL } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { FRASE_LEVE_O_PAR, fraseDoJuroReal, lerRespostaPosPagar, levadosSaoOPar, mapaDaParcelaPos, parcelaPosDosLevados,
   type RespostaPosPagar } from '@/lib/financiamentos/parcelaPosPagar';
+import { lerParcelasDosLancamentos } from '@/lib/conciliacao/detalheDaSugestao';
+import { parDaParcela, opcoesDoMotivo, pagoAdiantado, jurosQueFecham, fraseDoAjuste, ROTULO_DO_MOTIVO,
+  type MotivoDoAjuste, type ModoDaParcela, type ParcelaDoLancamento } from '@/lib/conciliacao/parcelaNoCasar';
 
 const fmtBRL = (v: number | null | undefined) =>
   v == null ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -133,6 +137,28 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
     void lerComplementoDasLinhas(clienteId, idsDosLevados.split(',')).then((m) => { if (vivo && m) setComplemento(m); });
     return () => { vivo = false; };
   }, [open, clienteId, idsDosLevados]);
+  /* CONC-SUGESTOES-V2 C (lote 114390) — o que declara o vencimento de cada levado: estimado = "~" e nunca "pago antes/depois" */
+  const [declarados, setDeclarados] = useState<ReadonlyMap<string, string | null> | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    if (!open || !clienteId || !idsDosLevados) { setDeclarados(null); return; }
+    void lerVencimentosDeclarados(clienteId, idsDosLevados.split(',')).then((m) => { if (vivo) setDeclarados(m); });
+    return () => { vivo = false; };
+  }, [open, clienteId, idsDosLevados]);
+  /* REGRA DE FINANCIAMENTO (b) 07:07 — de qual parcela é cada levado (amortização · juros): com a parcela inteira e outro valor, a pergunta */
+  const [parcelaDe, setParcelaDe] = useState<ReadonlyMap<string, ParcelaDoLancamento> | null>(null);
+  /* os levados E os iniciais: a amortização parcial tira os juros dos levados, e a parcela continua reconhecida pelos iniciais */
+  const idsParaParcela = [...new Set([...iniciais.map((l) => l.lancamento_id), ...(idsDosLevados ? idsDosLevados.split(',') : [])])].sort().join(',');
+  useEffect(() => {
+    let vivo = true;
+    if (!open || !idsParaParcela) { setParcelaDe(null); return; }
+    void lerParcelasDosLancamentos(idsParaParcela.split(',')).then((m) => { if (vivo) setParcelaDe(m); });
+    return () => { vivo = false; };
+  }, [open, idsParaParcela]);
+  const [motivoAjuste, setMotivoAjuste] = useState<MotivoDoAjuste>('ajuste_juros');
+  const [modoParcela, setModoParcela] = useState<ModoDaParcela>('inteira');
+  /* o ajuste de juros PADRÃO se aplica UMA vez por abertura (o operador pode mexer no campo depois) */
+  const ajusteFeito = useRef<string | null>(null);
   const nfLida = useMemo(() => {
     const nf = new Map<string, string>();
     for (const [id, x] of complemento) if (x.numeroDocumento) nf.set(id, x.numeroDocumento);
@@ -176,6 +202,7 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
     })));
     setErroRodape(null);
     setSim(null);
+    setMotivoAjuste('ajuste_juros'); setModoParcela('inteira'); ajusteFeito.current = null;
   }, [open, iniciais, extrato]);
 
   const valorDe = (t: string) => Number(t.replace(/\./g, '').replace(',', '.')) || 0;
@@ -212,6 +239,10 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
   );
   const idsLevados = useMemo(() => levados.map((l) => l.lancamento_id), [levados]);
   const parcelaPos = useMemo(() => parcelaPosDosLevados(idsLevados, mapaPos), [idsLevados, mapaPos]);
+  /* a parcela inteira (amortização + juros) — o pós-fixado tem o dono próprio e fica fora */
+  const par = useMemo(() => (parcelaPos ? null : parDaParcela(idsLevados, parcelaDe)), [parcelaPos, idsLevados, parcelaDe]);
+  /* a amortização parcial leva SÓ a amortização: a parcela que o modal reconhece é a dos INICIAIS (o par antes de tirar os juros) */
+  const parInicial = useMemo(() => (parcelaPos ? null : parDaParcela(iniciais.map((l) => l.lancamento_id), parcelaDe)), [parcelaPos, iniciais, parcelaDe]);
 
   const simular = useCallback(async () => {
     if (!extrato) return;
@@ -273,6 +304,46 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, [open, simular]);
 
+  /* os juros que fecham com o banco: |banco| − a amortização do campo (na CARÊNCIA, sem amortização, o banco inteiro) */
+  const jurosQueFechamDoPar = (p: { amortizacaoId: string | null }): number | null => {
+    if (!extrato) return null;
+    if (!p.amortizacaoId) return jurosQueFecham(extrato.valor, 0);
+    const am = levados.find((l) => l.lancamento_id === p.amortizacaoId);
+    return am ? jurosQueFecham(extrato.valor, valorDe(am.valorTexto)) : null;
+  };
+  /* o PADRÃO (ajuste de juros): a 1ª simulação com diferença põe nos juros o que fecha com o banco; o principal fica */
+  useEffect(() => {
+    if (!open || !par || !extrato || !sim || sim.ok || modoParcela !== 'inteira') return;
+    const chave = `${extrato.extrato_id}:${par.parcelaId}`;
+    if (ajusteFeito.current === chave) return;
+    const j = jurosQueFechamDoPar(par);
+    ajusteFeito.current = chave;
+    if (j != null && motivoAjuste !== 'juros_atraso') {
+      setLevados((v) => v.map((x) => (x.lancamento_id === par.jurosId ? { ...x, valorTexto: paraCampo(j) } : x)));
+    }
+  }, [open, par, extrato, sim, modoParcela, levados, motivoAjuste]);
+  const jurosPrevistoDe = (id: string) => Math.abs(iniciais.find((l) => l.lancamento_id === id)?.valor_assinado ?? 0);
+  const escolherMotivo = (m: MotivoDoAjuste) => {
+    setMotivoAjuste(m);
+    if (!par || !extrato) return;
+    const j = m === 'juros_atraso' ? jurosPrevistoDe(par.jurosId) : jurosQueFechamDoPar(par);
+    if (j != null) setLevados((v) => v.map((x) => (x.lancamento_id === par.jurosId ? { ...x, valorTexto: paraCampo(j) } : x)));
+  };
+  const escolherModo = (m: ModoDaParcela) => {
+    setModoParcela(m);
+    const base = parInicial;
+    if (!base) return;
+    if (m === 'parcial') {
+      /* só a amortização, com o valor PREVISTO dela: o "Conciliar com diferença" liga com falta e o resto segue em aberto */
+      setLevados((v) => v.filter((x) => x.lancamento_id !== base.jurosId).map((x) => (x.lancamento_id === base.amortizacaoId
+        ? { ...x, valorTexto: paraCampo(Math.abs(x.valor_assinado)) } : x)));
+    } else {
+      const ju = iniciais.find((l) => l.lancamento_id === base.jurosId);
+      ajusteFeito.current = null; setMotivoAjuste('ajuste_juros');
+      if (ju) setLevados((v) => (v.some((x) => x.lancamento_id === ju.lancamento_id) ? v : [...v, { ...ju, valorTexto: paraCampo(ju.valor_assinado) }]));
+    }
+  };
+
   const conciliar = async (lista: typeof itens = itens) => {
     if (!extrato) return;
     setGravando(true); setErroRodape(null);
@@ -287,10 +358,12 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
       onConciliado();
       return;
     }
+    /* Desconto/bônus (lote 114420): o MESMO casar, com o motivo do ajuste gravado na parcela (a coluna Ajuste/ⓘ do cronograma lê dele) */
+    const comBonus = !!par && motivoAjuste === 'bonus';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-    const { data, error } = await (supabase as any).rpc('fn_espelho_casar', {
-      p_extrato_id: extrato.extrato_id, p_itens: lista, p_simular: false, p_motivo: 'casado_no_espelho',
-    });
+    const { data, error } = await (supabase as any).rpc(comBonus ? 'fn_casar_parcela_com_motivo' : 'fn_espelho_casar', comBonus
+      ? { p_extrato_id: extrato.extrato_id, p_itens: lista, p_parcela_id: par?.parcelaId, p_motivo_ajuste: 'bonus', p_simular: false }
+      : { p_extrato_id: extrato.extrato_id, p_itens: lista, p_simular: false, p_motivo: 'casado_no_espelho' });
     setGravando(false);
     if (error) { setErroRodape(error.message); return; }
     const r = (data ?? {}) as { ok?: boolean; motivo?: string; frase?: string; pergunta?: { lancamento_id: string; frase: string } };
@@ -320,7 +393,8 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
     const travado = travadoNaNf(l);
     return { ...l, numero_documento: l.numero_documento || nfLida.get(l.lancamento_id) || null,
       fazendaCodigo: c?.fazendaCodigo ?? null, fazendaNome: c?.fazendaNome ?? null, escopoNegocio: c?.escopoNegocio ?? null, subcentro: c?.subcentro ?? null,
-      travadoNaNf: travado, ...(travado ? { valorTexto: paraCampo(l.valor_assinado) } : {}) };
+      travadoNaNf: travado, vencEstimado: vencimentoEstimado(declarados, l.lancamento_id),
+      ...(travado ? { valorTexto: paraCampo(l.valor_assinado) } : {}) };
   }).map((l) => (parcelaPos && respPos?.ok && respPos.juroReal != null && l.lancamento_id === respPos.jurosId
     ? { ...l, valorTexto: paraCampo(respPos.juroReal) } : l));
   /* P153b (D3) — algum levado troca de conta ao casar: o botão diz isso (o texto é fixo enquanto o modal está aberto) */
@@ -396,10 +470,21 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
               </div>
             ))}
             {/* D-h — o pagamento contra o vencimento (1:1), só quando há o que dizer: o texto nasce com o modal e não muda com o estado */}
+            {/* CONC-SUGESTOES-V2 C (mock): a frase do pagamento é uma LINHA PEQUENA com ⓘ (não mais a faixa colorida); vencimento ESTIMADO não vira
+                "pago antes/depois" — diz que é estimado */}
             {unico && (() => {
+              if (levadosDaTabela.every((l) => l.vencEstimado)) {
+                const v = levados[0]?.data_vencimento;
+                return v ? (
+                  <div className="flex h-[18px] items-center gap-1 px-1 text-[10.5px] whitespace-nowrap text-muted-foreground" data-testid="casar-faixa-pagamento" data-estimado="">
+                    <span aria-hidden>ⓘ</span>Vencimento estimado (~{v.slice(8, 10)}/{v.slice(5, 7)}): nenhum boleto, duplicata, cartão ou contrato o declara — não conta como pago antes ou depois
+                  </div>) : null;
+              }
               const f = fraseDoPagamento(extrato.data, levados.map((l) => l.data_vencimento));
               return f ? (
-                <div className={cn('flex h-[20px] items-center rounded px-2 text-[10px] whitespace-nowrap', f.classe)} data-testid="casar-faixa-pagamento">{f.texto}</div>
+                <div className="flex h-[18px] items-center gap-1 px-1 text-[10.5px] whitespace-nowrap text-[#2d5fb8]" data-testid="casar-faixa-pagamento">
+                  <span aria-hidden>ⓘ</span><span data-testid="casar-faixa-pagamento-texto">{f.texto}</span>
+                </div>
               ) : null;
             })()}
 
@@ -424,6 +509,40 @@ export function CasarComBancoModal({ open, onClose, extrato: extratoDaProp, inic
               )}
             </div>
 
+            {(par || (parInicial && modoParcela === 'parcial')) && (() => {
+              const base = par ?? parInicial;
+              if (!base) return null;
+              const adiantado = pagoAdiantado(extrato.data, base.vencimento);
+              const previsto = jurosPrevistoDe(base.jurosId);
+              const ju = levados.find((l) => l.lancamento_id === base.jurosId);
+              /* contra o PREVISTO da parcela (depois do ajuste a simulação fecha e não diz mais o sentido) */
+              const pagouAMais = Math.abs(extrato.valor) - (Math.abs(iniciais.find((l) => l.lancamento_id === base.amortizacaoId)?.valor_assinado ?? 0) + previsto) > 0.005;
+              const comDif = modoParcela === 'inteira' && ju && Math.abs(valorDe(ju.valorTexto) - previsto) >= 0.005;
+              const botao = (ativo: boolean, onClick: () => void, rotulo: string, testid: string) => (
+                <button key={testid} type="button" onClick={onClick} data-testid={testid} aria-pressed={ativo}
+                  className={cn('h-[20px] shrink-0 rounded border px-2 text-[10px]', ativo ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted')}>{rotulo}</button>);
+              return (
+                /* NADA SE DESLOCA: a faixa tem altura fixa (2 linhas de 22px) enquanto a parcela está levada */
+                <div className="h-[48px] shrink-0 space-y-[4px] rounded border border-amber-300 bg-amber-50/60 px-2 py-[3px]" data-testid="pergunta-parcela">
+                  <div className="flex h-[20px] items-center gap-1.5 whitespace-nowrap">
+                    <span className="w-[120px] shrink-0 text-[10px] text-muted-foreground">A diferença é</span>
+                    {modoParcela === 'inteira'
+                      ? opcoesDoMotivo(pagouAMais).map((m) => botao(motivoAjuste === m, () => escolherMotivo(m), ROTULO_DO_MOTIVO[m], `motivo-${m}`))
+                      : <span className="text-[10px] text-muted-foreground">só a amortização — o resto da parcela segue em aberto</span>}
+                    <span className="min-w-0 flex-1 truncate text-right text-[10px] tabular-nums text-amber-800" data-testid="frase-ajuste"
+                      title={comDif && ju ? fraseDoAjuste(previsto, valorDe(ju.valorTexto)) : undefined}>
+                      {comDif && ju && motivoAjuste !== 'juros_atraso' ? fraseDoAjuste(previsto, valorDe(ju.valorTexto)) : ''}</span>
+                  </div>
+                  <div className="flex h-[20px] items-center gap-1.5 whitespace-nowrap">
+                    <span className="w-[120px] shrink-0 text-[10px] text-muted-foreground">{adiantado ? 'Pago adiantado' : 'Pagamento'}</span>
+                    {adiantado && base.amortizacaoId
+                      ? (<>{botao(modoParcela === 'inteira', () => escolherModo('inteira'), 'Parcela inteira', 'modo-inteira')}
+                          {botao(modoParcela === 'parcial', () => escolherModo('parcial'), 'Amortização parcial', 'modo-parcial')}</>)
+                      : <span className="text-[10px] text-muted-foreground">parcela inteira</span>}
+                  </div>
+                </div>
+              );
+            })()}
             {erroRodape && <div className="text-[10px] text-destructive">{erroRodape}</div>}
             {!erroRodape && pergunta && !aceitos.includes(pergunta.lancamento_id) && (
               <div className="text-[10px] text-amber-700" data-testid="pergunta-valor-extrato">{pergunta.frase}</div>

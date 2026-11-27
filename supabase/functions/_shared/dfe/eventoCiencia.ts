@@ -18,6 +18,21 @@ export const URL_EVENTO = {
 export const ACAO_SOAP_EVENTO = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEvento';
 export const TP_CIENCIA = '210210';
 export const DESC_CIENCIA = 'Ciencia da Operacao';
+/**
+ * REGRA DO GABRIEL (27/11 11:58) — RISCO ZERO AO CLIENTE: o sistema SÓ envia a Ciência da Operação (210210, sem efeito fiscal, para baixar o
+ * XML). Confirmação (210200), Desconhecimento (210220) e Operação não Realizada (210240) são do cliente com o contador, NUNCA do sistema.
+ * Três travas independentes: esta conferência do envelope montado; a Lambda `agro-dfe-mtls` (aceita só o formato literal do 210210); e o
+ * banco (`fiscal_dfe_eventos.tp_evento = '210210'`, CHECK). O teste `soCiencia.test.ts` muta o envelope e prova as três.
+ */
+export const EVENTOS_PERMITIDOS: readonly string[] = [TP_CIENCIA];
+export function exigirSoCiencia(envelope: string): void {
+  const tipos = [...envelope.matchAll(/<tpEvento>([^<]*)<\/tpEvento>/g)].map((m) => m[1]);
+  const descs = [...envelope.matchAll(/<descEvento>([^<]*)<\/descEvento>/g)].map((m) => m[1]);
+  if (tipos.length !== 1 || !EVENTOS_PERMITIDOS.includes(tipos[0]) || descs.length !== 1 || descs[0] !== DESC_CIENCIA
+      || /2102[024]0/.test(envelope.replace(/ID210210\d{44}01/g, ''))) {
+    throw new Error('Só a Ciência da Operação (210210) sai do sistema. Nada foi enviado.');
+  }
+}
 const NS_NFE = 'http://www.portalfiscal.inf.br/nfe';
 const NS_DSIG = 'http://www.w3.org/2000/09/xmldsig#';
 const ALG_C14N = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
@@ -84,6 +99,7 @@ export function envelopeCiencia(p: {
     + '<nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">'
     + `<envEvento xmlns="${NS_NFE}" versao="1.00"><idLote>${p.idLote}</idLote>${evento}</envEvento>`
     + '</nfeDadosMsg></soap12:Body></soap12:Envelope>';
+  exigirSoCiencia(envelope);
   return { envelope, id, digest };
 }
 

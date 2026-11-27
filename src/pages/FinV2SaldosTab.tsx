@@ -64,6 +64,8 @@ interface ContaRef {
   nome_exibicao: string | null;
   tipo_conta: string | null;
   codigo_conta: string | null;
+  /** CONTA-INATIVAR-DATA-01 — a inativa entra no mapa de nomes; o seletor do "novo saldo" a deixa de fora */
+  ativa?: boolean | null;
 }
 
 
@@ -115,7 +117,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const { fazendas, fazendaAtual } = useFazenda();
   const { user } = useAuth();
   const { perfil, isManager } = usePermissions();
-  const isAdmin = perfil === 'admin_agroinblue' || perfil === 'gestor_cliente';
+  const isAdmin = perfil === 'admin_agroinblue' || perfil === 'gestor_cliente' || perfil === 'proprietario';
   const isFinanceiro = perfil === 'financeiro';
   const curAM = currentAnoMes();
 
@@ -205,11 +207,12 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
           .select('id, ano_mes, conta_banco, fazenda_id, saldo_final')
           .eq('cliente_id', clienteAtual.id)
           .order('ano_mes', { ascending: false }),
+        /* CONTA-INATIVAR-DATA-01 — TODAS as contas (a inativa dá o nome às linhas dela nos meses passados; antes o id cru); o seletor do
+           "novo saldo" usa só as ativas (`contasDoSeletor`) */
         supabase
           .from('financeiro_contas_bancarias')
-          .select('id, nome_conta, nome_exibicao, tipo_conta, codigo_conta')
-          .eq('cliente_id', clienteAtual.id)
-          .eq('ativa', true),
+          .select('id, nome_conta, nome_exibicao, tipo_conta, codigo_conta, ativa')
+          .eq('cliente_id', clienteAtual.id),
         supabase
           .from('financeiro_lancamentos_v2')
           .select('conta_bancaria_id, conta_destino_id, ano_mes, valor, sinal, tipo_operacao')
@@ -265,6 +268,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
 
   useEffect(() => { load(); }, [load]);
 
+  /* CONTA-INATIVAR-DATA-01 — o seletor do "novo saldo" oferece só as ativas; o nome das linhas vem de todas (`contaMap`) */
+  const contasDoSeletor = useMemo(() => contas.filter(c => c.ativa !== false), [contas]);
   const contaMap = useMemo(() => {
     const m = new Map<string, ContaRef>();
     contas.forEach(c => m.set(c.id, c));
@@ -400,7 +405,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     setEditing(null);
     setDialogAno(filtroAno);
     setDialogMes(String(new Date().getMonth() + 1).padStart(2, '0'));
-    setContaId(contas[0]?.id || '');
+    setContaId(contasDoSeletor[0]?.id || '');
     setSaldoInicial('0,00');
     setSaldoFinal('0,00');
     setOrigem('manual');
@@ -1092,7 +1097,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                   <ContaBancariaSelect
                     value={contaId}
                     onValueChange={setContaId}
-                    contas={contas}
+                    contas={editing ? contas : contasDoSeletor}
                     placeholder="Selecione"
                     disabled={!!editing}
                     className="h-9"

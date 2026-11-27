@@ -45,8 +45,28 @@
        "outline" (198 usos) — trocá-lo deixaria todo campo cinza. Cards e tabelas seguem brancos (`--card`).
        `--navy` (#0F1F3A) é o cabeçalho da tela (título, subtítulo, meses, abas); `--mes-aberto` (#1F56B8) o mês escolhido. */
     --corpo: 216 25% 88%;
+    /* MARCA-PADRAO-01: `--navy` É o `--marca-azul-marinho` (#0F1F3A) e `--mes-aberto` É o `--marca-azul-sobre-claro` (#1F56B8) — a mesma
+       cor; ficam em HSL porque o Tailwind as lê como `hsl(var(--x))`. Quem muda uma, muda a outra (a prova é `marcaTokens.test.ts`). */
     --navy: 218 59% 14%;
     --mes-aberto: 218 71% 42%;
+    /* MARCA-PADRAO-01 (Gabriel 17/11, reconfirmada 24/11) — os tokens da marca, copiados do `marca-tokens.css` do kit, byte a byte nos
+       valores. Disponíveis para quem precisar (Tailwind: `marca-*`); NENHUMA tela foi repintada com eles (repintar é outra frente). */
+    --marca-azul-marinho: #0F1F3A;
+    --marca-azul-profundo: #0A1730;
+    --marca-azul-faixa: #16284A;
+    --marca-azul-sistema: #1E3A5F;
+    --marca-azul: #4F8FE6;
+    --marca-azul-sobre-claro: #1F56B8;
+    --marca-dourado: #C9A75B;
+    --marca-dourado-sobre-claro: #B08A3A;
+    --marca-branco: #FFFFFF;
+    --marca-papel: #F5F6F8;
+    --marca-linha: #DDE1E8;
+    --marca-texto-2-escuro: #9FB0C8;
+    --marca-texto-2-claro: #5A6A80;
+    --marca-verde: #1F7A4D;
+    --marca-vermelho: #C0392B;
+    --marca-fonte: "Inter", system-ui, sans-serif;
     --muted-foreground: 220 9% 46%;
     --accent: 220 14% 94%;
     --accent-foreground: 222 47% 11%;

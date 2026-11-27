@@ -6,11 +6,14 @@
  *   K4 so' o que mudou vai ao banco: nada mudou = {}; saldo; caixa = cc + banco Dinheiro; "Sem extrato" e' a marca; conta e digito
  *   K5 larguras: somem Telefone e Inicio, depois Gerente e Agencia, depois Fazenda
  *   K6 conta nova exige a data e o saldo inicial
+ *   K8 CONTAS-BANCARIAS-AJUSTES-01 (a) título "N ativas · N inativas" do cadastro inteiro; rodapé "mostrando N de T" só com filtro
+ *   K9 (c) o código: 2 dígitos na nova e quando muda (o de hoje intocado não trava); o próximo livre é POR tipo_conta (a permuta é dela)
  */
 import { describe, it, expect } from 'vitest';
 import {
   celulaAgencia, celulaBanco, celulaConta, celulaGerente, celulaInicio, celulaSaldo, celulaTelefone, colunasEscondidas, faixasDaLista,
-  faltasDoFormulario, filtrarContas, formularioDaConta, mudancas, mudaOSaldoInicial, rodapeDaLista, subtituloDaConta,
+  codigoDeDoisDigitos, faltasDoFormulario, filtrarContas, formularioDaConta, mudancas, mudaOSaldoInicial, proximoCodigoLivre, rodapeDaLista,
+  resumoDoCadastro, subtituloDaConta, tipoContaDoFormulario,
   type BancoReferencia, type ContaBancariaCadastro,
 } from './contasBancarias';
 
@@ -64,7 +67,7 @@ describe('CAD-CONTAS-BANCARIAS-01 — a lista', () => {
     expect(fx.map(f => [f.rotulo, f.contas.map(c => c.id)])).toEqual([
       ['Conta corrente', ['cx', 'a', 'b', 'p']], ['Investimento', ['i']], ['Cartão', ['k']]]);
     const r = rodapeDaLista(lista);
-    expect(r.texto).toBe('6 contas · 5 ativas');
+    expect(r.texto).toBe('6 contas');
     expect(r.saldo).toBe(Math.round((48210.37 * 3 + 286904.12) * 100) / 100);
   });
 });
@@ -105,8 +108,8 @@ describe('CAD-CONTAS-BANCARIAS-01 — o formulario', () => {
 
   it('K6 conta nova exige data e saldo', () => {
     const vazio = formularioDaConta(null, 'f1');
-    expect(faltasDoFormulario(vazio, true)).toEqual(['o nome da conta', 'a data do saldo', 'o saldo inicial']);
-    expect(faltasDoFormulario({ ...vazio, nome: 'X', saldoEm: '2026-01-01', saldoInicial: 0 }, true)).toEqual([]);
+    expect(faltasDoFormulario({ ...vazio, codigo: '05' }, true)).toEqual(['o nome da conta', 'a data do saldo', 'o saldo inicial']);
+    expect(faltasDoFormulario({ ...vazio, codigo: '05', nome: 'X', saldoEm: '2026-01-01', saldoInicial: 0 }, true)).toEqual([]);
     expect(faltasDoFormulario(formularioDaConta(conta({ mes_inicio: null, saldo_inicial_oficial: null }), 'f1'), false)).toEqual([]);
   });
 
@@ -128,3 +131,139 @@ describe('CAD-CONTAS-BANCARIAS-01 — o formulario', () => {
   });
 });
 
+describe('CONTAS-BANCARIAS-AJUSTES-01', () => {
+  const lista = [conta({ id: 'a' }), conta({ id: 'b', ativa: false }), conta({ id: 'c', tipo_conta: 'inv' }), conta({ id: 'd', ativa: false }), conta({ id: 'e' })];
+
+  it('K8 título do cadastro e rodapé da lista: uma regra só', () => {
+    expect(resumoDoCadastro(lista).texto).toBe('3 ativas · 2 inativas');
+    expect(resumoDoCadastro([conta()]).texto).toBe('1 ativa');
+    expect(resumoDoCadastro([conta(), conta({ id: 'z', ativa: false })]).texto).toBe('1 ativa · 1 inativa');
+    expect(rodapeDaLista(lista, lista).texto).toBe('5 contas');                                // sem filtro
+    const so = filtrarContas(lista, { busca: '', segmento: 'todas', fazendaId: null, mostrarInativas: false });
+    expect(rodapeDaLista(so, lista).texto).toBe('mostrando 3 de 5');                           // inativas escondidas = filtro
+    const inv = filtrarContas(lista, { busca: '', segmento: 'inv', fazendaId: null, mostrarInativas: true });
+    expect(rodapeDaLista(inv, lista).texto).toBe('mostrando 1 de 5');
+  });
+
+  it('K9 o código curto', () => {
+    expect(['01', '13', ' 07 '].map(codigoDeDoisDigitos)).toEqual([true, true, true]);
+    expect(['013', '1', '', 'a1', '1-2'].map(codigoDeDoisDigitos)).toEqual([false, false, false, false, false]);
+    const nj = [conta({ id: 'c1', codigo_conta: '01' }), conta({ id: 'c2', codigo_conta: '11' }), conta({ id: 'c3', codigo_conta: '06', ativa: false }),
+      conta({ id: 'p1', tipo_conta: 'permuta', codigo_conta: '12' }), conta({ id: 'p2', tipo_conta: 'permuta', codigo_conta: '013' }),
+      conta({ id: 'i1', tipo_conta: 'inv', codigo_conta: '04' }), conta({ id: 'x', codigo_conta: null })];
+    expect(proximoCodigoLivre(nj, 'cc')).toBe('12');
+    expect(proximoCodigoLivre(nj, 'inv')).toBe('05');
+    expect(proximoCodigoLivre(nj, 'cartao')).toBe('01');
+    expect(proximoCodigoLivre(nj, 'permuta')).toBe('14');
+    expect(proximoCodigoLivre(nj, 'permuta', 'p2')).toBe('13');                                 // o Kemp: o próximo depois do 12
+    // o tipo no banco: a permuta segue permuta enquanto a tela não troca o tipo; a caixa é cc
+    const kemp = nj[4];
+    expect(tipoContaDoFormulario(formularioDaConta(kemp, 'f1'), kemp)).toBe('permuta');
+    expect(tipoContaDoFormulario({ tipo: 'inv' }, kemp)).toBe('inv');
+    expect(tipoContaDoFormulario({ tipo: 'caixa' }, null)).toBe('cc');
+    // a trava: a nova e o código que muda conferem; o de hoje, intocado, não trava outro Salvar
+    const fk = formularioDaConta(kemp, 'f1');
+    expect(faltasDoFormulario(fk, false, { original: '013', sugestao: '13' })).toEqual([]);
+    expect(faltasDoFormulario({ ...fk, codigo: '0131' }, false, { original: '013', sugestao: '13' }))
+      .toEqual(['o código curto com 2 dígitos (o próximo livre do tipo: 13)']);
+    expect(faltasDoFormulario({ ...fk, codigo: '13' }, false, { original: '013', sugestao: '13' })).toEqual([]);
+    const nova = { ...formularioDaConta(null, 'f1'), nome: 'X', saldoEm: '2026-01-01', saldoInicial: 0 };
+    expect(faltasDoFormulario(nova, true)).toEqual(['o código curto com 2 dígitos']);
+    expect(faltasDoFormulario({ ...nova, codigo: '12' }, true)).toEqual([]);
+  });
+});
+
+/* CONTA-INATIVAR-DATA-01 — "Inativa desde": dia 1º, só com a conta inativa, a prévia do banco lida e dita */
+import {
+  dadosDoFormulario as dadosI, faltasDoFormulario as faltasI, formularioDaConta as formI, fraseDaPreviaInativar, inativaDesdeValida,
+  lerPreviaInativar, listaDaPreviaInativar, primeiroDoMes,
+} from './contasBancarias';
+describe('CONTA-INATIVAR-DATA-01 — Inativa desde', () => {
+  const base = { id: 'c1', nome_conta: 'Bradesco', nome_exibicao: null, codigo_conta: '02', tipo_conta: 'cc', fazenda_id: 'f1', ativa: true, banco: 'Bradesco',
+    agencia: null, numero_conta: null, conta_digito: null, mes_inicio: '2020-01', saldo_inicial_oficial: 0 };
+  it('I1 a data vale só no dia 1º; qualquer dia escolhido vai ao 1º do mês', () => {
+    expect(inativaDesdeValida('2026-02-01')).toBe(true);
+    expect(inativaDesdeValida('2026-02-15')).toBe(false);
+    expect(inativaDesdeValida('')).toBe(false);
+    expect(primeiroDoMes('2026-02-15')).toBe('2026-02-01');
+    expect(primeiroDoMes('')).toBe('');
+  });
+  it('I2 a data vai ao escritor só com a conta inativa; ativa = nulo', () => {
+    const f = formI({ ...base, ativa: false, inativa_desde: '2026-02-01' }, '');
+    expect(f.inativaDesde).toBe('2026-02-01');
+    expect(dadosI(f).inativa_desde).toBe('2026-02-01');
+    expect(dadosI({ ...f, ativa: true }).inativa_desde).toBeNull();
+  });
+  it('I3 inativar sem data (ou dia ≠ 1) falta; a conta nova inativa falta', () => {
+    const f = formI(base, '');
+    expect(faltasI({ ...f, ativa: false, inativaDesde: '' }, false)).toContain('desde quando a conta está inativa (dia 1º de um mês)');
+    expect(faltasI({ ...f, ativa: false, inativaDesde: '2026-02-01' }, false)).not.toContain('desde quando a conta está inativa (dia 1º de um mês)');
+    expect(faltasI({ ...formI(null, 'f1'), nome: 'X', codigo: '05', ativa: false, saldoEm: '2026-01-01', saldoInicial: 0 }, true))
+      .toContain('a conta nova nasce ativa (inative depois de criada)');
+  });
+  it('I4 a prévia lida: confere = a frase do saldo; recusa = a frase do banco; a lista no title; fora do contrato = nulo', () => {
+    const ok = lerPreviaInativar({ pode: true, frase: null, desde: '2026-02-01', mes_do_saldo: '2026-01', saldo: 0, tem_saldo: true, abertos: 0, realizados: 0, extrato: 0, lancamentos: [] });
+    expect(ok && fraseDaPreviaInativar(ok)).toMatch(/^Confere: saldo R\$\s0,00 no fim de 01\/2026 · nenhum lançamento nem extrato a partir de 01\/02\/2026\.$/);
+    const nao = lerPreviaInativar({ pode: false, frase: 'A conta tem 2 lançamento(s)…', desde: '2026-02-01', mes_do_saldo: '2026-01', saldo: '0', abertos: 2,
+      lancamentos: [{ dia: '2027-09-01', valor: '-22719.29', status: 'programado', descricao: 'Parcela' }] });
+    expect(nao?.abertos).toBe(2);
+    expect(nao && fraseDaPreviaInativar(nao)).toBe('A conta tem 2 lançamento(s)…');
+    expect(nao && listaDaPreviaInativar(nao)).toMatch(/\n01\/09\/2027 · -R\$\s22\.719,29 · programado · Parcela$/);
+    expect(lerPreviaInativar({ pode: 'sim' })).toBeNull();
+    expect(lerPreviaInativar(null)).toBeNull();
+  });
+});
+
+/* CONTAS-BANCARIAS-LISTA-01 (mock 26/11) — a régua nova da lista: Banco = código + nome; Agência e Conta próprias; sem dado = "—";
+   Situação com "Inativa desde"; rodapé por tipo; a Fazenda e a Agência somem estreitando; a busca acha agência e conta */
+import {
+  agenciaNaLista, bancoNaLista, colunasDaListaEscondidas, contaNaLista, filtrarContas as filtrarL, rodapeDosTipos, situacaoNaLista,
+} from './contasBancarias';
+import { linhasDaExportacao } from '@/components/financeiro-v2/ContasExportMenu';
+describe('CONTAS-BANCARIAS-LISTA-01 — a lista', () => {
+  const B = [{ codigo_banco: '001', nome_banco: 'Banco do Brasil S.A.', nome_curto: 'Banco do Brasil' }, { codigo_banco: '000', nome_banco: 'Dinheiro', nome_curto: 'Dinheiro' }];
+  const k = (o: Record<string, unknown> = {}) => ({ id: 'k', nome_conta: 'BB', nome_exibicao: null, codigo_conta: '01', tipo_conta: 'cc', fazenda_id: 'f1', ativa: true,
+    banco: 'Banco do Brasil', agencia: '0897', numero_conta: '25367', conta_digito: '7', mes_inicio: '2020-01', saldo_inicial_oficial: 0, ...o });
+  it('L1 Banco = o código + o nome; caixa físico e permuta em cinza; sem banco = "—"', () => {
+    expect(bancoNaLista(k(), B)).toEqual({ codigo: '001', nome: 'Banco do Brasil', cinza: false });
+    expect(bancoNaLista(k({ banco: 'Dinheiro' }), B)).toEqual({ codigo: '', nome: 'Caixa físico', cinza: true });
+    expect(bancoNaLista(k({ tipo_conta: 'permuta', banco: 'Permuta' }), B)).toEqual({ codigo: '', nome: 'Permuta', cinza: true });
+    expect(bancoNaLista(k({ banco: null }), B)).toEqual({ codigo: '', nome: '—', cinza: true });
+    /* banco do catálogo com código 000 que não é caixa ("Outros"): só o nome, sem o código */
+    expect(bancoNaLista(k({ banco: 'Outros' }), [...B, { codigo_banco: '000', nome_banco: 'Outros', nome_curto: 'Outros' }])).toEqual({ codigo: '', nome: 'Outros', cinza: false });
+  });
+  it('L2 Agência e Conta: o número; sem dado = "—"; cartão = "final NNNN"', () => {
+    expect([agenciaNaLista(k()), contaNaLista(k())]).toEqual(['0897', '25367-7']);
+    expect([agenciaNaLista(k({ agencia: null })), contaNaLista(k({ numero_conta: null }))]).toEqual(['—', '—']);
+    expect(contaNaLista(k({ tipo_conta: 'cartao', numero_conta: '4984 0000 0000 3146', conta_digito: null }))).toBe('final 3146');
+    expect([agenciaNaLista(k({ banco: 'Dinheiro' })), contaNaLista(k({ banco: 'Dinheiro' }))]).toEqual(['—', '—']);
+  });
+  it('L3 Situação: Ativa · Inativa desde dd/mm/aaaa · Inativa', () => {
+    expect(situacaoNaLista({ ativa: true, inativa_desde: null }).texto).toBe('Ativa');
+    expect(situacaoNaLista({ ativa: false, inativa_desde: '2026-02-01' }).texto).toBe('Inativa desde 01/02/2026');
+    expect(situacaoNaLista({ ativa: false, inativa_desde: null }).texto).toBe('Inativa');
+  });
+  it('L4 o rodapé por tipo; com filtro, "mostrando N de T"', () => {
+    const todas = [k(), k({ id: 'b' }), k({ id: 'i', tipo_conta: 'inv' }), k({ id: 'c', tipo_conta: 'cartao' })];
+    expect(rodapeDosTipos(todas, todas)).toBe('4 contas · 2 conta corrente · 1 investimento · 1 cartão');
+    expect(rodapeDosTipos(todas.slice(0, 2), todas)).toBe('mostrando 2 de 4 · 2 conta corrente · 0 investimento · 0 cartão');
+  });
+  it('L5 estreitando, some a Fazenda e depois a Agência (com e sem a coluna Open Finance)', () => {
+    expect([...colunasDaListaEscondidas(960, true)]).toEqual([]);
+    expect([...colunasDaListaEscondidas(850, true)]).toEqual(['fazenda']);
+    expect([...colunasDaListaEscondidas(700, true)].sort()).toEqual(['agencia', 'fazenda']);
+    expect([...colunasDaListaEscondidas(850, false)]).toEqual([]);
+    expect([...colunasDaListaEscondidas(574, true)].sort()).toEqual(['agencia', 'fazenda', 'openFinance']);
+    expect([...colunasDaListaEscondidas(574, false)].sort()).toEqual(['agencia', 'fazenda']);
+  });
+  it('L6 a busca acha a agência e o número da conta', () => {
+    const f = { segmento: 'todas' as const, fazendaId: null, mostrarInativas: false };
+    expect(filtrarL([k()], { ...f, busca: '0897' }, B)).toHaveLength(1);
+    expect(filtrarL([k()], { ...f, busca: '25367' }, B)).toHaveLength(1);
+    expect(filtrarL([k()], { ...f, busca: '9999' }, B)).toHaveLength(0);
+  });
+  it('L7 a exportação sai com o mesmo texto da lista ("—" sem dado)', () => {
+    expect(linhasDaExportacao([k({ agencia: null })], B, () => 'Administrativo')).toEqual([
+      ['01', 'BB', 'Conta corrente', '001 Banco do Brasil', '—', '25367-7', 'Administrativo', 'Ativa']]);
+  });
+});

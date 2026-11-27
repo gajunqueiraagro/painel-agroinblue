@@ -64,7 +64,8 @@ vi.mock('@/hooks/useConciliacaoDoMes', () => ({
 vi.mock('@/lib/conciliacao/loteDeSugestoes', () => ({
   buscarSugestoesDoMes: async (_c: string, ids: string[]) => { banco.chamadasDoMotor += 1; return new Map(ids.map((id) => [id, banco.motor.get(id) ?? { ok: true, sugestao: { balde: 'sem', candidato: null, empate: false } }])); },
 }));
-vi.mock('@/components/conciliacao/EstacaoConciliar', () => ({ EstacaoConciliar: ({ movimento }: { movimento: { id: string } }) => <div data-testid="stub-estacao">{movimento.id}</div> }));
+/* CONC-SUGESTOES-V2 MODAL ÚNICO: o "casar/procurar" do painel abre o mesmo "Sugestões para casar" (a estação saiu) */
+vi.mock('@/components/conciliacao/SugestoesDoMovimento', () => ({ SugestoesDoMovimento: ({ movimento }: { movimento: { id: string } }) => <div data-testid="stub-sugestoes">{movimento.id}</div> }));
 vi.mock('@/components/conciliacao/PalcoDoMes', () => ({ PalcoDoMes: ({ contaId }: { contaId: string }) => <div data-testid="stub-palco">{contaId}</div> }));
 vi.mock('@/components/conciliacao/PreviaDaFatura', () => ({ PreviaDaFatura: ({ arquivo, contaId }: { arquivo: File; contaId: string }) => <div data-testid="stub-fatura">{contaId}:{arquivo.name}</div> }));
 vi.mock('@/components/conciliacao/ExtratoDoSistemaDialog', () => ({ ExtratoDoSistemaDialog: () => <div data-testid="stub-sistema" /> }));
@@ -420,7 +421,7 @@ describe('o painel (componente)', () => {
     expect(banco.chamadasDoMotor).toBe(1); // poucas linhas: o motor rodou ao abrir, uma varredura
     /* casar/procurar = a ESTAÇÃO por cima (as travas são dela); embaixo o lote ("Casar os exatos") e a Conferência */
     fireEvent.click(within(linhas[2]).getByTestId('painel-casar-acao'));
-    expect((await screen.findByTestId('stub-estacao')).textContent).toBe('m3');
+    expect((await screen.findByTestId('stub-sugestoes')).textContent).toBe('m3');
     expect(screen.getByTestId('painel-casar-exatos').textContent).toBe('Casar os exatos (prévia)');
     expect(screen.getByTestId('painel-casar').textContent).toBe('Conferência lado a lado');
   });

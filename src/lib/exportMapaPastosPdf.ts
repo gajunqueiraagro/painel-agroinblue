@@ -3,7 +3,7 @@ import { porcentagensDoMapa } from '@/lib/mapa/larguraDoMapa';
 import autoTable from 'jspdf-autotable';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 import type { PastoMapaRow, MapaTotais, AtividadeResumo } from '@/pages/MapaPastosTab';
-import logoUrl from '@/assets/logo.png';
+import { carregarLogoParaPdf, medidaDoLogoPdf, RODAPE_DA_MARCA } from '@/lib/marca/marca';
 import { tipoUsoLabelCurto } from '@/lib/calculos/labels';
 import { formatNum as fmt } from '@/lib/calculos/formatters';
 import { isPastoDivergencia } from '@/lib/classificacaoArea';
@@ -16,20 +16,8 @@ const DIV_NO_PDF = 'Div.';
 export const COLUNAS_FIXAS_DO_PDF: readonly string[] = ['Pasto', 'Ativ.', 'Lote', 'Programa'];
 
 function loadLogoBase64(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = reject;
-    img.src = logoUrl;
-  });
+  /* MARCA-PADRAO-01: o PNG do kit pelo carregador da marca (o logo antigo saiu do repositório). */
+  return carregarLogoParaPdf('horizontal');
 }
 
 function drawHeader(
@@ -43,8 +31,7 @@ function drawHeader(
   let y = 6;
 
   if (logoData) {
-    const logoH = 10;
-    const logoW = logoH * 2;
+    const { w: logoW, h: logoH } = medidaDoLogoPdf(36); // MARCA-PADRAO-01: pela proporção do arquivo
     doc.addImage(logoData, 'PNG', pageWidth / 2 - logoW / 2, y, logoW, logoH);
     y += logoH + 2;
   }
@@ -371,7 +358,7 @@ export async function exportMapaPastosPdf(
     doc.setFontSize(6);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(140, 140, 140);
-    doc.text(`Agroinblue – Gestão Pecuária  |  ${fazendaNome}  |  ${footerRef}`, margins.left, pageHeight - 5);
+    doc.text(`${RODAPE_DA_MARCA}  |  ${fazendaNome}  |  ${footerRef}`, margins.left, pageHeight - 5);
     doc.text(`Página ${i} de ${pageCount}`, pageWidth - margins.left, pageHeight - 5, { align: 'right' });
     doc.setTextColor(0, 0, 0);
   }

@@ -8,6 +8,7 @@ import type { LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import type { TotaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
 import type { ModoSemCaixa, NivelClassificacao } from '@/lib/financeiro/colunasDaListaV2';
 import { reservaDeNumero } from '@/components/ui/regua-tabela';
+import { lerResumoPronto, type FiltroPronto, type ResumoPronto } from '@/lib/financeiro/prontoParaPagar';
 
 /** O estado dos filtros da tela, como ela o guarda (sentinela `__all__` = Todos). */
 export interface FiltrosDaTelaV2 {
@@ -17,6 +18,10 @@ export interface FiltrosDaTelaV2 {
   produto: string; documento: string; fornecedor: string; modoSemCaixa: ModoSemCaixa;
   /** FIN-FILTRO-FILIAIS-01: o escolhido + as filiais ("+ filiais (N)" marcada); vai como `fornecedor_ids` e manda sobre o `fornecedor` */
   fornecedores?: readonly string[] | null;
+  /** FIN-PRONTO-PAGAR-01: o seletor "Pagamento" (ausente/'todos' = não vai) */
+  prontoPagar?: FiltroPronto;
+  /** LANC-FILTROS-02a: o PERÍODO do seletor (por dia, os dois inclusivos); vindo, vai como `de`/`ate` e MANDA — anos/meses não vão */
+  periodo?: { de: string; ate: string } | null;
 }
 
 const valor = (v: string) => (v && v !== '__all__' ? v : undefined);
@@ -34,10 +39,14 @@ export function filtrosDaPaginaV2(f: FiltrosDaTelaV2): Record<string, unknown> {
   ];
   for (const [k, v] of por) if (v !== undefined) out[k] = v;
   const anos = inteiros(f.anos); const meses = inteiros(f.meses);
-  if (anos.length) out.anos = anos;
-  if (meses.length) out.meses = meses;
+  if (f.periodo) { out.de = f.periodo.de; out.ate = f.periodo.ate; }
+  else {
+    if (anos.length) out.anos = anos;
+    if (meses.length) out.meses = meses;
+  }
   if (f.status.length) out.status = [...f.status];
   if (f.fornecedores && f.fornecedores.length > 1) out.fornecedor_ids = [...f.fornecedores];
+  if (f.prontoPagar && f.prontoPagar !== 'todos') out.pronto_pagar = f.prontoPagar;
   return out;
 }
 
@@ -56,6 +65,8 @@ export interface PaginaDaListaV2 {
   semCaixa: { linhas: number; total: number };
   /** FIN-V2-FILTRO-FORNECEDOR-01 — quantos lançamentos cada fornecedor tem no recorte (SEM o filtro de fornecedor), da RPC */
   usoPorFornecedor: ReadonlyMap<string, number>;
+  /** FIN-PRONTO-PAGAR-01 — prontos/faltando do recorte SEM o filtro de pagamento (nulo = o banco não mandou: a tela mostra "—") */
+  prontoPagar: ResumoPronto | null;
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -100,7 +111,9 @@ export function lerSoIdsV2(r: unknown): Pick<PaginaDaListaV2, 'linhas' | 'concil
 
 /* P73 — o que, mudando na linha, mexe nos totais do rodapé, no "sem caixa" ou no uso por fornecedor do recorte */
 const CAMPOS_DOS_TOTAIS = ['valor', 'sinal', 'tipo_operacao', 'status_transacao', 'sem_movimentacao_caixa', 'conta_bancaria_id',
-  'conta_destino_id', 'conta_efetiva_id', 'cancelado', 'favorecido_id'];
+  'conta_destino_id', 'conta_efetiva_id', 'cancelado', 'favorecido_id',
+  /* FIN-PRONTO-PAGAR-01: a forma, os dados e o código mexem nos totais Prontos/Faltando */
+  'forma_pagamento', 'dados_pagamento', 'pronto_pagar'];
 const FILTROS_DE_CONTA = ['macro', 'grupo', 'centro', 'subcentro'];
 
 /** P73 — salvou: os totais do recorte precisam ser relidos? Sim quando um campo que soma mudou, ou quando a linha é (ou era) DIVIDIDA
@@ -142,6 +155,7 @@ export function lerPaginaV2(r: unknown): PaginaDaListaV2 | null {
     totais: { entradas, saidas, transferencias, entradasSemCaixa, saidasSemCaixa },
     semCaixa: { linhas: scLinhas, total: scTotal },
     usoPorFornecedor,
+    prontoPagar: lerResumoPronto(g(o, 'pronto_pagar')),
   };
 }
 

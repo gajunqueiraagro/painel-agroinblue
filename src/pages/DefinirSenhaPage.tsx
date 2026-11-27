@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import logo from '@/assets/logo.png';
+import { LogoAgroinblue } from '@/components/marca/LogoAgroinblue';
 import {
   FRASE_LINK_INCOMPLETO, SENHA_MINIMA_NOVA, fraseDoErroDaSenha, fraseDoErroDoLink, lerLinkDoEmail, pendenciasDaSenhaNova,
   temPendencia, textosDoLink, type PendenciasDaSenha,
@@ -68,7 +68,7 @@ export default function DefinirSenhaPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4" data-testid="definir-senha">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <img src={logo} alt="AgroInBlue" className="h-20 mx-auto" />
+          <LogoAgroinblue variante="vertical" fundo="claro" alturaPx={80} className="mx-auto" />
           <h1 className="text-xl font-extrabold text-foreground mt-2">{semLink ? 'Link incompleto' : textos.titulo}</h1>
         </div>
 

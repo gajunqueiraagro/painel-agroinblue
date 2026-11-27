@@ -17,6 +17,9 @@ vi.mock('@/integrations/supabase/client', () => ({
 
 import { CasarComBancoModal } from './CasarComBancoModal';
 
+/* gate 26/11: a tabela dos levados só tem as colunas extras (Fornecedor · NF · Faz. · Ativ. · Plano) de 1100px; o jsdom abre a 1024 */
+Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 });
+
 describe('D1 — o nº da NF no Casar quando o levado chega sem ele', () => {
   it('2 levados sem o nº: a coluna NF mostra 000.000.404 e 000.000.402 (lidos); nunca "—" quando o lançamento tem NF', async () => {
     render(<CasarComBancoModal open onClose={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil" clienteId="cli"

@@ -13,6 +13,7 @@ import type { CellHookData, RowInput } from 'jspdf-autotable';
 import { PALETA, addHeader, criarDocRetratoA4, yRealAposDesenho } from '@/lib/pdf/pdfChassi';
 import { documentoNaTabela } from './documentoNaTabela';
 import { composicaoPorFazenda, ROTULO_CONDICAO_IMOVEL, pct, type CondicaoImovel, type Titular } from './produtores';
+import { RODAPE_DA_MARCA } from '@/lib/marca/marca';
 
 /* ── 1. o CONTEÚDO (puro, testável): o que vem escrito e quantas linhas em branco ─────────────────────────────────────────── */
 export interface Caixinhas { opcoes: readonly string[]; marcada: number | null }
@@ -160,7 +161,7 @@ function rodapes(doc: jsPDF): void {
     doc.setPage(p);
     doc.setDrawColor(...PALETA.LINHA_SEPARADORA); doc.setLineWidth(0.1); doc.line(M, 285, M + W, 285);
     doc.setFontSize(7.5); doc.setTextColor(...PALETA.CINZA_RODAPE);
-    doc.text('AgroinBlue · gestão rural e financeira', M, 289);
+    doc.text(RODAPE_DA_MARCA, M, 289);
     doc.text('Dados tratados conforme a LGPD · uso exclusivo do cadastro fiscal', M + W, 289, { align: 'right' });
   }
   doc.setTextColor(...PALETA.PRETO);

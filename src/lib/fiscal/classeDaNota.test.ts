@@ -21,6 +21,12 @@ describe('classeDaNota — pelo CFOP, nunca pelo tPag 90 sozinho', () => {
     expect(classeDaNota(n(['5949'], '1', 'NOTA DE DEBITO MULTA E JUROS IBS E CBS'), false).classe).toBe('compra');
     expect(classeDaNota(n(['5949'], '1', 'SUBSTITUICAO DE MERCADORIA EM GARANTIA'), false)).toEqual({ classe: 'nao_financeira', motivo: 'garantia' });
   });
+  /* NOTA-ENTREGA-FUTURA-01 (Gabriel 25/11 07:24): serviço que cobra NÃO é remessa — 5932/6932 (transporte de outra UF) e 5933/6933 (ISS)
+     geram; o resto do 59xx/69xx segue remessa (o controle: 5920 vasilhame, 5904 retorno de venda fora) */
+  it('serviço 5932/5933/6932/6933 é compra; 5920 e 5904 seguem remessa', () => {
+    for (const cf of ['5932', '5933', '6932', '6933']) expect(classeDaNota(n([cf]), false).classe, cf).toBe('compra');
+    for (const cf of ['5920', '6920', '5904']) expect(classeDaNota(n([cf]), false), cf).toEqual({ classe: 'nao_financeira', motivo: 'outra_remessa' });
+  });
   it('venda comum (5102) é compra — mesmo com tPag 90 (não entra na regra)', () => {
     expect(classeDaNota(n(['5102']), false)).toEqual({ classe: 'compra' });
     expect(classeDaNota(n(['5405', '5102']), false)).toEqual({ classe: 'compra' });

@@ -34,10 +34,13 @@ export function registrarFontes(fontes?: { regular: string; semibold?: string; b
 export const estilos = StyleSheet.create({
   pagina: { paddingTop: 66, paddingBottom: 32, paddingHorizontal: 22, fontFamily: FONTE, fontSize: 9, color: COR.cinza },
   // Header fixo
-  header: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 0.6, borderBottomColor: COR.separador },
-  headerLogo: { width: 42, height: 21, objectFit: 'contain', marginRight: 10 },
-  headerTitulo: { fontSize: 13, fontWeight: 700, color: COR.azul },
-  headerCtx: { fontSize: 8, color: COR.cinzaMedio, marginTop: 2 },
+  /* MARCA-PADRAO-01 — o cabeçalho do `cabecalho-pdf.html`: logo à esquerda (≈170px = 128pt; a altura pela proporção do arquivo), título e
+     contexto à direita, régua dourada (#B08A3A, 1,5px ≈ 1,1pt) embaixo. */
+  header: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1.1, borderBottomColor: '#B08A3A' },
+  headerLogo: { width: 128, height: 25, objectFit: 'contain', marginRight: 10 },
+  headerTexto: { alignItems: 'flex-end' },
+  headerTitulo: { fontSize: 13, fontWeight: 700, color: '#0F1F3A', textAlign: 'right' },
+  headerCtx: { fontSize: 8, color: '#5A6A80', marginTop: 2, textAlign: 'right' },
   // Rodapé fixo
   rodape: { position: 'absolute', bottom: 14, left: 24, right: 24, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: '#828282', borderTopWidth: 0.4, borderTopColor: COR.separador, paddingTop: 4 },
   // Título de seção (faixa azul)

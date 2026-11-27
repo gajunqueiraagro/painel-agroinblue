@@ -7,7 +7,7 @@ import { parseISO, format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
-import logoUrl from '@/assets/logo.png';
+import { carregarLogoParaPdf, medidaDoLogoPdf, RODAPE_DA_MARCA } from '@/lib/marca/marca';
 /* `addLogoToDoc` saiu daqui para `src/lib/pdf/` — PR-OC-RESUMO-01. */
 import { addLogoToDoc } from '@/lib/pdf/pdfChassi';
 import { fmtValor, formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
@@ -17,20 +17,8 @@ import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
 // Load logo as base64 for jsPDF
 function loadLogoBase64(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = reject;
-    img.src = logoUrl;
-  });
+  /* MARCA-PADRAO-01: o PNG do kit pelo carregador da marca (o logo antigo saiu do repositório). */
+  return carregarLogoParaPdf('horizontal');
 }
 
 type SubAba = 'abate' | 'compra' | 'venda';
@@ -281,17 +269,16 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
   //   título (16pt bold #1E3A5F) y=14
   //   escopo (11pt cinza médio)  y=21
   //   stats  (9pt cinza claro)   y=27
-  //   logo 44×22 mm canto sup. dir. y=8
+  //   logo 50mm (altura pela proporção, MARCA-PADRAO-01) canto sup. dir. y=10
   // Conteúdo começa em y=34 (margin.top das autoTables).
   // Footer ocupa últimos ~10mm; margin.bottom=14 reserva o espaço.
   const HEADER_TOP_RESERVED = 34;
   const FOOTER_BOTTOM_RESERVED = 14;
-  const LOGO_W = 44;
-  const LOGO_H = 22;
+  const { w: LOGO_W, h: LOGO_H } = medidaDoLogoPdf(50);
 
   const drawPageHeader = () => {
     if (logoData) {
-      doc.addImage(logoData, 'PNG', pageW - 10 - LOGO_W, 8, LOGO_W, LOGO_H);
+      doc.addImage(logoData, 'PNG', pageW - 10 - LOGO_W, 10, LOGO_W, LOGO_H);
     }
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
@@ -620,7 +607,7 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(130, 130, 130);
-    doc.text('AGROinBLUE • Gestão Rural Inteligente', 10, footerY);
+    doc.text(RODAPE_DA_MARCA, 10, footerY);
     doc.text('Versão PDF v2', pageW / 2, footerY, { align: 'center' });
     doc.text(`Página ${p} de ${totalPages}`, pageW - 10, footerY, { align: 'right' });
     doc.setTextColor(0, 0, 0);

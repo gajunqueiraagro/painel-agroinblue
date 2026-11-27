@@ -5,7 +5,7 @@
  * O MIME, o S3 e a rede entram como peças (provadas no vitest: `src/lib/boletos/sesEntrada.test.ts`); o `index.ts` liga as reais.
  * Erro que vale tentar de novo (rede, 5xx) LANÇA: o SES/Lambda assíncrona tenta mais 2 vezes; a reentrega não duplica (md5 e Message-ID).
  */
-import { assinar, DOMINIO_ENTRADA, CABECALHO_ASSINATURA, TAMANHO_MAXIMO } from '../../../supabase/functions/_shared/entradaEmail';
+import { assinar, DOMINIO_ENTRADA, CABECALHO_ASSINATURA, TAMANHO_MAXIMO, tipoDoConteudo } from '../../../supabase/functions/_shared/entradaEmail';
 
 export type Anexo = { nome: string | null; mime: string | null; bytes: Uint8Array };
 export type Veredito = { status?: string };
@@ -30,7 +30,26 @@ export type PecasLambda = {
   /** só os ANEXOS (o corpo nem sai do parser) */
   anexosDoMime: (bruto: Uint8Array) => Promise<Anexo[]>;
   postar: (url: string, headers: Record<string, string>, corpo: string) => Promise<{ status: number; json: () => Promise<unknown> }>;
+  /** ENTRADA-CENTRAL-01 F1: o leitor da caixa (o MESMO do app, `lerDaCaixa`), que devolve SÓ o resultado a guardar (`paraGravar`);
+   *  null = não guarda (erro). Ausente = a Lambda não lê (a caixa lê no navegador, como antes). */
+  ler?: (bytes: Uint8Array, tipo: 'pdf' | 'xml', nome: string | null) => Promise<Record<string, unknown> | null>;
+  /** o teto de cada leitura, em ms (estourou = o arquivo vai sem leitura) */
+  tetoDaLeituraMs?: number;
 };
+
+/** ENTRADA-CENTRAL-01 F1: lê UMA vez por anexo (antes dos destinatários); qualquer falha ou o teto = sem leitura, nunca para o e-mail. */
+async function lerComTeto(p: PecasLambda, a: Anexo): Promise<Record<string, unknown> | null> {
+  if (!p.ler || !a.bytes.length || a.bytes.length > TAMANHO_MAXIMO) return null;
+  const tipo = tipoDoConteudo(a.bytes);
+  if (!tipo) return null;
+  let relogio: ReturnType<typeof setTimeout> | undefined;
+  const teto = new Promise<null>((ok) => { relogio = setTimeout(() => ok(null), p.tetoDaLeituraMs ?? 20_000); });
+  try {
+    return await Promise.race([p.ler(a.bytes.slice(), tipo, a.nome).catch(() => null), teto]);
+  } finally {
+    clearTimeout(relogio);
+  }
+}
 
 const ehObjeto = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
@@ -96,20 +115,24 @@ export async function processar(p: PecasLambda, evento: EventoSes): Promise<Resu
     };
     const virus = (verificacao.virus ?? '').toUpperCase() === 'FAIL';
     const anexos = (await p.anexosDoMime(await p.lerBruto(sesId))).filter(anexoUtil);
+    /* um por vez (a memória da Lambda é curta; um PDF grande não divide espaço com outro) */
+    const leituras: (Record<string, unknown> | null)[] = [];
+    for (const a of anexos) leituras.push(virus ? null : await lerComTeto(p, a));
 
     for (const destinatario of destinos) {
       const base = { destinatario, mensagem_id: mail?.commonHeaders?.messageId || sesId };
       const arquivos: Record<string, unknown>[] = [];
       const recusas: { nome: string | null; motivo: string }[] = [];
       let ignorado = false;
-      for (const a of anexos) {
+      for (const [i, a] of anexos.entries()) {
         if (virus) { arquivos.push({ nome: a.nome }); continue; }   // não sobe: o banco marca "recusado"
         if (a.bytes.length > TAMANHO_MAXIMO) { recusas.push({ nome: a.nome, motivo: 'maior que 10 MB' }); continue; }
         if (a.bytes.length === 0) { recusas.push({ nome: a.nome, motivo: 'arquivo vazio' }); continue; }
         const r = await enviar(p, { ...base, etapa: 'arquivo', nome: a.nome, conteudo_b64: base64(a.bytes) });
         if (r.dado.motivo === 'endereco_desconhecido') { ignorado = true; break; }
         if (r.status === 200 && r.dado.ok === true) {
-          arquivos.push({ nome: r.dado.nome ?? a.nome, tipo: r.dado.tipo, tamanho: r.dado.tamanho, md5: r.dado.md5 });
+          const leitura = leituras[i];
+          arquivos.push({ nome: r.dado.nome ?? a.nome, tipo: r.dado.tipo, tamanho: r.dado.tamanho, md5: r.dado.md5, ...(leitura ? { leitura } : {}) });
         } else {
           recusas.push({ nome: a.nome, motivo: typeof r.dado.frase === 'string' ? r.dado.frase : 'arquivo recusado' });
         }

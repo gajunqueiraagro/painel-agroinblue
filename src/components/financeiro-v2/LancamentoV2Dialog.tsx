@@ -27,6 +27,7 @@ import { usePodeAbrir, usePodeAlterarOperacao, TELA_DA_OPERACAO } from '@/v2/hoo
 import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
 import { FinanciamentoDoLancamento } from '@/components/financiamentos/FinanciamentoDoLancamento';
 import { PatrimonioDoLancamento } from '@/components/patrimonio/PatrimonioDoLancamento';
+import { FuncionarioDoLancamento } from '@/components/folha/FuncionarioDoLancamento';
 import { contaPedeFinanciamento } from '@/lib/patrimonio/patrimonioDoLancamento';
 import { assinarDocumento, useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
@@ -35,6 +36,9 @@ import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { linhaDoDocumento as textoDaLinhaDoDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import { ResumoDoLancamento } from '@/components/financeiro-v2/ResumoDoLancamento';
+import { useEntregasDoLancamento } from '@/hooks/useEntregasDoLancamento';
+import { xmlDaCaixaDaReceita } from '@/lib/fiscal/danfeDasNotasGuardadas';
+import { fraseDasEntregas } from '@/lib/financeiro/entregasDoLancamento';
 import { CaixaDeBoletosDialog } from '@/components/financeiro-v2/CaixaDeBoletosDialog';
 import { boletoDoResumo, seloDoBoleto, type BoletoDoResumo } from '@/lib/financeiro/boleto/boletoDaParcela';
 import {
@@ -112,7 +116,8 @@ import {
   MOTIVO_DA_DIVISAO_NA_CRIACAO, partesPendentes, percentuaisDosItens, porContaDosItens, porQueNaoDivideNaCriacao, voltarUmaConta, voltarUmaContaDoCadastro,
   type DivisaoLida, type ParteNova, type ResultadoDaDivisao,
 } from '@/lib/financeiro/divisaoDaClassificacao';
-import { aprender, historicoDoEmitente, sugerir } from '@/lib/financeiro/sugestaoDeContaDosItens';
+import { contasSugeridasDosItens, type ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
+import { lembrarContasDosItens, sugestaoDosItensDaNota } from '@/lib/financeiro/nfeConsultas';
 import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
 import { fraseParcelasComoNaNota, type CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
@@ -143,7 +148,7 @@ import { consultarSplitDoLancamento, type SplitDoLancamento } from '@/lib/concil
 import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela';
 import { edicaoDaParcela, podeSerParcelaDeContrato, MOTIVO_PARCELA_PAGA } from '@/lib/financiamentos/parcelaNoModal';
 import { gravarParcelaDoModal, lerContratoDaParcela, type ContratoDaParcela } from '@/lib/financiamentos/parcelaNoModalBanco';
-import { camposTravadosDoCasado, consultarCasadoComExtrato, saiDoEstadoDoBanco, FRASE_CASADO_COM_EXTRATO } from '@/lib/financeiro/casadoComExtrato';
+import { camposTravadosDoCasado, consultarCasadoComExtrato, saiDoEstadoDoBanco, FRASE_CASADO_COM_EXTRATO, FRASE_CASADO_NO_RODAPE, TITLE_CASADO_NO_RODAPE } from '@/lib/financeiro/casadoComExtrato';
 import { agendarSeriaRecusado, vaiAgendar, FRASE_AGENDAR_SEM_APROVACAO, FRASE_AGENDAR_NOVO_SEM_APROVACAO } from '@/lib/financeiro/aprovacao';
 import { EnviarParaAprovacaoDialog } from '@/components/financeiro-v2/EnviarParaAprovacaoDialog';
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
@@ -230,6 +235,8 @@ interface Props {
   /** P143 (PAGAMENTO-PARCELAS-01, D1) — abrir OUTRA parcela da mesma compra no MESMO modal: o hospedeiro rele^ o lancamento pelo id e o troca
    *  na prop `lancamento`. Ausente = a tabela das parcelas so' se le^ (nenhuma linha abre). */
   onTrocarLancamento?: (lancamentoId: string) => void;
+  /** FOLHA-01 · PR B (D3): dentro da Folha, o ↗ do funcionário só troca a pessoa no Histórico (sem ele, navega para a Folha) */
+  onAbrirFuncionario?: (funcionarioId: string) => void;
   /** P128a (NOTA-JA-LANCADA, porta 2) — "Ler a NF" no Documentos do Editar: o arquivo abre a MESMA previa do "+ Da nota", partindo deste
    *  lancamento. Devolve a frase pronta do que impediu (nota nao lida, consulta que falhou) ou `null` (a previa abriu). Ausente = sem o gesto. */
   onLerNotaFiscal?: (arquivo: File, lancamentoId: string) => Promise<string | null>;
@@ -238,7 +245,7 @@ interface Props {
   onLerNotaNoNovo?: (arquivo: File) => Promise<string | null>;
   /** P152 — a aba em que o modal abre (o "NF nnnn" da Contas a Pagar e Receber abre direto em Documentos, onde mora a regra de abrir a
    *  nota: o PDF; sem PDF, os itens). Ausente = 'geral', como sempre. */
-  abaInicial?: 'documentos';
+  abaInicial?: 'documentos' | 'pagamento';  /* FIN-PRONTO-PAGAR-01: o ponto da lista abre na Pagamento */
   prefill?: {
     fazenda_id?: string;
     conta_bancaria_id?: string;
@@ -634,7 +641,7 @@ export function LancamentoV2Dialog({
   open, carregando, onClose, onSave, onDelete, lancamento: lancamentoDaProp, fazendas, contas, classificacoes,
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill: prefillDaProp, lockedFields: travasDaProp, onLancamentoCriado,
   ocultarParcelamento, tiposOperacaoPermitidos, origemOC,
-  referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato, onTrocarLancamento,
+  referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato, onTrocarLancamento, onAbrirFuncionario,
   documentosAntesDeSalvar, onLerNotaFiscal, onLerNotaNoNovo, abaInicial,
 }: Props) {
   /* CONC-CRIAR-PERDE-DADOS-01 (Gabriel 08/11, URGENTE) — FORMULÁRIO ABERTO NUNCA PERDE DADOS. A hidratação do formulário (os efeitos com
@@ -660,11 +667,22 @@ export function LancamentoV2Dialog({
      nasce desligado (`null`) e a aba diz o que fazer, em vez de oferecer um botão que
      recusaria no servidor. */
   const documentosApi = useLancamentoDocumentos(lancamento?.id ?? null, clienteAtual?.id ?? null);
+  /* NOTA-ENTREGA-FUTURA-01 (B) — o papel dos documentos e o saldo a entregar: UMA leitura para a aba Documentos e o Resumo */
+  const entregasApi = useEntregasDoLancamento(lancamento?.id ?? null, documentosApi.documentos);
+  const entregasDoResumo = entregasApi.entregas?.ok && entregasApi.entregas.valor.entregas > 0
+    ? { compra: entregasApi.entregas.valor.compra ? formatNFNumber(entregasApi.entregas.valor.compra.nf) : null, entregas: fraseDasEntregas(entregasApi.entregas.valor) } : null;
   /* ITENS-NOTA-01 — os itens da nota: os guardados pela chave dos documentos; no novo que nasce de uma nota, os do proprio arquivo */
+  /* NOTA-ENTREGA-FUTURA-01 (Gabriel 25/11 09:26) — numa compra com entrega futura os itens que valem (custo, classificação) são os da COMPRA: as
+     remessas e as outras NF que não geram a conta (o confronto do banco) ficam de fora; com a compra conhecida, só a chave dela (e, sem itens
+     guardados, o XML dela na caixa da Receita). As remessas só alimentam o "entregue" do Saldo a entregar */
+  const naoFinanceirasDoLanc = documentosApi.confronto?.naoFinanceiras;
+  const chaveDaCompra = entregasApi.entregas?.ok ? entregasApi.entregas.valor.compra?.chave ?? null : null;
   const itensDaNota = useItensDaNota({
     clienteId: clienteAtual?.id ?? null,
-    chaves: (documentosApi.documentos ?? []).map((d) => d.chaveAcesso ?? '').filter(Boolean),
+    chaves: chaveDaCompra ? [chaveDaCompra]
+      : (documentosApi.documentos ?? []).filter((d) => !naoFinanceirasDoLanc?.has(d.id)).map((d) => d.chaveAcesso ?? '').filter(Boolean),
     arquivo: !lancamento ? prefill?.doXml?.arquivo ?? null : null,
+    daCaixa: chaveDaCompra ? xmlDaCaixaDaReceita : undefined,
   });
   /* FIN-CLASSIF-DIVIDIDA-01b — a classificacao dividida do lancamento SALVO: as partes gravadas e a ultima operacao que se desfaz (relidas
      a cada dividir/voltar/desfazer: `divisaoSeq`). O que se grava e' so' pelas RPCs da divisao, com motivo. */
@@ -677,7 +695,16 @@ export function LancamentoV2Dialog({
   const [contasDosItensMudadas, setContasDosItensMudadas] = useState<ReadonlyMap<number, string> | null>(null);
   const resultadoDoSalvarEDividir = useRef<ResultadoDaDivisao | null>(null);
   useEffect(() => { setContasDosItensMudadas(null); }, [open, lancamento?.id]);
-  const [contasAprendidas, setContasAprendidas] = useState<ReadonlyMap<number, string>>(new Map());
+  /* NOTA-ITENS-SUGESTAO (Gabriel 27/11, lote 114360) — a sugestão POR ITEM da escada ÚNICA do banco: no NOVO, a que veio com a nota
+     (`xml.proposta.sugestaoDosItens`); no Editar, a da nota gravada. Nenhuma regra na tela (a "aprendida" do navegador saiu). */
+  const [sugestoesDosItens, setSugestoesDosItens] = useState<ItemSugerido[] | null>(null);
+  const contasAprendidas = useMemo(() => contasSugeridasDosItens(sugestoesDosItens ?? []), [sugestoesDosItens]);
+  /* Q3 — as contas que o operador escolheu na vista Contas (resposta obra × manutenção, conta trocada) e o "Juntar tudo numa conta" */
+  const [escolhasDosItens, setEscolhasDosItens] = useState<ReadonlyMap<number, string>>(new Map());
+  const [juntadaEm, setJuntadaEm] = useState<string | null>(null);
+  /* "ver por item" da faixa: a aba Itens abre na vista Contas */
+  const [itensEmContas, setItensEmContas] = useState(false);
+  useEffect(() => { setEscolhasDosItens(new Map()); setJuntadaEm(null); setItensEmContas(false); }, [open, lancamento?.id]);
   /* NOTA-CONTAS-NA-CRIACAO-01 A — a divisao pelos itens escolhida no NOVO lancamento: PENDENTE na tela (nada vai ao banco antes do Salvar);
      o Salvar cria e divide (o parcelado numa transacao so'; o a' vista cancela o recem-criado se a divisao recusar) */
   const [divisaoNaCriacao, setDivisaoNaCriacao] = useState<ReadonlyMap<number, string> | null>(null);
@@ -2706,32 +2733,64 @@ export function LancamentoV2Dialog({
     if (recusa) { setErroAntesDeSalvar(recusa); return; }
     setErroAntesDeSalvar(null);
     setDivisaoNaCriacao(new Map(mapa));
-    const c = classificacoesDoModal.find((x) => x.id === contaDaMaiorParte(itensDaNota.lidos.itens, mapa));
-    if (c) {
-      /* a safra so' fica se a maior parte e' da MESMA atividade (a regra de trocar a atividade na Geral; o campo esta' oculto enquanto pendente,
-         e a safra de outra atividade seria recusada no Salvar — PR-FIN-SAFRA-ESCOPO-01) */
-      const escopo = (c.escopo_negocio || '').trim();
-      setClassificacao((atual) => ({ ...atual, plano_conta_id: c.id ?? null, subcentro: c.subcentro, macro_custo: c.macro_custo, grupo_custo: c.grupo_custo || '',
-        centro_custo: c.centro_custo, escopo_negocio: c.escopo_negocio || '', atividade: atividadeValida(c.escopo_negocio),
-        safra_id: escopo === 'administrativo' || escopo !== (atual.escopo_negocio || '').trim() ? '' : atual.safra_id }));
-    }
+    setJuntadaEm(null);
+    porNaContaDoLancamento(contaDaMaiorParte(itensDaNota.lidos.itens, mapa));
   };
-  /* a sugestao aprendida dos itens (as divisoes ja' feitas pelos itens, do mesmo emitente) */
+  /** A conta escolhida vira a do lancamento (o Subcentro da Geral). */
+  const porNaContaDoLancamento = (planoContaId: string | null) => {
+    const c = classificacoesDoModal.find((x) => x.id === planoContaId);
+    if (!c) return;
+    /* a safra so' fica se a maior parte e' da MESMA atividade (a regra de trocar a atividade na Geral; o campo esta' oculto enquanto pendente,
+       e a safra de outra atividade seria recusada no Salvar — PR-FIN-SAFRA-ESCOPO-01) */
+    const escopo = (c.escopo_negocio || '').trim();
+    setClassificacao((atual) => ({ ...atual, plano_conta_id: c.id ?? null, subcentro: c.subcentro, macro_custo: c.macro_custo, grupo_custo: c.grupo_custo || '',
+      centro_custo: c.centro_custo, escopo_negocio: c.escopo_negocio || '', atividade: atividadeValida(c.escopo_negocio),
+      safra_id: escopo === 'administrativo' || escopo !== (atual.escopo_negocio || '').trim() ? '' : atual.safra_id }));
+  };
+  /* NOTA-ITENS-SUGESTAO — a conta sugerida pelos itens chega só com o id e o subcentro: no NOVO que nasce da nota, o resto da linha do
+     plano (macro, grupo, centro, atividade) vem do plano carregado — a mesma regra do "Usar divisão". Só no novo da nota: nunca mexe no
+     que um lançamento salvo já tem. */
+  const contaSemHierarquia = !lancamento && !!xml && !!classificacao.plano_conta_id && !classificacao.macro_custo ? classificacao.plano_conta_id : null;
+  useEffect(() => {
+    if (contaSemHierarquia) porNaContaDoLancamento(contaSemHierarquia);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- so' quando a conta sem a linha do plano aparece (ou o plano chega)
+  }, [contaSemHierarquia, classificacoesDoModal]);
+  /** NOTA-ITENS-SUGESTAO — "Juntar tudo numa conta": sem divisão; a conta escolhida vira a do lançamento. */
+  const juntarNaCriacao = (planoContaId: string) => {
+    setErroAntesDeSalvar(null);
+    setDivisaoNaCriacao(null);
+    setJuntadaEm(planoContaId);
+    porNaContaDoLancamento(planoContaId);
+  };
+  /** Q3 — depois do Salvar (os itens já gravados pela chave): a conta que o operador ESCOLHEU e que valeu (na divisão, ou a juntada) vira a
+   *  regra do item (`fn_item_regra_gravar`); na próxima nota o mesmo produto já vem decidido. Falha não desfaz nada (só o console). */
+  const lembrarEscolhasDosItens = async () => {
+    const cli = clienteAtual?.id;
+    if (!cli || !xml || !escolhasDosItens.size) return;
+    const valeu = (n: number, p: string) => (divisaoNaCriacao ? divisaoNaCriacao.get(n) === p : juntadaEm === p);
+    const m = new Map([...escolhasDosItens].filter(([n, p]) => valeu(n, p)));
+    if (!m.size) return;
+    const falhas = await lembrarContasDosItens(cli, xml.proposta.documento.chaveAcesso, m, `Escolhido no lançamento da ${xml.proposta.rotuloNota}`);
+    if (falhas.length) console.error('[lembrarContasDosItens]', falhas);
+  };
+  /* a sugestao dos itens (a escada unica do banco) */
   const chaveDaNotaDosItens = itensDaNota?.cabecalho.chave ?? null;
-  const emitenteDosItens = itensDaNota?.cabecalho.emitenteDocumento ?? null;
+  const temItensDaNota = !!itensDaNota;
+  const sugestaoDaProposta = xml?.proposta.sugestaoDosItens ?? null;
   useEffect(() => {
     let vivo = true;
-    setContasAprendidas(new Map());
+    setSugestoesDosItens(null);
     const cli = clienteAtual?.id;
-    if ((!podeDividir && !podeDividirNaCriacao) || !cli || !itensDaNota) return;
-    void historicoDoEmitente(cli, emitenteDosItens, chaveDaNotaDosItens).then((h) => {
-      if (!vivo || !h.length) return;
-      const validas = new Set(classificacoesDoModal.filter((c) => c.tipo_operacao === tipoOperacao).map((c) => c.id));
-      setContasAprendidas(sugerir(itensDaNota.lidos.itens, aprender(h), (id) => validas.has(id)));
+    if ((!podeDividir && !podeDividirNaCriacao) || !cli || !temItensDaNota) return;
+    /* no NOVO a sugestão já veio com a nota (a mesma escada, com os itens do arquivo) */
+    if (podeDividirNaCriacao && sugestaoDaProposta) { setSugestoesDosItens(sugestaoDaProposta.itens); return; }
+    void sugestaoDosItensDaNota(cli, chaveDaNotaDosItens).then((r) => {
+      if (!vivo) return;
+      if (r.ok === false) { console.error('[sugestaoDosItensDaNota]', r.motivo); return; }
+      setSugestoesDosItens(r.valor);
     });
     return () => { vivo = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- a nota e o emitente bastam: a lista do plano so' valida
-  }, [podeDividir, podeDividirNaCriacao, clienteAtual?.id, chaveDaNotaDosItens, emitenteDosItens]);
+  }, [podeDividir, podeDividirNaCriacao, clienteAtual?.id, chaveDaNotaDosItens, sugestaoDaProposta, temItensDaNota]);
   const contasIniciaisDosItens = useMemo(() => {
     const gravadas = divisao ? contasDasPartes(divisao.partes) : new Map<number, string>();
     return gravadas.size ? gravadas : contasAprendidas;
@@ -2851,7 +2910,7 @@ export function LancamentoV2Dialog({
       if (falha) return desfazerCriacao(cli, idCriado, `a nota não foi anexada: ${falha.erro ?? 'falha'}`);
     }
     const frase = await dividirNaCriacao(cli, idCriado, mapa);
-    if (!frase) onLancamentoCriado?.();
+    if (!frase) { await lembrarEscolhasDosItens(); onLancamentoCriado?.(); }
     return frase;
   };
   const aposCriarDoXml = async () => {
@@ -2860,6 +2919,7 @@ export function LancamentoV2Dialog({
     if (clienteAtual?.id) {
       const erroItens = await gravarItensSemTravar(clienteAtual.id, xml.arquivo);
       if (erroItens) toast.error(`Lançamento gravado, mas os itens da nota não foram guardados: ${erroItens}`);
+      else await lembrarEscolhasDosItens();
     }
     onLancamentoCriado?.();
   };
@@ -3039,6 +3099,19 @@ export function LancamentoV2Dialog({
                     title={`NCM ${xml.proposta.ncmDeBem}: máquina, implemento ou veículo. Se for bem durável, ligue em Patrimônio.${xml.proposta.classificacao?.subcentro ? ` Última classe deste fornecedor: ${xml.proposta.classificacao.subcentro}.` : ''}`}>
                     <span className="min-w-0 truncate">Pode ser bem do patrimônio (NCM {xml.proposta.ncmDeBem}) — ligar em Patrimônio</span>
                   </div>
+                ) : xml.proposta.sugestaoDosItens ? (
+                  /* NOTA-ITENS-SUGESTAO (mock aprovado 27/11 10:47) — a faixa diz a ORIGEM ("pelos itens (N): …", "último deste fornecedor …");
+                     com os itens em várias contas, o AVISO PEQUENO "N itens em X classificações · ver por item" (a mesma faixa, uma linha) */
+                  (xml.proposta.sugestaoDosItens.frase && (xml.proposta.sugestaoDosItens.varias || xmlAmbar('subcentro') || !xml.proposta.classificacao)) ? (
+                    <div className="flex h-6 min-w-0 items-center gap-2 overflow-hidden rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-subcentro"
+                      title={xml.proposta.sugestaoDosItens.porque || xml.proposta.sugestaoDosItens.frase}>
+                      <span className="min-w-0 truncate">{xml.proposta.sugestaoDosItens.frase}</span>
+                      {itensDaNota && (podeDividirNaCriacao || podeDividir) && xml.proposta.sugestaoDosItens.itens.some((i) => i.fonte !== 'fornecedor' || i.pergunta) && (
+                        <button type="button" className="ml-auto shrink-0 font-medium underline underline-offset-2 hover:text-amber-950" data-testid="ver-por-item"
+                          onClick={() => { setItensEmContas(true); setAbaAtiva('itens'); }}>ver por item</button>
+                      )}
+                    </div>
+                  ) : null
                 ) : xmlAmbar('subcentro') && (
                   <div className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-subcentro"
                     title={`Classificação sugerida: ${xml.proposta.classificacao?.subcentro ?? ''} · ${xml.proposta.origens.subcentro ?? ''}`}>
@@ -3528,9 +3601,10 @@ export function LancamentoV2Dialog({
             <section className={sectionClass}>
               <TituloDoBloco nome="Pagamento" />
               {/* NOTA-PAGA-POR-TERCEIRO-01 (Fatia A, mock aprovado 23/11) — "Quem paga: Nós · Terceiro": só na edição; gravou = fecha e a lista relê */}
-              {isEdit && lancamento?.id && clienteAtual?.id && (
-                <QuemPagaTerceiro lancamentoId={lancamento.id} clienteId={clienteAtual.id} tipoOperacao={tipoOperacao}
-                  status={lancamento.status_transacao ?? null}
+              {/* CONSERTO 27/11 — a linha fica em TODO lançamento (novo, entrada, já pago: desligada no mesmo lugar) */}
+              {clienteAtual?.id && (
+                <QuemPagaTerceiro lancamentoId={isEdit ? lancamento?.id ?? null : null} clienteId={clienteAtual.id} tipoOperacao={tipoOperacao}
+                  status={lancamento?.status_transacao ?? null}
                   documentos={(documentosApi.documentos ?? []).map((d) => ({ id: d.id, nome: d.nome }))}
                   aoMudarQuemPaga={setQuemPaga}
                   aoGravar={(frase) => { toast.success(frase); notificarLancamentosMudaram(clienteAtual.id); onClose(); }} />
@@ -3697,9 +3771,10 @@ export function LancamentoV2Dialog({
                       rotuloVoltar={xml && xml.proposta.duplicatas.length > 0 ? 'Voltar às duplicatas da nota' : 'Desfazer edições'}
                       /* D2 — no cartão, a 1ª fatura sugerida vem no recado (o lugar fixo da grade: nada se desloca) */
                       recado={sugestaoDoCartao ? [sugestaoDoCartao, recadoDasParcelas].filter(Boolean).join(' · ') : recadoDasParcelas}
-                      /* a altura segue a JANELA (nunca o conteúdo): medido, o corpo do modal tem 100vh − 131 e a grade começa a 207
-                         com 15 de respiro embaixo — assim o modal não rola e só a lista rola */
-                      altura="clamp(140px, calc(100vh - 355px), 236px)"
+                      /* a altura segue a JANELA (nunca o conteúdo): medido, o corpo do modal tem 100vh − 131 e a grade começa a 239
+                         (207 + os 32 da linha "Quem paga", que ficou de LUGAR FIXO no conserto de 27/11) com 15 de respiro embaixo —
+                         assim o modal não rola e só a lista rola, com o cabeçalho preso nela */
+                      altura="clamp(96px, calc(100vh - 387px), 236px)"
                     />
                   )}
 
@@ -3796,7 +3871,7 @@ export function LancamentoV2Dialog({
               )}
             </section>
             {lancamento?.id ? (
-              <AbaDocumentosLancamento api={documentosApi}
+              <AbaDocumentosLancamento api={documentosApi} lancamentoId={lancamento.id} entregasApi={entregasApi}
                 clienteId={clienteAtual?.id ?? null}
                 sugestao={sugestaoDoDocumento}
                 /* P127 + P128c — o "Novo documento" que lê a nota abre a MESMA prévia do "Ler a NF" (um caminho só: `onLerNotaFiscal`) */
@@ -3875,16 +3950,19 @@ export function LancamentoV2Dialog({
             {itensDaNota && (
               <TabsContent value="itens" className="mt-0 h-full focus-visible:outline-none" data-testid="aba-itens-da-nota">
                 <ItensDaNota cabecalho={itensDaNota.cabecalho} lidos={itensDaNota.lidos} contaDoLancamento={subcentro || null}
+                  visaoInicial={itensEmContas && (podeDividir || podeDividirNaCriacao) ? 'contas' : undefined}
                   vistaContas={podeDividir ? (
                     <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao}
                       contaDeHoje={lancDividido ? null : (classificacao.plano_conta_id ?? null)} sugeridas={contasIniciaisDosItens} atividadeSugerida={classificacao.atividade}
                       gravando={!!motivoDaDivisao} onDividir={(mapa) => setMotivoDaDivisao({ tipo: 'itens', mapa })}
-                      pendente={contasDosItensMudadas} onMudou={setContasDosItensMudadas} />
+                      pendente={contasDosItensMudadas} onMudou={setContasDosItensMudadas}
+                      sugestoes={lancDividido ? undefined : sugestoesDosItens ?? undefined} />
                   ) : podeDividirNaCriacao ? (
                     /* NOTA-CONTAS-NA-CRIACAO-01 A — no NOVO: a mesma vista; "Dividir … ao salvar" deixa a divisao PENDENTE (o Salvar grava) */
                     <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao} aoSalvar
                       contaDeHoje={classificacao.plano_conta_id ?? null} sugeridas={divisaoNaCriacao ?? contasAprendidas} atividadeSugerida={classificacao.atividade}
-                      gravando={saving} onDividir={aplicarDivisaoNaCriacao} />
+                      gravando={saving} onDividir={aplicarDivisaoNaCriacao}
+                      sugestoes={sugestoesDosItens ?? undefined} onJuntar={sugestoesDosItens ? juntarNaCriacao : undefined} onEscolhas={setEscolhasDosItens} />
                   ) : undefined} />
               </TabsContent>
             )}
@@ -3969,8 +4047,8 @@ export function LancamentoV2Dialog({
                 conta estão em leitura (uma linha, altura do rodapé; os campos não mudam de tamanho nem de lugar). */}
             {casadoComExtrato && (
               <span className="min-w-0 truncate whitespace-nowrap text-[10px] leading-tight text-amber-700 dark:text-amber-400"
-                title={FRASE_CASADO_COM_EXTRATO} data-testid="casado-com-extrato">
-                {FRASE_CASADO_COM_EXTRATO}
+                title={TITLE_CASADO_NO_RODAPE} data-testid="casado-com-extrato">
+                {FRASE_CASADO_NO_RODAPE}
               </span>
             )}
             {edicaoParcela && (edicaoParcela.paga || edicaoParcela.frase) && (
@@ -4015,6 +4093,11 @@ export function LancamentoV2Dialog({
             {isEdit && lancamento && clienteAtual?.id && !lancamento.cancelado && (
               <PatrimonioDoLancamento lancamentoId={lancamento.id} clienteId={clienteAtual.id} descricao={lancamento.descricao ?? null}
                 valor={Math.abs(Number(lancamento.valor) || 0)} fornecedor={resumoFavorecido} fazendaRotulo={resumoFazenda} />
+            )}
+            {/* FOLHA-01 · PR B (D3/D4) — "Funcionário ↗" / "ligar a um funcionário…": só para quem tem a folha (a peça confere o `folha_ok`) */}
+            {isEdit && lancamento && clienteAtual?.id && !lancamento.cancelado && (
+              <FuncionarioDoLancamento lancamentoId={lancamento.id} clienteId={clienteAtual.id} onAntesDeSair={onClose}
+                onAbrirFuncionario={onAbrirFuncionario ? (id) => { onClose(); onAbrirFuncionario(id); } : undefined} />
             )}
             {isEdit && lancamento && clienteAtual?.id && !lancamento.cancelado && parteOCLida && !parteOCViva && (
               <FinanciamentoDoLancamento lancamentoId={lancamento.id} clienteId={clienteAtual.id} parcelaDaCompra={parcelaDaCompra}
@@ -4155,6 +4238,7 @@ export function LancamentoV2Dialog({
                   : isEdit && parcelaDaCompra ? `${parcelaDaCompra.numero} de ${parcelaDaCompra.total}`
                   : isEdit && soltaDoResumo ? `${soltaDoResumo.k} de ${soltaDoResumo.n}` : null}
                 documento={documentoDoResumo(docDoLancamento, tipoDocumento)}
+                entregas={entregasDoResumo}
                 boleto={boletoLigado ? {
                   selo: seloDoBoleto(boletoLigado),
                   /* 👁 = o PDF do boleto (o mesmo bucket dos documentos; a URL assinada de 60 s do clipe da lista) */

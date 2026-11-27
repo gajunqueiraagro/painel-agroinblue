@@ -48,7 +48,8 @@ const consultas = vi.hoisted(() => ({
   desfazerIeDaFazenda: vi.fn(async (): Promise<string | null> => null),
   fornecedorPeloNome: vi.fn(async (): Promise<Consulta<string | null>> => ({ ok: true, valor: null })),
   notaJaRegistrada: vi.fn(async (): Promise<Consulta<unknown[]>> => ({ ok: true, valor: [] })),
-  ultimaClassificacaoDoFornecedor: vi.fn(async (): Promise<unknown> => null),
+  /* NOTA-ITENS-SUGESTAO — a escada única do banco (nenhuma sugestão) */
+  sugestaoPelosItens: vi.fn(async (): Promise<unknown> => ({ ok: true, valor: { itens: [], fornecedor: null } })),
   fornecedorPeloDocumento: vi.fn(async (_c: string, _d: string): Promise<Consulta<{ id: string; nome: string; ativo: boolean } | null>> => ({ ok: true, valor: null })),
   usoDoFornecedor: vi.fn(async (_f: string): Promise<{ lancamentos: number; ultimo: string | null } | null> => ({ lancamentos: 3, ultimo: '2026-09-01' })),
   /* P128b — completar com a nota: a prévia é a própria função com `simular`; por padrão aceita tudo e devolve as linhas do pedido */
@@ -71,6 +72,8 @@ const consultas = vi.hoisted(() => ({
   /* NOTA-ATUALIZA-PREVISTO-01 — o histórico da participação (padrão: nenhum, nada sugerido) e a gravação do % no documento */
   historicoDaParticipacao: vi.fn(async (_c: string, _f: string): Promise<{ lancamentoCent: number; documentoCent: number }[]> => []),
   definirParticipacao: vi.fn(async (_c: string, _d: readonly string[], _p: number): Promise<string | null> => null),
+  /* DA-NOTA-CLASSIF-01 — a sugestão pelos itens na etapa 2 (padrão: a nota ainda não está gravada) */
+  sugestaoDosItensDaNota: vi.fn(async (_c: string, _k: string | null): Promise<Consulta<null>> => ({ ok: true, valor: null })),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
 /* Ajuste 12 — a aba Itens da nota já lançada: os itens fiscais (guardados ou do arquivo) num hook só; o teste diz o que ele responde */
@@ -1568,6 +1571,59 @@ describe('NOTA-PAGA-A-VISTA-01 — a nota inteira paga à vista num lançamento'
     expect(pedidoGravado().opcoes.juntar).toBe(false);
     expect(g.lancamento).not.toHaveBeenCalled();
   });
+  /* o valor difere da nota: o pago não é achado "à vista" — o operador o VINCULA e a parcela da nota não nasce (o caso do NJ: só o pago no pedido) */
+  const soOPagoRecebe = async () => {
+    const acao = (v: string) => screen.getAllByTestId('nota-acao').find((b) => b.getAttribute('data-acao') === v);
+    const fora = acao('deixar');
+    if (!fora) throw new Error('o pago não nasceu fica de fora');
+    fireEvent.keyDown(fora, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('nota-acao-vincular'));
+    const cria = acao('criar');
+    if (cria) {
+      fireEvent.keyDown(cria, { key: 'Enter' });
+      const opc = screen.queryByTestId('nota-acao-deixar') ?? screen.queryByTestId('nota-acao-jaPaga');
+      if (!opc) throw new Error('a parcela da nota não tem como ficar de fora');
+      fireEvent.click(opc);
+    }
+  };
+  /* DA-NOTA-JUROS-01 (Gabriel 24/11 17:03, o molde da NF 26.185 do NJ: nota R$ 3.441,75, pago 1 dia depois R$ 3.446,34) — PAGO ≠ NOTA NUNCA TRAVA:
+     a nota SINTÉTICA de R$ 1.966,56 e o pago de R$ 1.971,15 (+4,59) */
+  it('JUROS1 pago a mais com tudo pago: sem a recusa; "pago · nota · diferença" com Juros/multa sugerido; "Não é juros" devolve a guarda; o motivo vai ao banco', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [{ ...AVISTA, valorCent: 197115, pagamento: '2026-10-11' }] });
+    const { comoGravadores } = gravadoresFalsos();
+    const props = await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores });
+    await naAbaParcelas();
+    await soOPagoRecebe();
+    expect(screen.queryByTestId('nota-recusa-compra')).toBeNull();
+    fireEvent.click(within(screen.getByTestId('nota-abas-ja')).getByText(/Como vai ficar/));
+    const linha = await screen.findByTestId('previa-diferenca');
+    expect([within(linha).getByTestId('previa-diferenca-pago').textContent, within(linha).getByTestId('previa-diferenca-nota').textContent,
+      within(linha).getByTestId('previa-diferenca-valor').textContent]).toEqual(['R$ 1.971,15', 'R$ 1.966,56', '+R$ 4,59']);
+    expect(linha.getAttribute('title')).toContain('Juros/multa: o pagamento fica dividido');
+    /* a prévia do banco já pergunta com o motivo */
+    await waitFor(() => expect(consultas.completarComANota.mock.calls.some((c) => c[2].simular && Reflect.get(c[2], 'diferenca') === 'juros')).toBe(true));
+    /* trocar: "Não é juros" = a guarda da soma volta (a frase curta no rodapé) */
+    fireEvent.click(within(linha).getByText('Não é juros'));
+    expect((await screen.findByTestId('nota-recusa-compra')).textContent).toBe('⚠ Soma passa da nota. Nada gravado.');
+    fireEvent.click(within(screen.getByTestId('previa-diferenca')).getByText('Juros/multa'));
+    await waitFor(() => expect(screen.queryByTestId('nota-recusa-compra')).toBeNull());
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['avista']);
+    expect(Reflect.get(pedidoGravado().opcoes, 'diferenca')).toBe('juros');
+  });
+  it('JUROS2 pago a menos com tudo pago: Desconto sugerido, nunca trava; a nota que bate não mostra a linha', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [{ ...AVISTA, valorCent: 190000 }] });
+    const { comoGravadores } = gravadoresFalsos();
+    await abrir(montarNota({ fornecedores: [FORN], semDuplicata: true }), { g: comoGravadores });
+    await naAbaParcelas();
+    await soOPagoRecebe();
+    expect(screen.queryByTestId('nota-recusa-compra')).toBeNull();
+    fireEvent.click(within(screen.getByTestId('nota-abas-ja')).getByText(/Como vai ficar/));
+    const linha = await screen.findByTestId('previa-diferenca');
+    expect(within(linha).getByTestId('previa-diferenca-valor').textContent).toBe('−R$ 66,56');
+    expect(within(linha).getByText('Desconto')).toBeTruthy();
+  });
   it('V3 pelo "+ Adicionar documento" do lançamento já pago (a porta 2): o aberto é o à vista — anexa e vincula, sem forçar as parcelas', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [{ ...AVISTA, por: ['lancamento'] }] });
     const { g, comoGravadores } = gravadoresFalsos();
@@ -1729,5 +1785,36 @@ describe('DA-NOTA-ETAPAS-01 — a nota NÃO FINANCEIRA troca o botão (Gabriel 1
     await waitFor(() => expect(bem.registrarBemDeTerceiro).toHaveBeenCalledTimes(1));
     const [cli, chave, prev, obs, simular] = bem.registrarBemDeTerceiro.mock.calls[0];
     expect([cli, String(chave).length, prev, obs, simular]).toEqual(['cli', 44, null, null, true]);
+  });
+});
+
+/* ═══ DA-NOTA-CLASSIF-01 (Gabriel 24/11 09:17/09:18) — o cartão Fornecedor com o MESMO desenho com ou sem cadastro; o marketplace "vendido por" ═══ */
+describe('DA-NOTA-CLASSIF-01 — cartão do fornecedor e "vendido por"', () => {
+  it('sem cadastro: o chip âmbar numa linha, os dados do XML em cinza e "Criar fornecedor" (nunca "Cadastrar com estes dados")', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
+    await abrir(montarNota());
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('não encontrado no cadastro · criar com estes dados');
+    expect(screen.getByTestId('nota-cadastrar-fornecedor').textContent).toBe('Criar fornecedor');
+    expect(screen.getByTestId('nota-fornecedor-linha-2').className).toContain('text-muted-foreground');
+  });
+  it('com cadastro: o chip "achado pelo CNPJ", o preto do cadastro e nenhum botão de criar', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
+    await abrir(montarNota({ fornecedores: [FORN] }), { fornecedores: [FORN] });
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('achado pelo CNPJ');
+    expect(screen.getByTestId('nota-fornecedor-linha-2').className).not.toContain('text-muted-foreground');
+    expect(screen.queryByTestId('nota-cadastrar-fornecedor')).toBeNull();
+  });
+  it('lançamento de OUTRO fornecedor (o marketplace): "vendido por <emitente> · lançado em <quem cobrou>"; o fornecedor do lançamento não é trocado', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });          // os 4 no cadastro sem CNPJ (outro que o emitente)
+    const { onCriarFornecedor } = await abrir(montarNota({ fornecedores: [FORN] }), { fornecedores: [FORN] });
+    const v = await screen.findByTestId('nota-vendido-por');
+    expect(v.textContent).toMatch(/^vendido por .+ · lançado em Agro Sintetica Insumos SA$/);
+    expect(v.getAttribute('title')).toContain('O fornecedor do lançamento não muda.');
+    expect(onCriarFornecedor).not.toHaveBeenCalled();
+  });
+  it('lançamento do PRÓPRIO emitente: sem "vendido por"', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO.map((l) => ({ ...l, fornecedorId: 'f1', fornecedorNome: 'Agro Sintetica' })) });
+    await abrir(montarNota({ fornecedores: [FORN] }), { fornecedores: [FORN] });
+    expect(screen.queryByTestId('nota-vendido-por')).toBeNull();
   });
 });

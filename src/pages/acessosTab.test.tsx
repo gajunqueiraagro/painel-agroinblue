@@ -126,9 +126,9 @@ describe('o cabeçalho e a lista', () => {
 });
 
 describe('os perfis do piloto', () => {
-  it('só Gestor do Cliente e Financeiro se criam; Campo e Leitura ficam na lista, apagados, com o motivo; admin não existe', () => {
+  it('Proprietário, Gestor do Cliente e Financeiro se criam; Campo e Leitura ficam na lista, apagados, com o motivo; admin não existe', () => {
     expect(PERFIS_DA_TELA.map(p => [p.valor, p.motivo])).toEqual([
-      ['gestor_cliente', null], ['financeiro', null], ['campo', MOTIVO_PERFIL_AGUARDA], ['leitura', MOTIVO_PERFIL_AGUARDA],
+      ['proprietario', null], ['gestor_cliente', null], ['financeiro', null], ['campo', MOTIVO_PERFIL_AGUARDA], ['leitura', MOTIVO_PERFIL_AGUARDA],
     ]);
     expect(MOTIVO_PERFIL_AGUARDA).toBe('aguarda a trava de gravação no banco');
     expect(PERFIS_DA_TELA.some(p => p.valor === 'admin_agroinblue')).toBe(false);

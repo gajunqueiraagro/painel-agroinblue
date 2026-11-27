@@ -13,8 +13,10 @@
  * cabeçalho, ↑↓). As fontes são as da lista do Financeiro.
  * O "até" da busca é o fim do MÊS SEGUINTE ao extrato: o em aberto que vence depois do movimento entra (Gabriel, 30/10).
  *
- * ⚠ BUSCAR É GESTO (Procurar ou Enter): nada sai sozinho ao abrir.
- * ⚠ D1: banco sem nome (Bradesco "PIX ENVIADO", Sicredi com 8 dígitos) = o campo VAZIO e a frase "o banco não trouxe o nome: digite".
+ * CONC-SUGESTOES-V2 A (Gabriel 25/11, mock aprovado): o campo nasce com NOME · CNPJ do texto do banco (`campoDoHistorico`) e a busca SAI
+ *   SOZINHA ao abrir quando há o que procurar (é só leitura; casar continua gesto). O nome vai em `p_termo`; o documento em `p_documento`.
+ * ⚠ D1: banco sem nome NEM documento (Bradesco "PIX ENVIADO", Sicredi com 8 dígitos) = o campo VAZIO e a frase "o banco não trouxe o nome:
+ *   digite" — nada sai sozinho.
  * ⚠ "NÃO CONSEGUI" NUNCA VIRA "NADA ACHADO" (P146): a recusa ou o formato inesperado dizem "Não consegui procurar" e oferecem de novo.
  * ⚠ LAYOUT FIXO: a linha do campo e o quadro têm altura fixa (na estação, 6 linhas; no modal, `preencher` = o que sobra dele) — nada se
  *   desloca entre "antes de procurar", "procurando", "nada achado" e a lista. Na tabela, texto = uma linha com "…" e o inteiro no `title`.
@@ -26,14 +28,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { nomeDoHistorico } from '@/lib/conciliacao/nomeDoHistorico';
+import { campoDoHistorico, termoDoCampo } from '@/lib/conciliacao/nomeDoHistorico';
 import { TabelaDaLista } from '@/components/financeiro-v2/TabelaDaLista';
 import { CabecalhoParaCasar, LinhaParaCasarNaTabela, LINK_PARA_CASAR, ALTURA_DA_LINHA_PARA_CASAR, TODAS_AS_COLUNAS_PARA_CASAR, largurasParaCasar,
-  ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR, deltasDoMovimento } from '@/components/conciliacao/TabelaParaCasar';
+  ALTURA_DO_CABECALHO_PARA_CASAR, PISO_PARA_CASAR, deltasDoMovimento, FaixaParaCasar } from '@/components/conciliacao/TabelaParaCasar';
 import { lerComplementoDasLinhas, type ComplementoDaLinha } from '@/lib/conciliacao/complementoDasLinhas';
 import {
   lerResultado, fraseDaFaixa, modeloDoAchado, contagemDosAchados, ONDE_TODOS, acaoDoAchado, outraConta, ordenarAchados, proximaOrdem,
-  fimDoMesSeguinte, ORDEM_PADRAO,
+  ORDEM_PADRAO,
   type AchadoDoHistorico, type ColunaDoHistorico, type ModeloDoHistorico, type OndeProcurar, type OrdemDoHistorico, type ResultadoDoHistorico,
 } from '@/lib/conciliacao/procurarNoHistorico';
 
@@ -67,32 +69,42 @@ type Estado =
   | { tipo: 'pronto'; termo: string; r: ResultadoDoHistorico };
 
 export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoRef, onCasar, contaDoExtrato, preencher, selecao }: Props) {
-  const nomeDoBanco = nomeDoHistorico(movimento.historico, movimento.data);
+  const campoDoBanco = campoDoHistorico(movimento.historico, movimento.data);
   const ano = Number((movimento.data ?? '').slice(0, 4)) || new Date().getFullYear();
-  const [termo, setTermo] = useState(nomeDoBanco);
+  const [termo, setTermo] = useState(campoDoBanco);
+  const pedido = termoDoCampo(termo);
   const [onde, setOnde] = useState<ReadonlySet<OndeProcurar>>(new Set(ONDE_TODOS));
   const [desdeAno, setDesdeAno] = useState(ano);
   const [estado, setEstado] = useState<Estado>({ tipo: 'antes' });
   const [ordem, setOrdem] = useState<OrdemDoHistorico>(ORDEM_PADRAO);
 
-  const podeProcurar = !!clienteId && termo.trim().length >= 2 && onde.size > 0 && estado.tipo !== 'procurando';
+  const podeProcurar = !!clienteId && (pedido.nome.length >= 2 || !!pedido.documento) && onde.size > 0 && estado.tipo !== 'procurando';
   const contaId = contaDoExtrato?.id ?? null;
   const nomeContaExtrato = contaDoExtrato?.nome ?? 'a conta do extrato';
 
   const procurar = async () => {
     if (!podeProcurar || !clienteId) return;
-    const t = termo.trim();
+    const t = pedido.nome;
     setEstado({ tipo: 'procurando' });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
     const { data, error } = await (supabase as any).rpc('fn_conciliacao_historico_buscar', {
       p_cliente: clienteId, p_termo: t, p_onde: ONDE_TODOS.filter((o) => onde.has(o)),
-      p_de: `${desdeAno}-01-01`, p_ate: fimDoMesSeguinte(movimento.data), p_valor: movimento.valor,
+      /* CONC-SUGESTOES-V2 A (mock): o em aberto INCLUSIVE FUTUROS — sem "até" (o pago nunca é futuro) */
+      p_de: `${desdeAno}-01-01`, p_ate: null, p_valor: movimento.valor,
+      /* CONC-SUGESTOES-V2 B: o CNPJ (ou CPF) do campo → o fornecedor de mesmo documento ou mesma raiz; só vai quando há */
+      ...(pedido.documento ? { p_documento: pedido.documento.digitos } : {}),
     });
     if (error) { console.error('[ProcurarNoHistorico]', error); setEstado({ tipo: 'falhou', motivo: 'o banco recusou a busca' }); return; }
     const r = lerResultado(data);
     if (!r) { console.error('[ProcurarNoHistorico] resposta inesperada', data); setEstado({ tipo: 'falhou', motivo: 'a resposta veio num formato inesperado' }); return; }
-    setEstado({ tipo: 'pronto', termo: t, r });
+    setEstado({ tipo: 'pronto', termo: t || termo.trim(), r });
   };
+
+  /* CONC-SUGESTOES-V2 A: com nome ou documento do banco, a busca sai sozinha ao abrir (uma vez; depois é Procurar/Enter) */
+  useEffect(() => {
+    if (campoDoBanco && clienteId) void procurar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só ao abrir
+  }, []);
 
   const alternar = (o: OndeProcurar) => setOnde((s) => {
     const n = new Set(s); if (n.has(o)) n.delete(o); else n.add(o); return n;
@@ -114,7 +126,15 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
     return () => { vivo = false; };
   }, [clienteId, estado]);
   const faixa = estado.tipo === 'pronto' ? fraseDaFaixa(estado.termo, estado.r.resumo) : null;
-  const frase = faixa?.curta ?? (!nomeDoBanco && estado.tipo === 'antes' ? 'o banco não trouxe o nome: digite' : null);
+  /* CONC-SUGESTOES-V2 A (mock): no modal (com quem case), EM ABERTO (inclusive futuros) primeiro, com Casar; depois os PAGOS, modelo para
+     "Criar igual". Sem quem case (a estação) tudo é modelo: uma lista só, sem faixa. */
+  const abertos = onCasar ? achados.filter((a) => acaoDoAchado(a, contaId, true) !== 'criar_igual') : [];
+  const pagos = onCasar ? achados.filter((a) => acaoDoAchado(a, contaId, true) === 'criar_igual') : achados;
+  const gruposDosAchados = onCasar
+    ? [{ chave: 'abertos', faixa: abertos.length ? `Em aberto (inclusive futuros) · ${abertos.length}` : null, itens: abertos },
+       { chave: 'pagos', faixa: pagos.length ? `Pagos — modelo para criar igual · ${pagos.length}` : null, itens: pagos }]
+    : [{ chave: 'todos', faixa: null, itens: pagos }];
+  const frase = faixa?.curta ?? (!campoDoBanco && estado.tipo === 'antes' ? 'o banco não trouxe o nome: digite' : null);
   const contagem = estado.tipo === 'pronto' ? contagemDosAchados(estado.r) : estado.tipo === 'procurando' ? 'procurando…' : '';
   const alturaFixa = ALTURA_DO_CABECALHO_PARA_CASAR + LINHAS_A_VISTA * ALTURA_DA_LINHA_PARA_CASAR + 2;
   /* o cabeçalho só fica PRESO quando o quadro rola de fato (mais linhas que as à vista) — preso num quadro que não rola é vão (P153) */
@@ -150,7 +170,7 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
           Procurar
         </button>
         {/* a contagem tem lugar reservado: "procurando…", "N achados" e vazio ocupam o mesmo (vazio = um espaço fixo) */}
-        <span className="ml-auto w-[64px] shrink-0 truncate text-right tabular-nums text-muted-foreground" title={contagem || undefined}
+        <span className="ml-auto w-[100px] shrink-0 truncate text-right tabular-nums text-muted-foreground" title={contagem || undefined}
           data-testid="procurar-historico-contagem">{contagem || ' '}</span>
       </div>
 
@@ -180,7 +200,9 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
             {estado.tipo === 'pronto' && achados.length === 0 && (
               <tr style={{ height: ALTURA_DA_LINHA_PARA_CASAR }}><td colSpan={larguras.length} className="px-1 italic text-muted-foreground">nada achado com "{estado.termo}"</td></tr>
             )}
-            {achados.map((a) => {
+            {gruposDosAchados.flatMap((g) => [
+              ...(g.faixa ? [<FaixaParaCasar key={`faixa-${g.chave}`} n={larguras.length} testid={`procurar-faixa-${g.chave}`}>{g.faixa}</FaixaParaCasar>] : []),
+              ...g.itens.map((a) => {
               const acao = acaoDoAchado(a, contaId, !!onCasar);
               const outra = outraConta(a, contaId);
               const tituloDescricao = [a.descricao, [a.centro, a.subcentro].filter(Boolean).join(' · ') || null, a.banco ? `O banco: ${a.banco}` : null]
@@ -212,7 +234,7 @@ export function ProcurarNoHistorico({ clienteId, movimento, onCriarIgual, campoR
                     </button>
                   )} />
               );
-            })}
+            })])}
         </TabelaDaLista>
         </div>
       </div>

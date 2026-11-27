@@ -69,6 +69,8 @@ describe('proporLancamento — F1, a nota inteira', () => {
   it('tudo o que o Novo lancamento vai mostrar', () => {
     expect(p).toEqual({
       rotuloNota: 'NF 000.012.345',
+      /* NOTA-ITENS-SUGESTAO — sem a sugestão pelos itens (o caminho antigo, só o fornecedor) */
+      sugestaoDosItens: null,
       tipoOperacao: '2-Saídas',
       competencia: '2026-09-30',
       favorecidoId: 'forn-1',

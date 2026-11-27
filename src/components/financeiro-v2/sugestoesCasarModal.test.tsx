@@ -29,6 +29,9 @@ vi.mock('@/components/conciliacao/CriarLancamentoDaLinha', () => ({ CriarLancame
 import { SugestoesCasarModal } from './SugestoesCasarModal';
 import { CasarComBancoModal } from './CasarComBancoModal';
 
+/* gate 26/11: a tabela dos levados só tem as colunas extras (Fornecedor · NF · Faz. · Ativ. · Plano) de 1100px; o jsdom abre a 1024 */
+Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 });
+
 beforeEach(() => { RPC.chamadas = []; RPC.tabelas = {}; });
 
 const c = (p: Partial<CandidatoSugestao> & { lancamento_id: string; valor_assinado: number }): CandidatoSugestao => ({
@@ -62,29 +65,22 @@ describe('o modal "Sugestões para casar"', () => {
     expect(within(modal).queryByText('histórico')).toBeNull();
   });
 
-  /* CONC-SUGESTOES-TABELA-01 (Gabriel 04/11 06:36) — o extrato é o TÍTULO, numa faixa própria, fora da tabela */
-  it('o lançamento do extrato é uma faixa própria acima das sugestões: rótulo · data · texto do banco · valor (em negrito, maior)', () => {
+  /* CONC-SUGESTOES-V2 A (mock aprovado 25/11): o extrato é a 1ª linha DA MESMA TABELA — "Banco" · Pgto. · nome sem caixa alta (cru no title) · Valor */
+  it('CONC-SUGESTOES-V2 A: o movimento do banco é a 1ª linha da tabela, nas mesmas colunas (a faixa de fora saiu)', () => {
     const { modal } = abrir();
-    const faixa = within(modal).getByTestId('sugestoes-extrato');
-    expect(faixa.tagName).toBe('DIV');
-    expect(faixa.closest('table')).toBeNull();
-    expect(faixa.textContent).toContain('Lançamento do extrato');
-    expect(within(faixa).getByTestId('sugestoes-extrato-data').textContent).toBe('15/09/2026');
-    const nome = within(faixa).getByTestId('sugestoes-extrato-nome');
-    expect(nome.textContent).toBe('Pagamento de Boleto · BANCO RABOBANK INTERNATIONAL BRASIL S/');
-    expect(nome.className).toContain('truncate');
-    expect(nome.getAttribute('title')).toBe(`Pagamento de Boleto · BANCO RABOBANK INTERNATIONAL BRASIL S/\n${EXT_RABO.historico}`);
-    expect(within(faixa).getByTestId('sugestoes-extrato-valor').textContent).toBe('-26.127,18');
-    /* UI-FONTE-GATE-01 (Gabriel 12/11): a faixa e o rodapé na régua — 28px, 10; o valor 11 em negrito */
-    expect(within(faixa).getByTestId('sugestoes-extrato-valor').className).toMatch(/text-\[11px\] font-bold/);
-    expect(faixa.className).toMatch(/\bh-\[28px\].*\btext-\[10px\]/);
-    expect(within(modal).getByTestId('sugestoes-rodape').className).toContain('text-[10px]');
-    expect(modal.querySelector('h2')!.className).toContain('text-[11px]');
-    /* a tabela só tem os lançamentos */
-    expect(modal.querySelector('table tbody')!.textContent).not.toContain('RABOBANK INTERNATIONAL BRASIL S/');
+    expect(within(modal).queryByTestId('sugestoes-extrato')).toBeNull();
+    const banco = within(modal).getByTestId('linha-do-banco');
+    expect(banco.tagName).toBe('TR');
+    expect(banco.closest('tbody')?.firstElementChild).toBe(banco);
+    expect(banco.textContent).toContain('Banco');
+    expect(banco.textContent).toContain('15/09/2026');
+    const nome = within(banco).getByTestId('linha-do-banco-nome');
+    expect(nome.textContent).toBe('Pagamento boleto · Banco Rabobank International Brasil S'); /* o leitor tira a pontuação da ponta (P153) */
+    /* o title leva o que a célula mostra E o texto cru (o gate de cortes: "…" só com o inteiro no title) */
+    expect(nome.getAttribute('title')).toBe(`Pagamento boleto · Banco Rabobank International Brasil S\n${EXT_RABO.historico}`);
+    expect(banco.querySelector('td.celula-valor')?.textContent?.replace(/\s/g, ' ')).toContain('26.127,18');
   });
 
-  /* CONC-SUGESTOES-TABELA-01 — a TABELA DA LISTA DO FINANCEIRO (`TabelaDaLista`): as mesmas peças, as larguras e a classe das fontes */
   it('a tabela é a da lista do Financeiro: ☐ · Comp. · Venc. · Pgto. · Descrição · Fornecedor · Faz. · NF · Valor · Status · Motivo · casar', () => {
     const { modal } = abrir();
     const t = modal.querySelector('table')!;
@@ -94,11 +90,11 @@ describe('o modal "Sugestões para casar"', () => {
     expect(t.style.tableLayout).toBe('fixed');
     /* UI-FONTE-GATE-01 (Chat 12/11 15:22): sem fazenda nem NF nas sugestões, Faz. e NF saem e a largura vai para Descrição/Fornecedor */
     expect([...t.querySelectorAll('col')].map((x) => (x instanceof HTMLElement ? x.style.width : '?')))
-      .toEqual(['28px', '46px', '46px', '46px', '', '', '94px', '80px', '38px', '60px', '110px', '62px']);
-    expect([...t.querySelectorAll('th')].map((x) => (x.textContent ?? '').replace(/⇅/g, ''))).toEqual(['', 'Comp.', 'Venc.', 'Pgto.', 'Descrição', 'Fornecedor', 'Valor', 'Δ valor', 'Δ dias', 'Status', 'Motivo', '']);
+      .toEqual(['28px', '46px', '52px', '46px', '38px', '', '', '94px', '80px', '60px', '104px', '62px']);
+    expect([...t.querySelectorAll('th')].map((x) => (x.textContent ?? '').replace(/⇅/g, ''))).toEqual(['', 'Comp.', 'Venc.', 'Pgto.', 'Δ dias', 'Descrição', 'Fornecedor', 'Valor', 'Δ valor', 'Status', 'Motivo', '']);
     /* UI-FONTE-GATE-01: o cabeçalho alinha como a coluna (texto à esquerda, número à direita), nunca tudo no centro */
     expect([...t.querySelectorAll('th')].map((x) => (/\btext-left\b/.test(x.className) ? 'E' : /\btext-right\b/.test(x.className) ? 'D' : 'C')))
-      .toEqual(['C', 'C', 'C', 'C', 'E', 'E', 'D', 'D', 'D', 'C', 'E', 'C']);
+      .toEqual(['C', 'C', 'C', 'C', 'D', 'E', 'E', 'D', 'D', 'C', 'E', 'C']);
     const linhas = within(modal).getAllByTestId('sugestao');
     expect(linhas.length).toBeGreaterThan(0);
     for (const tr of linhas) {
@@ -220,11 +216,10 @@ describe('o modal "Sugestões para casar"', () => {
     expect(outra.querySelector('td.celula-doc')!.textContent).toBe('-');
   });
 
-  it('sem sugestão, diz "Nenhuma sugestão automática" (P159f); o rodapé explica as cores', () => {
+  it('sem sugestão, diz "Nenhuma sugestão automática" (P159f); CONC-SUGESTOES-V2: a legenda saiu (o selo diz o que é)', () => {
     const { modal } = abrir(vi.fn(), []);
     expect(within(modal).getByText('Nenhuma sugestão automática')).toBeInTheDocument();
-    expect(within(modal).getByText('âmbar = conferir antes de casar')).toBeInTheDocument();
-    expect(within(modal).getByText('· mais provável primeiro')).toBeInTheDocument();
+    expect(within(modal).queryByText('âmbar = conferir antes de casar')).toBeNull();
   });
 
   /* P153 — o "Procurar no histórico" fica embaixo das sugestões, no mesmo modal; sem quem receba o "Criar igual", não aparece */
@@ -258,7 +253,7 @@ describe('casar com valor diferente abre o CasarComBancoModal com o valor do ban
       iniciais={[{ lancamento_id: 'amanda', descricao: 'Folha de Pagamento', fornecedor: 'Amanda Montes Camargo', valor_assinado: -3085, usarValorDoBanco: true }]} />);
     const campo = screen.getByLabelText('Valor de Folha de Pagamento') as HTMLInputElement;
     expect(campo.value).toBe('5.665,00');
-    expect(screen.getByTestId('levado-linha').querySelectorAll('td')[8].textContent).toBe('-3.085,00');
+    expect(screen.getByTestId('levado-linha').querySelectorAll('td')[10].textContent).toBe('-3.085,00'); /* + Pgto. e Δ dias (CONC-SUGESTOES-V2 C) */
     expect(screen.getByTestId('levado-linha-fica').textContent).toBe('a mais 2.580,00');
     expect(screen.getByTestId('usar-valor-banco')).toBeDisabled();
     await waitFor(() => expect(RPC.chamadas.length).toBeGreaterThan(0));

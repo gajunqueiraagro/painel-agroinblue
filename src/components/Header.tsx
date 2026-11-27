@@ -3,7 +3,8 @@ import { LogOut, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
-import logo from '@/assets/logo.png';
+import { LogoAgroinblue } from '@/components/marca/LogoAgroinblue';
+import { ASSINATURA_DA_MARCA } from '@/lib/marca/marca';
 
 interface HeaderProps {
   title: string;
@@ -22,13 +23,13 @@ export function Header({ title, clienteNome, fazendaNome, periodo, rightAction }
       <div className="w-full">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <img src={logo} alt="AgroInBlue" className="h-5 md:h-7 w-auto shrink-0" />
+            <LogoAgroinblue variante="compacto" fundo="escuro" alturaPx={20} className="shrink-0" />
             <div className="min-w-0">
               <h1 className="text-xs md:text-base font-bold text-primary-foreground tracking-wide truncate leading-tight">
                 Painel de Controle
               </h1>
               <p className="text-[8px] md:text-[10px] text-primary-foreground/50 font-medium tracking-wider leading-tight">
-                Agroinblue · Gestão Pecuária e Financeira
+                {ASSINATURA_DA_MARCA}
               </p>
             </div>
           </div>

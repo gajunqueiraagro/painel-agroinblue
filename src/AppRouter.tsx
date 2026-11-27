@@ -15,6 +15,7 @@ import V2Index from '@/v2/V2Index';
 import V2NaoEncontrada from '@/v2/pages/V2NaoEncontrada';
 import V3Index from '@/v3/V3Index';
 import LayoutLab from '@/pages/LayoutLab';
+import { CarregandoAgroinblue } from '@/components/marca/LogoAgroinblue';
 
 /**
  * ROTA FORA DO V2 SO' PARA O ADMIN DO AGROinBLUE — ACESSOS-02b.
@@ -53,10 +54,7 @@ export default function AppRouter() {
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <span className="text-5xl animate-pulse">🐂</span>
-          <p className="text-muted-foreground mt-2 font-semibold">Carregando...</p>
-        </div>
+        <CarregandoAgroinblue frase="Carregando..." />
       </div>
     );
   }
@@ -70,10 +68,7 @@ export default function AppRouter() {
   if (loadingCliente || fazendaLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <span className="text-5xl animate-pulse">🏡</span>
-          <p className="text-muted-foreground mt-2 font-semibold">Carregando fazendas...</p>
-        </div>
+        <CarregandoAgroinblue frase="Carregando fazendas..." />
       </div>
     );
   }

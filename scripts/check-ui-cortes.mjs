@@ -22,6 +22,11 @@
  *       (o centro do donut no furo).
  *   (8) FOLGA ENTRE CELULAS (P100 item 5) — o cenario com `folgaCelulas` (seletor de tabelas): em cada linha, o texto visivel de uma
  *       celula e o da vizinha ficam a 6 px ou mais um do outro ("R$ 11.252.742,85+257,9%" colado = achado), cabecalho inclusive.
+ *   (9) RÉGUA DE FONTE (UI-FONTES-REGUA-01, Gabriel 25/11 07:41) — SÓ nas telas novas ou alteradas no diff (`telasDaReguaDeFonte`; as já
+ *       aprovadas não reprovam): texto de linha de tabela ≤ 11px; texto de campo/botão/aba ≤ 11px; rótulo/cabeçalho/data ≤ 10px; título de
+ *       modal ≤ 13px; altura de campo/botão ≤ 28px; exceção só o valor em destaque (resumo/KPI: número fora de tabela e de campo), até 16px.
+ *       As telas antigas vão para um RELATÓRIO (`--relatorio-fontes ARQ.jsonl`, uma linha por elemento; `--so-fonte` mede só a régua), que
+ *       `scripts/ui-fontes-relatorio.mjs` junta por tela — sem consertar nada.
  * Baseline = a lista de EXCECOES abaixo (vazia). Antes de varrer, o detector se prova num fixture com os defeitos: se nao os achar,
  * sai com codigo 2 ("zero achados" so' vale quando a busca provou que sabe achar). `--fotos DIR` grava um print por tela e tamanho.
  */
@@ -30,7 +35,7 @@ import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { filtroRapido, telaDoCenario } from './ui-gate-rapido.mjs';
+import { elementoDoDiff, filtroRapido, telaDoCenario, telasDaReguaDeFonte } from './ui-gate-rapido.mjs';
 import { lerOpcoesDaRodada, planoDaRodada, comTeto, deveParar, textoDoTeto, linhaDaMedicao, fraseDoParcial, codigoDaRodada, criarRegistro,
   paginasDaMedicao } from './ui-cortes/teto.mjs';
 
@@ -44,6 +49,10 @@ const SO = arg('--so');
 /* UI-MESES-PADRAO-01 (decisão do Gabriel 18/11: publicar com o gate das telas ALCANÇADAS, o completo à noite) — `--telas a,b,c`: só os
    cenários dessas telas da bancada (o `tela=` da url, a MESMA regra do modo rápido). Não substitui o completo: é o gate parcial declarado. */
 const TELAS = arg('--telas') ? new Set(arg('--telas').split(',')) : null;
+/* UI-FONTES-REGUA-01 — onde a régua reprova (as telas do diff), o relatório das antigas e o modo que mede só ela */
+const REGUA = telasDaReguaDeFonte(process.env.UI_GATE_BASE || 'origin/proto');
+const RELATORIO_FONTES = arg('--relatorio-fontes');
+const SO_FONTE = process.argv.includes('--so-fonte');
 /* PIQUETE-VIGENCIA-01 (gate a 918): quando a barra do polígono não cabe inteira, os gestos vão para o "⋯" (`editar-mais`) com os MESMOS
    testids — o clique no gesto abre o menu antes, se preciso; `temGesto` confere o gesto à vista OU no menu (e fecha o menu) */
 async function cliqueNoGesto(p, t) {
@@ -97,6 +106,15 @@ const TAMANHOS_DO_P92 = [[750, 483], [750, 520], [750, 600], [814, 530], [900, 6
 const EXCETO_CONSORCIO = '[data-testid="lista-parcelas-consorcio"], [data-testid="lista-faixas-consorcio"]';
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await p.waitForTimeout(500); };
 const clicarRotulo = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await p.waitForTimeout(500); };
+/* LANC-FILTROS-02a — os seletores de exibição da lista de Lançamentos (Class., Sem caixa, Pagamento) moram no "Exibir ▾" do desktop: abre,
+   clica e fecha (Esc); no celular (< 1000) seguem na faixa, e o clique é direto */
+const naExibir = (acao) => async (p) => {
+  const exibir = p.locator('[data-testid="btn-exibir"]');
+  const comExibir = await exibir.count() > 0 && await exibir.first().isVisible();
+  if (comExibir) { await exibir.first().click(); await p.waitForTimeout(300); }
+  await acao(p);
+  if (comExibir) { await p.keyboard.press('Escape'); await p.waitForTimeout(300); }
+};
 const clicarTexto = (txt) => async (p) => { await p.getByText(txt, { exact: true }).first().click(); await p.waitForTimeout(500); };
 /* CONC-CRIAR-COM-NOTA-01 — o "Criar lançamento" da estação, a aba Documentos e (com `ler`) a NF SINTÉTICA da bancada solta no "Ler a NF" */
 const criarComNota = (ler) => async (p) => {
@@ -154,6 +172,12 @@ const CENARIOS = [
   /* FORN-LISTA-01 — a lista nos tamanhos do contrato; os filtros pelo rótulo que começa com a situação (o número vem depois) */
   /* FORN-01b — a lista com a barra REAL do topo (32px) e 2.356 cadastros, como no app; a régua dela é a de Recorrências (abaixo) */
   { nome: 'fornecedores-lista', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* FORN-FORMA-PELO-EXTRATO-01 — o modal (1ª maiúscula no cabeçalho, sem rolagem lateral: só Fornecedor e o extrato encolhem com "…") */
+  { nome: 'forma-pelo-extrato', url: 'tela=forma-pelo-extrato', regiao: '[data-testid="forma-pelo-extrato"]',
+    tamanhos: [[1024, 600], [1126, 579], [1240, 700], [1280, 800], [1920, 1080]], antes: async (p) => { await p.locator('[data-testid="forma-tabela"]').waitFor({ timeout: 8000 }); } },
+  { nome: 'forma-pelo-extrato-gravado', url: 'tela=forma-pelo-extrato', regiao: '[data-testid="forma-pelo-extrato"]',
+    tamanhos: [[1024, 600], [1280, 800], [1920, 1080]], antes: async (p) => { await p.locator('[data-testid="forma-tabela"]').waitFor({ timeout: 8000 });
+      await clicarRotulo(/^2 · Gravado/)(p); await p.locator('[data-testid="forma-gravacoes"]').waitFor({ timeout: 8000 }); } },
   { nome: 'fornecedores-mesclados', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Mesclados /) },
   { nome: 'fornecedores-sem-documento', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="filtro-sem-documento"]') },
   /* FORN-SEM-CADASTRO-01 — a aba "Sem cadastro" (substitui a "Pendentes") nos tamanhos do mock, fechada e com uma linha aberta */
@@ -175,7 +199,7 @@ const CENARIOS = [
     antes: clicar('[data-testid="btn-novo"]') },
   /* P94 — os avisos da conferência e os chips do que veio da OC, na faixa dos totais: rolam no lugar reservado, sem "…"; e os seletores da
      barra com o valor fora das opções ("valor inexistente (limpar)", vermelho) na largura da barra */
-  { nome: 'financeiro-fantasma', url: 'tela=financeiro&fantasma=1', regiao: '[data-testid="faixa-totais"]' },
+  { nome: 'financeiro-fantasma', url: 'tela=financeiro&fantasma=1', regiao: '[data-testid="faixa-totais"], [data-testid="cabecalho-dos-filtros"]' },
   { nome: 'valor-inexistente', url: 'tela=valor-inexistente', regiao: '[data-testid="barra-inexistente"]' },
   /* FORN-BUSCA-UNICA-01 — o filtro de fornecedor com um nome longo escolhido: o chip mostra o nome inteiro. FIN-FILTRO-DOC-01 —
      `alturaFixa`: a fileira de filtros tem de ter a MESMA altura antes e depois de escolher o nome longo (nada empurra a tela) */
@@ -260,7 +284,16 @@ const CENARIOS = [
   ...[2, 18, 36].map((np) => ({ nome: `contrato-parcelamento-${np}`, url: `tela=contrato&v=parcelamento&np=${np}&docs=1`, tamanhos: TAMANHOS_DO_CONTRATO })),
   ...['Geral', 'Pagamento', 'Documentos'].flatMap((aba) => ['novo', 'editar'].map((m) => ({ nome: `lancamento-${m}-${aba}`, url: `tela=lancamento&m=${m}`, antes: clicarTexto(aba) }))),
   /* DOC-NOTA-XML-PDF-01 — a aba Documentos com a nota em PDF + XML numa linha (selos), a nota so' em XML e um boleto */
+  /* CONSERTO "Quem paga" (Gabriel 27/11 10:07) — a linha de lugar fixo nos 3 jeitos (ligada na saída a pagar; desligada na entrada, com o
+     porquê; marcada, com "pago em" e Desfazer): nada corta, régua de fonte. A posição 0 px é provada por scripts/ui-cortes/provaQuemPaga.mjs. */
+  ...[['ligada', 'tipo=saida&status=programado'], ['desligada', 'tipo=entrada&status=programado'], ['marcada', 'tipo=saida&status=programado&terceiro=marcado']]
+    .map(([n, q]) => ({ nome: `lancamento-quem-paga-${n}`, url: `tela=lancamento&m=editar&${q}`, regiao: '[data-testid="quem-paga-linha"]',
+      tamanhos: [[1280, 800], [1440, 900], [1920, 1080]], antes: clicarTexto('Pagamento') })),
   { nome: 'lancamento-editar-Documentos-nota', url: 'tela=lancamento&m=editar&docs=nota', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Documentos') },
+  /* NOTA-ENTREGA-FUTURA-01 (B) — a compra com entrega futura: Papel · Documento…, "gera a conta"/"sem financeiro", o Saldo a entregar (nome longo, 2 itens)
+     e o Resumo com Compra · Entregas · LCDPR */
+  { nome: 'lancamento-editar-Documentos-entregas', url: 'tela=lancamento&m=editar&docs=entregas', tamanhos: TAMANHOS_DO_CONTRATO,
+    antes: async (p) => { await clicarTexto('Documentos')(p); await p.locator('[data-testid="saldo-tabela"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
   /* FIN-CLASSIF-DIVIDIDA-01b/01c — a classificação dividida: a Geral com as partes, a aba Itens na vista "Contas" (18 itens), a lista com
      a parte "de R$ total" e os selos */
   { nome: 'lancamento-dividido-Geral', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO },
@@ -298,6 +331,39 @@ const CENARIOS = [
      cabecalho do dia em janela estreita) — frente CPR-SEM-CORTE-01. Tirar a `regiao` mede a tela inteira. */
   /* CPR-SEM-CORTE-01 (CPR-AJUSTES-20-10) — a CPR INTEIRA, lista e Ampliado, nos sete tamanhos: nada de "…" */
   { nome: 'cpr-lista', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* BPO-FUNCIONAR-01 — a aprovação DENTRO da CPR: as etapas no topo; "Para aprovar" (a régua da casa + seleção + barra), os cartões no celular,
+     o painel de decisão (o documento ao lado) e "Para pagar" */
+  { nome: 'cpr-bpo-tudo', url: 'tela=cpr&bpo=1', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'cpr-bpo-aprovar', url: 'tela=cpr&bpo=1&etapa=aprovar', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1920, 1080]],
+    antes: async (p) => { await p.locator('[data-celula-aprovacao], [data-testid="bpo-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(400); } },
+  /* o celular sem a casca da bancada (o app no celular não tem a lateral nem a barra do topo) */
+  { nome: 'cpr-bpo-aprovar-celular', url: 'tela=cpr&bpo=1&etapa=aprovar&semlateral=1&barra=0', tamanhos: [[390, 844], [750, 600]],
+    antes: async (p) => { await p.locator('[data-testid="bpo-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(400); } },
+  { nome: 'cpr-bpo-painel', url: 'tela=cpr&bpo=1&etapa=aprovar', tamanhos: [[1126, 579], [1280, 800], [1920, 1080]], regiao: '[data-testid="bpo-painel-decisao"]',
+    antes: async (p) => { await p.locator('[data-celula-aprovacao]').first().waitFor({ timeout: 20000 });
+      await p.locator('[data-celula-aprovacao]').first().click(); await p.locator('[data-testid="bpo-painel-decisao"]').waitFor(); await p.waitForTimeout(600); } },
+  { nome: 'cpr-bpo-pagar', url: 'tela=cpr&bpo=1', tamanhos: TAMANHOS_DO_CONSORCIO,
+    antes: async (p) => { await p.locator('[data-testid="cpr-etapa-pagar"]').click();
+      await p.locator('[data-celula-aprovacao], [data-testid="bpo-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(400); } },
+  /* APROVAR-PAGAMENTOS-V3 — a tela própria do aprovador (mock aprovado 24/11): a lista por dia (Venc. em dd/mm: a tabela é `data-dia-mes`, o
+     mock), os cartões do celular, o painel (a NF em PDF + XML = uma aba) e a aba Pagamento (boleto: a linha digitável inteira) */
+  { nome: 'aprovar-v3', url: 'tela=aprovar-v3', tamanhos: [[1126, 579], [1280, 800], [1440, 800], [1920, 1080]],
+    antes: async (p) => { await p.locator('[data-testid="v3-linha"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(300); } },
+  { nome: 'aprovar-v3-celular', url: 'tela=aprovar-v3&semlateral=1&barra=0', tamanhos: [[390, 844], [750, 600]],
+    antes: async (p) => { await p.locator('[data-testid="v3-cartao"]').first().waitFor({ timeout: 20000 }); await p.waitForTimeout(300); } },
+  { nome: 'aprovar-v3-vazio', url: 'tela=aprovar-v3&v=vazio', tamanhos: [[1126, 579]],
+    antes: async (p) => { await p.locator('[data-testid="v3-vazio"]').first().waitFor({ timeout: 20000 }); } },
+  /* no celular a barra lateral não existe (como as outras cenas de celular): a 390 com os 152 px dela o rodapé não cabe */
+  { nome: 'aprovar-v3-vazio-celular', url: 'tela=aprovar-v3&v=vazio&semlateral=1&barra=0', tamanhos: [[390, 844]],
+    antes: async (p) => { await p.locator('[data-testid="v3-vazio"]').first().waitFor({ timeout: 20000 }); } },
+  { nome: 'aprovar-v3-painel', url: 'tela=aprovar-v3', tamanhos: [[1126, 579], [1280, 800], [1920, 1080]], regiao: '[data-testid="v3-painel"]',
+    antes: async (p) => { await p.locator('[data-testid="v3-linha"]').nth(1).click(); await p.locator('[data-testid="v3-ultimos"] table').waitFor({ timeout: 20000 });
+      await p.waitForTimeout(400); } },
+  { nome: 'aprovar-v3-pagamento', url: 'tela=aprovar-v3', tamanhos: [[1126, 579], [1280, 800]], regiao: '[data-testid="v3-painel"]',
+    antes: async (p) => { await p.locator('[data-testid="v3-linha"]').nth(1).click(); await p.locator('[data-testid="v3-aba-pagamento-botao"]').click();
+      await p.locator('[data-testid="v3-aba-pagamento"]').waitFor(); await p.waitForTimeout(300); } },
+  { nome: 'aprovar-v3-painel-celular', url: 'tela=aprovar-v3&semlateral=1&barra=0', tamanhos: [[390, 844]], regiao: '[data-testid="v3-painel"]',
+    antes: async (p) => { await p.locator('[data-testid="v3-cartao"] button').nth(1).click(); await p.locator('[data-testid="v3-painel"]').waitFor(); await p.waitForTimeout(400); } },
   /* REC-COLUNAS-01 — Financeiro › Recorrências, a lista do mês com o pior texto de cada coluna curta, nos sete tamanhos. Descrição,
      Favorecido e a Conta acima da régua cortam com "…" e o inteiro no `title` (regra do Gabriel de 21/10, 07h25): a regra
      `reticencias` fica fora; corte calado, vazamento, número partido, quebra, sobreposição e cabeçalho valem.
@@ -1468,6 +1534,48 @@ const CENARIOS = [
         await pronto(p); await p.locator('[data-testid="ignorar-antigos"]').first().click(); await p.waitForTimeout(400);
         await p.locator('[data-testid="motivo-outro"]').click(); await p.locator('[data-testid="confirmar-ignorar"]').click(); await p.waitForTimeout(300); } },
       { nome: 'caixa-boletos-sem-lancar', url: `${URL}&caso=sem_lancar`, tamanhos: T, regiao: R, antes: pronto },
+      /* FOLHA-NA-CAIXA-01 — a prévia do recibo do contador (dado SINTÉTICO, `dados/folhaDaCaixa.ts`): o pior caso (nome no teto, o que divide
+         em 1ª + 2ª, valores no teto, sem lançamento com o "Criar"); com o "Criar" marcado; aplicado (um PDF que não subiu: o "de novo");
+         o já aplicado com o Desfazer aberto e o que volta */
+      ...(() => {
+        const RF = '[data-testid="folha-da-caixa"]';
+        const abrir = async (p) => { await pronto(p); await p.locator('[data-testid="acao-abrir_folha"]').first().click(); await p.waitForTimeout(800); };
+        const criar = async (p) => { await abrir(p); await p.locator('[data-testid="criar-2"]').click(); await p.waitForTimeout(500); };
+        return [
+          { nome: 'caixa-folha-previa', url: URL, tamanhos: T, regiao: RF, antes: abrir },
+          { nome: 'caixa-folha-criar', url: URL, tamanhos: T, regiao: RF, antes: criar },
+          { nome: 'caixa-folha-completar', url: `${URL}&caso=folha_completar`, tamanhos: T, regiao: RF, antes: abrir },
+          { nome: 'caixa-folha-sem-recibo', url: URL, tamanhos: T, regiao: RF, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="ver-sem-recibo"]').click(); await p.waitForTimeout(300); } },
+          { nome: 'caixa-folha-aplicado', url: URL, tamanhos: T, regiao: RF, antes: async (p) => {
+            await criar(p); await p.locator('[data-testid="aprovar-folha"]').click(); await p.waitForTimeout(900); } },
+          { nome: 'caixa-folha-desfazer', url: `${URL}&caso=folha_aplicada`, tamanhos: T, regiao: RF, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="desfazer-folha"]').click();
+            await p.locator('[data-testid="motivo-desfazer-folha"]').fill('o contador mandou o recibo de novo com o valor certo');
+            await p.locator('[data-testid="prever-desfazer"]').click(); await p.waitForTimeout(500); } },
+        ];
+      })(),
+      /* FOLHA-RESUMO-CONTADOR-01 — a prévia do resumo do contador ("Extrato Mensal", dado SINTÉTICO, `dados/resumoDoContador.ts`), arrastado:
+         o pior caso (nome no teto, FGTS no teto, a soma que não fecha, uma empresa sem fazenda = Prever apagado); sem pendência e gravado;
+         o já aplicado com o Desfazer aberto e o que volta */
+      ...(() => {
+        const RR = '[data-testid="resumo-do-contador"]';
+        const abrir = async (p) => {
+          await pronto(p);
+          await p.locator('[data-testid="input-da-caixa"]').setInputFiles([{ name: 'extrato.pdf', mimeType: 'application/pdf',
+            buffer: Buffer.from('%PDF Extrato Mensal 13 ficticio com nome de arquivo comprido de exemplo.pdf') }]);
+          await p.waitForTimeout(900); await p.locator('[data-testid="acao-abrir_resumo"]').first().click(); await p.waitForTimeout(800);
+        };
+        return [
+          { nome: 'caixa-resumo-previa', url: URL, tamanhos: T, regiao: RR, antes: abrir },
+          { nome: 'caixa-resumo-gravado', url: `${URL}&caso=resumo_ok`, tamanhos: T, regiao: RR, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="prever-fgts"]').click(); await p.waitForTimeout(700); } },
+          { nome: 'caixa-resumo-desfazer', url: `${URL}&caso=resumo_aplicado`, tamanhos: T, regiao: RR, antes: async (p) => {
+            await abrir(p); await p.locator('[data-testid="desfazer-resumo"]').click();
+            await p.locator('[data-testid="motivo-desfazer-resumo"]').fill('o contador mandou o resumo de novo com o valor certo');
+            await p.locator('[data-testid="prever-desfazer-resumo"]').click(); await p.waitForTimeout(500); } },
+        ];
+      })(),
     ];
   })(),
   /* BOLETO D3c — o endereço de boletos (dado SINTÉTICO: o slug no teto de 40): ver; trocar sem motivo (vermelho) e com a prévia; revogar;
@@ -1505,6 +1613,68 @@ const CENARIOS = [
       ...[['ligar', 'sem_bem'], ['ligar', 'recusa'], ['ligar', 'previsto'], ['ligar', 'contrato'], ['ligar', 'repetida'], ['criar', 'sem_bem'], ['criar', 'sem_categoria'], ['criar', 'contrato']]
         .map(([a, c]) => ({ nome: `patrimonio-lancamento-${a}-${c}`, url: U(c, a), tamanhos: T, regiao: DIALOGO,
           antes: async (p) => { await espera(p); if (a === 'ligar') { await p.locator('[data-testid="bem-para-ligar"]').first().click(); await espera(p); } } })),
+    ];
+  })(),
+  /* FOLHA-01 · PR B (telas) — Financeiro › Folha de pagamento (dado SINTÉTICO nas formas do proto, `dados/folha.ts`: v=nj 89 funcionários e
+     157 pendências, v=vera 12 e 28; o pior caso: nome de 41+ caracteres, registro de 59, chips demais, valor no teto, documento vencido).
+     As quatro abas, a ficha aberta (cadastro e documentos), o filtro para 1/0 linhas (o quadro tem a mesma altura), o modal do cadastro nas
+     três abas, o Histórico por tipo, as Pendências e o modal de resolver, sem a folha, e o rodapé do Editar lançamento */
+  ...(() => {
+    const T = [[1126, 579], [1280, 800], [1440, 800], [1920, 1080]];
+    const U = (v, extra = '') => `tela=folha&v=${v}&barra=32${extra}`;
+    const linha = (nome) => async (p) => {
+      await p.locator('[data-testid="folha-filtros"] button', { hasText: /^Todos/ }).click(); await p.waitForTimeout(300);
+      await p.locator('[data-testid="folha-busca"]').fill(nome); await p.waitForTimeout(400);
+      await p.locator('[data-testid="folha-linha"]', { hasText: nome }).first().click(); await p.waitForTimeout(600);
+    };
+    const buscar = (txt) => async (p) => { await p.locator('[data-testid="folha-busca"]').fill(txt); await p.waitForTimeout(500); };
+    const filtro = (re) => async (p) => { await p.locator('[data-testid="folha-filtros"] button', { hasText: re }).click(); await p.waitForTimeout(500); };
+    const dialogo = (nome, aba) => async (p) => {
+      if (nome) { await linha(nome)(p); await p.locator('[data-testid="folha-ficha-editar"]').click(); } else await p.locator('[data-testid="folha-novo"]').click();
+      await p.locator('[data-testid="funcionario-dialog"]').waitFor(); await p.waitForTimeout(600);
+      if (aba) { await p.locator('[data-testid="funcionario-dialog"] button', { hasText: new RegExp(`^${aba}`) }).first().click(); await p.waitForTimeout(500); }
+    };
+    const pend = async (p) => { await p.getByRole('tab', { name: /^Pendências/ }).click(); await p.waitForTimeout(600); };
+    const resolver = (acao) => async (p) => { await pend(p); await p.locator(`[data-testid="folha-pendencia-${acao}"]`).first().click();
+      await p.locator('[data-testid="resolver-pendencia"]').waitFor(); await p.waitForTimeout(500); };
+    const LANC = '[data-testid="rodape-da-bancada"]';
+    return [
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}`, url: U(v), tamanhos: T })),
+      { nome: 'folha-nj-desligados', url: U('nj'), tamanhos: T, antes: filtro(/^Desligados/) },
+      { nome: 'folha-nj-busca-1', url: U('nj'), tamanhos: T, antes: buscar('Maria Aparecida') },
+      { nome: 'folha-nj-busca-0', url: U('nj'), tamanhos: T, antes: buscar('zzzz nada') },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-ficha`, url: U(v), tamanhos: T, antes: linha('Antônio Exemplo Prado') })),
+      { nome: 'folha-nj-ficha-longa', url: U('nj'), tamanhos: T, antes: linha('Maria Aparecida Demonstração dos Santos Lima') },
+      { nome: 'folha-nj-ficha-documentos', url: U('nj'), tamanhos: T, antes: async (p) => { await linha('Antônio Exemplo Prado')(p);
+        await p.locator('[data-testid="folha-ficha"] button', { hasText: /^Documentos/ }).click(); await p.waitForTimeout(500); } },
+      ...[['cadastro', null], ['salario', 'Salário e atuação'], ['situacao', 'Situação']].map(([n, a]) => ({
+        nome: `folha-funcionario-${n}`, url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: dialogo('Antônio Exemplo Prado', a) })),
+      { nome: 'folha-funcionario-novo', url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: dialogo(null, null) },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-historico`, url: U(v, '&aba=historico&func=f00'), tamanhos: T })),
+      { nome: 'folha-nj-historico-voltar', url: U('nj', '&aba=historico&func=f00&voltar=1'), tamanhos: T },
+      { nome: 'folha-nj-historico-rescisao', url: U('nj', '&aba=historico&func=f00'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-historico-faixa"] button', { hasText: /^Rescisão/ }).click(); await p.waitForTimeout(500); } },
+      { nome: 'folha-nj-historico-sem-pessoa', url: U('nj', '&aba=historico'), tamanhos: T },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-pendencias`, url: U(v, '&aba=pendencias'), tamanhos: T })),
+      { nome: 'folha-nj-pendencias-recibo', url: U('nj', '&aba=pendencias'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-pendencias-filtros"] button', { hasText: /^Sem recibo/ }).click(); await p.waitForTimeout(500); } },
+      ...['ligar_sugestao', 'cadastrar_desligado', 'descartar'].map((a) => ({ nome: `folha-resolver-${a}`, url: U('nj'), tamanhos: T, regiao: '[role="dialog"]', antes: resolver(a) })),
+      /* FOLHA-TELAS-03: a Folha do mês nas duas formas, o 13º 1ª parcela (o Segmentado) e a folha em que tudo confere */
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-mes`, url: U(v, '&aba=mes'), tamanhos: T })),
+      { nome: 'folha-nj-mes-13-1', url: U('nj', '&aba=mes'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-mes-faixa"] button', { hasText: /^13º · 1ª/ }).click(); await p.waitForTimeout(500); } },
+      { nome: 'folha-vera-mes-confere', url: U('vera', '&aba=mes&mes=confere'), tamanhos: T },
+      { nome: 'folha-vera-mes-confirmar-previa', url: U('vera', '&aba=mes&mes=confere'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-mes-confirmar"]').click(); await p.locator('[data-testid="folha-mes-previa"]').waitFor(); await p.waitForTimeout(300); } },
+      { nome: 'folha-vera-mes-confirmada', url: U('vera', '&aba=mes&mes=confirmada'), tamanhos: T },
+      { nome: 'folha-vera-mes-reabrir', url: U('vera', '&aba=mes&mes=confirmada'), tamanhos: T, antes: async (p) => {
+        await p.locator('[data-testid="folha-mes-reabrir"]').click(); await p.locator('[data-testid="folha-mes-reabrir-motivo"]').waitFor(); await p.waitForTimeout(300); } },
+      ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-ferias`, url: U(v, '&aba=ferias'), tamanhos: T })),
+      { nome: 'folha-sem-acesso', url: U('nj', '&ok=0'), tamanhos: T },
+      ...['ligado', 'sem'].map((c) => ({ nome: `folha-lancamento-${c}`, url: `tela=folha-lancamento&caso=${c}`, tamanhos: T, regiao: LANC,
+        antes: async (p) => { await p.waitForTimeout(600); } })),
+      { nome: 'folha-lancamento-dialogo', url: 'tela=folha-lancamento&caso=ligado', tamanhos: T, regiao: '[role="dialog"]', antes: async (p) => {
+        await p.locator('[data-testid="lanc-funcionario-trocar"]').click(); await p.locator('[data-testid="lanc-funcionario-dialog"]').waitFor(); await p.waitForTimeout(400); } },
     ];
   })(),
   /* PATR-01 PR B — Cadastros › Patrimônio (dado SINTÉTICO, `dados/patrimonio.ts`, com um pior caso: descrição longa e valor no teto):
@@ -1724,13 +1894,30 @@ const CENARIOS = [
   { nome: 'contas-lista-longo', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO },
   /* CONTAS-OF-LINHA-01 — a coluna "Open Finance" com o link do titular vivo, e o modal do "Conectar" da linha (altura fixa) */
   { nome: 'contas-of-link', url: 'tela=contas&barra=32&n=longo&of=link', tamanhos: TAMANHOS_DO_CONTRATO },
-  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-conectar-linha"]' },
+  /* CONTAS-BANCARIAS-LISTA-01: abaixo de ~900 px a coluna Open Finance sai da lista (o Nome nunca abaixo de 160 px) — o "Conectar" da linha
+     só existe de 1000 px para cima */
+  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO.filter(([w]) => w >= 1000), regiao: '[data-testid="openfinance-conectar-linha"]',
+    antes: async (p) => { await p.locator('[data-testid="openfinance-termo-aceito"]').waitFor(); await p.waitForTimeout(300); } },
+  /* OPENFINANCE-PRONTO-NJ-01 (1)+(7) — "Bancos conectados" como a Pluggy vê: nome, Empresa, os 4 estados e a frase inteira das que não completaram */
+  { nome: 'contas-of-lista', url: 'tela=contas&barra=32&of=lista', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-desconectar-dialogo"]',
+    visivelNaTela: { sels: ['[data-testid="openfinance-conexao-frase"]'], inteirosEm: ['[data-testid="openfinance-conexoes"]'] },
+    antes: async (p) => { await p.locator('[data-testid="openfinance-conexao"]').first().waitFor(); await p.waitForTimeout(300); } },
   { nome: 'contas-inativas', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="mostrar-inativas"]') },
   ...['dados', 'gerente', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-editar-${aba}`, url: `tela=contas&barra=32&v=editar&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
   /* CARTAO-LANCAMENTO-01 — o cadastro do cartão: Dia de fechamento e Dia de vencimento no lugar de Agência e Conta, e a explicação embaixo */
   { nome: 'contas-editar-cartao', url: 'tela=contas&barra=32&n=longo&v=editar&aba=dados&cartao=1', tamanhos: [...TAMANHOS_DO_CONTRATO, [1366, 768]],
     regiao: '[data-testid="modal-conta-bancaria"]' },
+  /* CONTA-INATIVAR-DATA-01 — "Inativa desde" na aba Dados: desmarcar "Ativa", escolher a data; a recusa da prévia (o campo vermelho e o
+     rodapé "Falta: … mova-os antes de inativar") e a conferência que passa, nos tamanhos do contrato */
+  ...[['contas-editar-inativar-recusa', 'recusa'], ['contas-editar-inativar-ok', 'ok']].map(([nome, v]) => ({ nome,
+    url: `tela=contas&barra=32&v=editar&aba=dados&inativar=${v}`, tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="campo-situacao"]').click();
+      const c = p.locator('[data-testid="campo-inativa-desde-bloco"] input'); await c.fill('15/02/2026'); await c.blur();
+      await p.locator('[data-testid="campo-inativa-desde-frase"]', { hasText: v === 'ok' ? 'Confere' : 'mova-os' }).waitFor({ state: 'attached' });
+      await p.waitForTimeout(300);
+    } })),
   ...['dados', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-nova-${aba}`, url: `tela=contas&barra=32&v=nova&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
   /* UI-SIDEBAR-ESTREITA-01 — a barra lateral de verdade (V2Sidebar, `LARGURA_DA_LATERAL`) com o grupo Financeiro aberto. Com nomes que
@@ -1738,6 +1925,8 @@ const CENARIOS = [
      por decisao do Gabriel (21/10): nome de cliente ou fazenda maior que o seletor corta com "…" e o nome inteiro no `title`. */
   { nome: 'barra-lateral', url: 'tela=recorrencias&lateral=1&submenu=financeiro&cli=Cliente%20Exemplo&faz=Faz.%20Exemplo%20Sul',
     regiao: '[data-testid="barra-lateral"]', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* ACESSO-UM-CLIENTE-01 — o login de UM cliente só: o nome do cliente travado no topo do menu (antes, só "Global") */
+  { nome: 'barra-lateral-um-cliente', url: 'tela=recorrencias&lateral=1&umcli=1&cli=Vera%20Ligia%20Milani&faz=Global', regiao: '[data-testid="barra-lateral"]', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'barra-lateral-nome-longo', url: 'tela=recorrencias&lateral=1&submenu=financeiro', regiao: '[data-testid="barra-lateral"]', tamanhos: TAMANHOS_DO_CONTRATO,
     soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'data', 'valor', 'altura', 'tabela'] },
   /* CPR-AJUSTES-20-10c — período encerrado: o grupo "Saem hoje · fora do saldo do período" DEPOIS do Fim do período (rolado até ele) */
@@ -1833,6 +2022,11 @@ const CENARIOS = [
   /* P95 — "Novo a partir da nota": a nota lida, a da chave digitada, as recusadas com o campo da chave (nome comprido) e o aviso do repetido */
   /* P101 — em TODOS os tamanhos: abaixo de 1000px a tabela perde a coluna CNPJ (no `title` do Emitente) e estreita (antes vazava 155px a 750) */
   { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* NOTAS-RECEITA-CARD-SEMPRE-01 — o card da Receita nos 5 estados (mock aprovado 27/11): nunca some, nada corta, a faixa não pula */
+  ...['sem_certificado', 'sem_busca', 'sem_novas', 'com_notas', 'parada'].map((e) => ({ nome: `novo-da-nota-receita-${e}`, url: `tela=novo-da-nota&receita=${e}`,
+    regiao: '[data-testid="card-da-receita"]', tamanhos: [[1126, 579], [1280, 720]] })),
+  { nome: 'novo-da-nota-receita-motivo', url: 'tela=novo-da-nota&receita=parada', regiao: '[data-testid="card-da-receita-minimodal"]',
+    tamanhos: [[1126, 579], [1280, 720]], antes: clicar('[data-testid="card-da-receita-motivo"]') },
   /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO o Novo lançamento: o PDF (4 duplicatas), só a chave
      digitada (valor e data para o operador) e o cartão em 10× (D2: Parcelada 10× no Pagamento, a 1ª fatura sugerida); Geral, Pagamento e
      Documentos (o anexo clicável) nos sete tamanhos. Substitui a tela intermediária (`nota-pdf` da nota nova, `nota-pdf-aba-*`, `nota-pdf-cartao*`). */
@@ -1881,6 +2075,56 @@ const CENARIOS = [
       await p.locator('[data-testid="nota-abas-ja"] button', { hasText: rotulo }).first().click(); await p.waitForTimeout(500);
       if (sub) { await p.locator('[data-testid="nota-aba-itens"] button', { hasText: new RegExp(`^${sub}$`) }).first().click(); await p.waitForTimeout(500); }
     } }))),
+  /* DA-NOTA-CLASSIF-01 (Gabriel 24/11 09:18, UI-LARGURA-FIXA-01) — o cartão Fornecedor SEM cadastro (razão social de 60 letras): o chip âmbar numa
+     linha, os dados do XML em cinza, "Criar fornecedor" na coluna dos botões; nada empurra Nota nem DANFE/XML. E a etapa 2 com a sugestão pelos
+     itens (`uma`: "Sugestão pelos itens: … · usar"; `varias`) e a classificação sempre à vista (fazenda, subcentro, safra) */
+  { nome: 'nota-pdf-forn-sem-cadastro', url: 'tela=nota-pdf&v=jalancada&nome60=1', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(500); } },
+  ...['uma', 'varias'].map((sug) => ({ nome: `nota-pdf-ja-ficar-sugestao-${sug}`, url: `tela=nota-pdf&v=lr&sugestao=${sug}`, tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+    } })),
+  /* DA-NOTA-JUROS-01 (Gabriel 24/11 17:03) — pago ≠ nota com tudo pago NUNCA trava: o pago (+4,59) vinculado, a parcela da nota fica de fora, e o
+     "Como vai ficar" com a linha "pago · nota · diferença" + Juros/multa sugerido (âmbar) e o rodapé sem frase cortada. SINTÉTICO. */
+  { nome: 'nota-pdf-ja-juros', url: 'tela=nota-pdf&v=juros', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-acao"][data-acao="deixar"]').first().click(); await p.locator('[data-testid="nota-acao-vincular"]').click(); await p.waitForTimeout(300);
+      const cria = p.locator('[data-testid="nota-acao"][data-acao="criar"]');
+      if (await cria.count()) { await cria.first().click(); await p.locator('[data-testid="nota-acao-deixar"], [data-testid="nota-acao-jaPaga"]').first().click(); await p.waitForTimeout(300); }
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="previa-diferenca"]').waitFor({ timeout: 5000 });
+    } },
+  /* DA-NOTA ETAPA 2 (Gabriel 24/11 19:30, o 2º print: NF 26.185 já com os juros) — a sugestão pelos itens TROCA o subcentro: o "usar" e a linha
+     "Subcentro muda de Sanidade Animal — … · Pecuária para Nutrição Engorda · Pecuária"; subcentro, safra e descrição inteiros; nada rola de lado. SINTÉTICO. */
+  { nome: 'nota-pdf-ja-juros-troca', url: 'tela=nota-pdf&v=juros&sugestao=uma', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'O que já existe' }).first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="nota-acao"][data-acao="deixar"]').first().click(); await p.locator('[data-testid="nota-acao-vincular"]').click(); await p.waitForTimeout(300);
+      const cria = p.locator('[data-testid="nota-acao"][data-acao="criar"]');
+      if (await cria.count()) { await cria.first().click(); await p.locator('[data-testid="nota-acao-deixar"], [data-testid="nota-acao-jaPaga"]').first().click(); await p.waitForTimeout(300); }
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="previa-sugestao-usar"]').click(); await p.locator('[data-testid="previa-troca-conta-para"]').waitFor({ timeout: 5000 }); await p.waitForTimeout(400);
+    } },
+  /* NOTA-JUNTAR-CLASSIF-01 (Gabriel 24/11 19:05) — juntar com classificações diferentes (as parcelas em Manutenção Máquinas Agricultura e Pecuária, o molde
+     da NF 176.663 do NJ, SINTÉTICO): a linha "Classificações diferentes · Usar a da 1/4 em todas · … · Dividir por item · em breve" e o rodapé curto; e
+     depois do clique (a conta e a safra da 1/4 no Aplicar a todas, o subcentro "Manut. Máquinas · Agricultura" inteiro). DA-NOTA ETAPA 2: nada cortado. */
+  ...[['', false], ['-escolhido', true]].map(([suf, clica]) => ({ nome: `nota-pdf-ja-juntar-classif${suf}`, url: 'tela=nota-pdf&v=lr&classif=2',
+    tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720], [1366, 768], [1920, 1080]], titulosDeBloco: true,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="previa-rolagem"], [data-testid="nota-hoje-rolagem"], [data-testid="itens-rolagem"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-abas-ja"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-testid="nota-abas-ja"] button', { hasText: 'Como vai ficar' }).first().click(); await p.waitForTimeout(700);
+      await p.locator('[data-testid="previa-juntar-classif"]').waitFor({ timeout: 5000 });
+      if (clica) { await p.locator('[data-testid="previa-juntar-classif"] button', { hasText: 'Usar a da 1/4' }).first().click(); await p.waitForTimeout(900); }
+    } })),
   /* NOTA-ATUALIZA-PREVISTO-01 — o caso da Vera (SINTÉTICO): "É esta" no PREVISTO de R$ 1.000 + "paga 70 %": a aba Parcelas (o Resultado
      "1 atualiza · 0 cria · R$ … · paga 70 % · outro paga R$ …", o resumo em colunas) e a Como vai ficar (o valor de hoje riscado → o novo) */
   ...[['parcelas', 'O que já existe'], ['ficar', 'Como vai ficar']].map(([a, rotulo]) => ({
@@ -1919,6 +2163,16 @@ const CENARIOS = [
     antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcelas-no-pagamento"]').waitFor(); await p.waitForTimeout(500); } },
   { nome: 'lancamento-parcelar-confirmar', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
     antes: async (p) => { await parcelarEm4(p); await p.locator('[data-testid="parcelar-este-confirmar"]').click(); await p.waitForTimeout(500); } },
+  /* NOTA-ENTREGA-FUTURA-01 (3) — o achado com OUTRA NF: a etapa 1 (seção própria, "O que fazer") e o Confirmar nas duas escolhas */
+  ...[['etapa1', null, false], ['confirmar-trocar', 'trocar', true], ['confirmar-criar', 'criar', true]].map(([nome, escolha, confirmar]) => ({
+    nome: `nota-outra-nf-${nome}`, url: 'tela=nota-pdf&v=outranota', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-itens-rolagem"], [data-testid="nota-outra-nf"], [data-testid="nota-outra-nf-rolagem"], [data-testid="nota-confirmar"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid="nota-outra-nf"]').waitFor({ timeout: 8000 });
+      if (escolha) await p.locator(`[data-testid="nota-outra-nf-${escolha}"]`).click();
+      if (confirmar) await p.locator('[data-testid="nota-etapa-lancamento"]').click();
+      await p.waitForTimeout(400);
+    } })),
   /* P128a — os TRÊS CAMINHOS com o "Criar um lançamento novo" escolhido (o aviso vermelho "duplica", o botão "Criar novo (duplica)") */
   { nome: 'nota-pdf-caminho-criar', url: 'tela=nota-pdf&v=diferenca', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"], [data-testid="nota-hoje-rolagem"]' },
@@ -1995,6 +2249,17 @@ const CENARIOS = [
   { nome: 'lancamento-xml-Itens-contas', url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
     antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); await clicarTexto('Contas')(p); } },
+  /* NOTA-ITENS-SUGESTAO (Gabriel 27/11, mock aprovado 10:47) — a faixa com a ORIGEM (1 conta), o aviso pequeno "N itens em X classificações ·
+     ver por item" (3 contas + 1 a decidir) e, pelo "ver por item", Itens › Contas com obra/manutenção, origem e total por conta; respondida
+     a pergunta, o "Usar divisão" libera (nada se desloca) */
+  { nome: 'lancamento-xml-sugestao-uma', url: 'tela=lancamento&m=novo&v=xmlsug1', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'lancamento-xml-sugestao-varias', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'lancamento-xml-sugestao-itens', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="contas-total-por-conta"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
+  { nome: 'lancamento-xml-sugestao-respondida', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="pergunta-5-manutencao"]').click(); await p.waitForTimeout(300); } },
   { nome: 'lancamento-xml-Geral-dividida', url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => {
       await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); await clicarTexto('Contas')(p);
@@ -2027,18 +2292,7 @@ const CENARIOS = [
     antes: async (p) => { await p.locator('[data-testid="rateio-linha"]').first().waitFor(); if (botao) { await p.locator(botao).click(); await p.waitForTimeout(300); } } })),
   { nome: 'financeiro-barra-lote', url: 'tela=financeiro', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
     antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().click(); await p.waitForTimeout(500); } },
-  /* BPO-GUIA-01 P2 — com o BPO ligado, a barra dos marcados ganha "Enviar para aprovação" (inteiro na barra) e a prévia do banco no modal
-     (entram N, uma fica de fora com o motivo: o pior caso da frase) */
-  { nome: 'financeiro-barra-lote-bpo', url: 'tela=financeiro&bpo=1', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
-    botoesDentro: '[data-testid="barra-lote"]',
-    antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().waitFor();
-      for (const n of [0, 1, 2]) await p.locator('tbody button[role="checkbox"]').nth(n).click();
-      await p.locator('[data-testid="lote-enviar-aprovacao"]').waitFor(); await p.waitForTimeout(400); } },
-  { nome: 'financeiro-enviar-aprovacao', url: 'tela=financeiro&bpo=1', tamanhos: [[390, 844], [1280, 800], [1920, 1080]], regiao: '[data-testid="enviar-aprovacao"]',
-    antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().waitFor();
-      for (const n of [0, 1, 2]) await p.locator('tbody button[role="checkbox"]').nth(n).click();
-      await p.locator('[data-testid="lote-enviar-aprovacao"]').click();
-      await p.locator('[data-testid="enviar-aprovacao-previa"]', { hasText: 'para a fila' }).waitFor(); await p.waitForTimeout(300); } },
+  /* BPO-FUNCIONAR-01 — o "Enviar para aprovação" SAIU da barra (entra sozinho pela regra, 118500): as cenas dele saíram junto */
   /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar" */
   ...['', 'mesmo', 'errado'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' } })),
@@ -2214,6 +2468,14 @@ const CENARIOS = [
       if (x === '-taxa') await p.locator('[data-testid="destino-taxa"]').click();
       await p.waitForTimeout(400);
     } })),
+  /* CONC-SUGESTOES-V2 (mock aprovado 25/11) — os 3 casos (sintéticos): a exata + outro banco + vencimento estimado (T R Santana), as possíveis do
+     mesmo CNPJ + nota sem lançamento (Prudentão), "nenhuma · achado pelo CNPJ" (Matão); o Procurar já preenchido e procurado (abertos · pagos) */
+  ...['trsantana', 'prudentao', 'matao'].map((x) => ({ nome: `casar-sugestoes-v2-${x}`, url: `tela=sugestoes-casar&v=${x}`, tamanhos: [...TAMANHOS_DO_P92, [1280, 720]],
+    regiao: '[data-testid="sugestoes-casar"]',
+    antes: async (p) => { await p.locator('[data-testid="linha-do-banco"]').waitFor(); await p.locator('[data-testid="procurar-historico-contagem"]', { hasText: /achado/ }).waitFor({ timeout: 15000 });
+      await p.waitForTimeout(300); } })),
+  { nome: 'casar-1x1-v2-trsantana', url: 'tela=casar-1x1&v=trsantana', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720]],
+    antes: async (p) => { await p.locator('[data-testid="levados-extrato"]').waitFor(); await p.locator('[data-testid="casar-faixa-pagamento"][data-estimado]').waitFor({ timeout: 15000 }); } },
   { nome: 'casar-sugestoes-edson', url: 'tela=sugestoes-casar&v=edson', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]' },
   /* D3 (homologação Edson 11:40): a tabela ordenada pela NF (a seta no cabeçalho; todas as colunas ordenam) */
   { nome: 'casar-sugestoes-edson-por-nf', url: 'tela=sugestoes-casar&v=edson', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
@@ -2260,17 +2522,22 @@ const CENARIOS = [
       }
       await p.waitForTimeout(350);
     } })),
-  /* OF-ESCOLHER-CONTAS-LAYOUT-01 (Gabriel 17/11 08:50) — Escolher contas com o "Lança na conta", antes e depois da prévia da ligação: o
-     botão inteiro e na mesma largura, a frase "Liga … em …" na linha dela, inteira (sem "…" e sem passar da caixa) */
-  ...[['escolher-contas', false], ['escolher-contas-previa', true]].map(([nome, previa]) => ({ nome, url: 'tela=escolher-contas',
-    tamanhos: [[1000, 600], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[role="dialog"]',
-    botoesDentro: '[data-testid="openfinance-lanca-na-conta"]',
-    visivelNaTela: { sels: [previa ? '[data-testid="openfinance-gravar-ligacao"]' : '[data-testid="openfinance-ver-ligacao"]', '[data-testid="openfinance-previa-ligacao"]'],
-      dentro: '[data-testid="openfinance-lanca-na-conta"]', altura: 88, inteirosEm: ['[data-testid="openfinance-lanca-na-conta"]'] },
-    semRolarNoLugar: '[data-testid="openfinance-lanca-na-conta"]',
+  /* OF-ESCOLHER-CONTAS-LAYOUT-01 + OPENFINANCE-PRONTO-NJ-01 (1) — Escolher contas num passo: a coluna "Lança na conta" (o seletor na
+     linha, a sugestão pela agência e conta), antes e depois da prévia (2 contas marcadas), e a Pluggy ainda lendo ("Ler de novo") */
+  ...[['escolher-contas', ''], ['escolher-contas-previa', 'previa'], ['escolher-contas-lendo', 'lendo']].map(([nome, estado]) => ({ nome,
+    url: `tela=escolher-contas${estado === 'lendo' ? '&v=lendo' : ''}`,
+    tamanhos: [[1000, 600], [1126, 640], [1280, 720], [1440, 800], [1920, 1080]], regiao: '[role="dialog"]',
+    botoesDentro: '[data-testid="openfinance-previa"]',
+    visivelNaTela: { sels: ['[data-testid="openfinance-previa"]', estado === 'previa' ? '[data-testid="openfinance-gravar-escolha"]' : '[data-testid="openfinance-ver-previa"]'],
+      inteirosEm: ['[role="dialog"]'] },
     antes: async (p) => {
-      await p.locator('[data-testid="openfinance-ver-ligacao"]').waitFor();
-      if (previa) { await p.locator('[data-testid="openfinance-ver-ligacao"]').click(); await p.locator('[data-testid="openfinance-gravar-ligacao"]').waitFor(); }
+      if (estado === 'lendo') { await p.locator('[data-testid="openfinance-ler-de-novo"]').waitFor(); await p.waitForTimeout(300); return; }
+      await p.locator('[data-testid="openfinance-conta"]').first().waitFor();
+      if (estado === 'previa') {
+        const marcar = p.locator('[data-testid="openfinance-conta-marcar"]');
+        await marcar.nth(0).click(); await marcar.nth(1).click();
+        await p.locator('[data-testid="openfinance-ver-previa"]').click(); await p.locator('[data-testid="openfinance-gravar-escolha"]').waitFor();
+      }
       await p.waitForTimeout(300);
     } })),
   /* OF-CONFERIR-CASAMENTO-01 (Gabriel 17/11 09:04) — o "Conferir com o banco": até 90vh, uma rolagem só (o corpo), cabeçalhos presos, as
@@ -2351,6 +2618,22 @@ const CENARIOS = [
       await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor();
       if (grupo) await p.locator(`[data-testid="fatura-grupo-${grupo}"]`).click();
       await p.waitForTimeout(400); } })),
+  /* CARTAO-FATURA-GRAVAR (25/11, lote 118540) — o "Gravar N prontas" na prévia, NO TETO (soma 9.999.999,99; a fazenda mais comprida):
+     `-escolha` a linha a lançar aberta na faixa (conta + fazenda, seletores da casa); `-confirmar` a prévia do banco ("Confirmar gravação");
+     `-recusa` (`&v=fatura-recusa`) a frase do banco NA LINHA do mover; `-desfazer-motivo` / `-desfazer-previa` (`&v=fatura-gravada`) */
+  ...[['-escolha', 'fatura', 'escolha'], ['-confirmar', 'fatura', 'confirmar'], ['-recusa', 'fatura-recusa', 'recusa'],
+    ['-desfazer-motivo', 'fatura-gravada', 'motivo'], ['-desfazer-previa', 'fatura-gravada', 'previa']].map(([n, v, passo]) => ({
+    nome: `conciliacao-painel-cartao-fatura${n}`, url: `tela=conciliacao&admin=1&v=${v}`, tamanhos: [[1000, 600], [1126, 579], [1280, 720], [1920, 1080]],
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="car"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arrastar"] input[type="file"]').setInputFiles({ name: 'fatura-bancada-out.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+      await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor();
+      if (passo === 'escolha') { await p.locator('[data-testid="fatura-grupo-nova_sugestao"]').click(); await p.locator('[data-testid="fatura-linha"][data-estado="falta"]').first().click(); }
+      if (passo === 'confirmar' || passo === 'recusa') { await p.locator('[data-testid="fatura-gravar"]').click(); await p.locator('[data-testid="fatura-confirmar"]').waitFor(); }
+      if (passo === 'recusa') await p.locator('[data-testid="fatura-grupo-mover"]').click();
+      if (passo === 'motivo' || passo === 'previa') { await p.locator('[data-testid="fatura-desfazer"]').click(); await p.locator('[data-testid="fatura-motivo-desfazer"]').fill('fatura lida com o cartão errado'); }
+      if (passo === 'previa') { await p.locator('[data-testid="fatura-prever-desfazer"]').click(); await p.locator('[data-testid="fatura-confirmar-desfazer"]').waitFor(); }
+      await p.waitForTimeout(400); } })),
   { nome: 'conciliacao-painel-conta-ver-importacao', url: 'tela=conciliacao&admin=1', tamanhos: [[1000, 600], [1280, 720], [1920, 1080]],
     antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="cc1"] [data-testid="botao-lapis"]');
       await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
@@ -2400,10 +2683,12 @@ const CENARIOS = [
     tamanhos: TAMANHOS_DA_CONCILIACAO, antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
       await clicarRotulo(/^Casar lançamentos$/)(p); await p.locator('[data-testid="extrato-saldo-final"]').waitFor(); await p.waitForTimeout(500); } })),
   /* BAIXA-DESCONTO-BANCO-01: `conferencia-desconto` = a NF paga com desconto (dia 03) com a sub-linha cinza "↳ desconto · não sai do banco" */
+  /* CONC-SUGESTOES-V2 B: `conferencia-v2` = cada sem par diz o que tem (exata · possíveis · nenhuma) e o contador "✓ Exatas" no cabeçalho */
   ...[['conferencia', null], ['conferencia-vencidos', 'chip-vencidos'], ['conferencia-sem-par', 'chip-sem_par'], ['conferencia-poucos', null],
-    ['conferencia-desconto', null]].map(([nome, chip]) => ({
-    nome, url: nome === 'conferencia-poucos' ? 'tela=conciliacao&v=poucos' : nome === 'conferencia-desconto' ? 'tela=conciliacao&v=desconto-depois' : 'tela=conciliacao',
-    tamanhos: [...TAMANHOS_DO_P92, [1366, 768]],
+    ['conferencia-desconto', null], ['conferencia-v2', 'chip-sem_par']].map(([nome, chip]) => ({
+    nome, url: nome === 'conferencia-poucos' ? 'tela=conciliacao&v=poucos' : nome === 'conferencia-desconto' ? 'tela=conciliacao&v=desconto-depois'
+      : nome === 'conferencia-v2' ? 'tela=conciliacao&v=sugv2' : 'tela=conciliacao',
+    tamanhos: nome === 'conferencia-v2' ? [...TAMANHOS_DO_P92, [1280, 720], [1366, 768]] : [...TAMANHOS_DO_P92, [1366, 768]],
     regiao: '[data-testid="modal-conferencia"]',
     /* P159e (Gabriel 29/10): o nome do extrato INTEIRO de 1366px para cima; abaixo, "…" + o title (a regra de corte de sempre) */
     inteiroDe: { sel: '[data-testid="modal-conferencia"] [data-testid="conf-historico"]', de: 1366 },
@@ -2475,9 +2760,36 @@ const CENARIOS = [
   { nome: 'financeiro-tabela-pagina-2', url: 'tela=financeiro&v=volume&n=450', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: clicar('[data-testid="pagina-proxima"]') },
   /* o item 2 do 01b: a faixa de totais + controles nunca fica por cima do que vem embaixo — dez trocas de filtro e o "sobreposicao" */
-  { nome: 'financeiro-faixa-totais', url: 'tela=financeiro', regiao: '[data-testid="faixa-totais"]', tamanhos: TAMANHOS_DO_CONTRATO,
-    botoesDentro: '[data-testid="faixa-totais"]',
-    antes: async (p) => { for (let i = 0; i < 10; i++) await clicarRotulo([/^Macro$/, /^Subcentro$/, /^Centro$/, /^Mostrar$/, /^Ocultar$/][i % 5])(p); } },
+  { nome: 'financeiro-faixa-totais', url: 'tela=financeiro', regiao: '[data-testid="faixa-totais"], [data-testid="resumo-da-lista"]', tamanhos: TAMANHOS_DO_CONTRATO,
+    botoesDentro: '[data-testid="faixa-totais"], [data-testid="cabecalho-dos-filtros"]',
+    antes: async (p) => { for (let i = 0; i < 10; i++) await naExibir(clicarRotulo([/^Macro$/, /^Subcentro$/, /^Centro$/, /^Mostrar$/, /^Ocultar$/][i % 5]))(p); } },
+  /* FIN-PRONTO-PAGAR-01 — o seletor "Pagamento" em Faltando: a tabela só com os pontos laranja (o ponto antes do status, sem coluna nova) */
+  { nome: 'financeiro-pronto-faltando', url: 'tela=financeiro', regiao: '[data-testid="quadro-lancamentos"]',
+    tamanhos: [[1240, 700], [1024, 600], [1280, 800], [1920, 1080], ...TAMANHOS_DO_CONTRATO],
+    antes: async (p) => { await naExibir(clicarRotulo(/^Faltando/))(p); await p.locator('[data-testid="ponto-pronto"][data-pronto="nao"]').first().waitFor({ timeout: 8000 }); } },
+  /* LANC-FILTROS-02a (Gabriel 25/11, mock lancamentos-filtros-ref/mock-aprovado.html) — a caixa de filtros do desktop (6 colunas, 24px a 10,5,
+     Período no lugar de Ano/Mês), recolhida (os ativos em chips), o calendário aberto (o compacto do DRE) e o resumo Caixa × A pagar, nos
+     5 tamanhos do pedido (o celular, abaixo de 768, não mudou); o ESTRESSE: −R$ 99.999.999,99 em todos os cards — nada corta nem empurra */
+  ...(() => {
+    const T5 = [[918, 600], [1024, 640], [1126, 579], [1280, 720], [1366, 768]];
+    const escolherForn = async (p) => {
+      await p.locator('[data-testid="filtro-fornecedor-largo"] [role="combobox"]').first().click(); await p.waitForTimeout(300);
+      await p.locator('[data-testid="favorecido-opcao"]').filter({ hasText: 'Cooperativa' }).first().click(); await p.waitForTimeout(500);
+    };
+    return [
+      { nome: 'financeiro-filtros-02-aberta', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]', tamanhos: T5,
+        botoesDentro: '[data-testid="cabecalho-dos-filtros"]' },
+      { nome: 'financeiro-filtros-02-recolhida', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]', tamanhos: T5.slice(1),
+        antes: async (p) => { await escolherForn(p); await clicar('[data-testid="recolher-filtros"]')(p); } },
+      { nome: 'financeiro-filtros-02-calendario', url: 'tela=financeiro', regiao: '[data-testid="lanc-periodo-popup"]', tamanhos: T5.slice(1),
+        antes: clicar('[data-testid="lanc-periodo"]') },
+      { nome: 'financeiro-filtros-02-exibir', url: 'tela=financeiro', regiao: '[data-testid="painel-exibir"]', tamanhos: T5.slice(1),
+        antes: clicar('[data-testid="btn-exibir"]') },
+      { nome: 'financeiro-resumo-02', url: 'tela=financeiro', regiao: '[data-testid="resumo-da-lista"]', tamanhos: T5.slice(1) },
+      { nome: 'financeiro-resumo-02-estresse', url: 'tela=financeiro&estresse=1', regiao: '[data-testid="resumo-da-lista"]', tamanhos: T5.slice(1),
+        alturaFixa: '[data-testid="resumo-da-lista"]' },
+    ];
+  })(),
 ];
 /* UI-TEXTO-LONGO-01 — o que tem de ter a mesma altura com texto curto e longo (o que não existe na tela é pulado nos dois lados) */
 const ALTURAS_DO_MODAL = ['[role="dialog"]', '[role="dialog"] aside', '[data-testid="grade-de-parcelas"]'];
@@ -3234,6 +3546,59 @@ function medirSemRolarVertical(sel) {
     .map((e) => ({ regra: 'rolagem', texto: `${e.getAttribute('data-testid') || sel} rola: pede ${e.scrollHeight}px, tem ${e.clientHeight}` }));
 }
 /* roda NA PAGINA: devolve os achados [{regra, texto}] */
+/* UI-FONTES-REGUA-01 — a régua de fonte (na página; uma entrada por elemento fora dela). Quem é o quê, nesta ordem: título do modal (o
+   `aria-labelledby` do `role=dialog`) · campo/botão/aba (input, select, textarea, button, tab, combobox) · data (dd/mm[/aaaa], em qualquer
+   lugar) · rótulo/cabeçalho (`th`, `label`, columnheader) · linha de tabela (`td`, cell) · valor em destaque (número fora de tabela e de
+   campo: até 16). O resto do texto (parágrafo, título de página) não entra. */
+function medirFonteRegua(regiao) {
+  const raiz = (regiao && document.querySelector(regiao)) || document.body;
+  const LIM = { titulo: 13, campo: 11, data: 10, rotulo: 10, linha: 11, destaque: 16, altura: 28 };
+  const CAMPO = 'input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not([type="file"]), textarea, select, button, [role="tab"], [role="combobox"]';
+  const DATA = /^\d{2}\/\d{2}(\/\d{2}(\d{2})?)?$/;
+  const NUMERO = /^[-+−]?\s*(R\$\s*)?[-−]?\d[\d.,]*\s*(%|@|cab|kg|ha|t)?$/i;
+  const visivel = (el) => { const r = el.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false;
+    const st = getComputedStyle(el); return st.visibility !== 'hidden' && st.display !== 'none' && Number(st.opacity) > 0; };
+  const curto = (t) => String(t ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  const nome = (el, texto) => { const id = el.closest('[data-testid]')?.getAttribute('data-testid'); return `${el.tagName.toLowerCase()}${id ? `[${id}]` : ''}${texto ? ` "${curto(texto)}"` : ''}`; };
+  const um = (v) => Math.round(v * 10) / 10;
+  const achados = []; const vistos = new Set();
+  const acusar = (el, tipo, medida, valor, lim, texto) => {
+    const elemento = nome(el, texto); const k = `${tipo}|${elemento}|${um(valor)}`; if (vistos.has(k)) return; vistos.add(k);
+    achados.push({ regra: 'fonte', tipo, medida, elemento, tamanho: um(valor), limite: lim,
+      texto: `${tipo}: ${elemento} ${medida === 'altura' ? 'com altura' : 'a'} ${um(valor)}px (régua: até ${lim})` });
+  };
+  const titulos = new Set([...document.querySelectorAll('[role="dialog"][aria-labelledby]')].map((d) => document.getElementById(d.getAttribute('aria-labelledby'))).filter(Boolean));
+  const classe = (el, texto) => {
+    if ([...titulos].some((t) => t.contains(el))) return ['título de modal', LIM.titulo];
+    const campo = el.closest(CAMPO);
+    if (campo) return [campo.matches('[role="tab"]') ? 'aba' : campo.matches('button') ? 'botão' : 'campo', LIM.campo];
+    if (DATA.test(texto)) return ['data', LIM.data];
+    if (el.closest('th, label, [role="columnheader"]')) return ['rótulo/cabeçalho', LIM.rotulo];
+    if (el.closest('td, [role="cell"], [role="gridcell"]')) return ['linha de tabela', LIM.linha];
+    if (NUMERO.test(texto)) return ['valor em destaque', LIM.destaque];
+    return null;
+  };
+  /* o texto: cada nó de texto visível pelo elemento que o desenha (o tamanho é o dele) */
+  const andar = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT);
+  for (let n = andar.nextNode(); n; n = andar.nextNode()) {
+    const texto = curto(n.textContent); const el = n.parentElement;
+    if (!texto || !el || el.closest('svg, script, style, [aria-hidden="true"]') || !visivel(el)) continue;
+    const c = classe(el, texto); if (!c) continue;
+    const fs = parseFloat(getComputedStyle(el).fontSize);
+    if (fs > c[1] + 0.05) acusar(el, c[0], 'fonte', fs, c[1], texto);
+  }
+  /* os campos (o texto deles não é nó: valor e placeholder) e a ALTURA de campo/botão (textarea cresce por desenho: só a fonte) */
+  for (const el of raiz.querySelectorAll(CAMPO)) {
+    if (!visivel(el)) continue;
+    const tipo = el.matches('[role="tab"]') ? 'aba' : el.matches('button') ? 'botão' : 'campo';
+    const rotulo = el.getAttribute('aria-label') || el.value || el.getAttribute('placeholder') || el.textContent;
+    if (el.matches('input, textarea, select')) { const fs = parseFloat(getComputedStyle(el).fontSize); if (fs > LIM.campo + 0.05) acusar(el, tipo, 'fonte', fs, LIM.campo, rotulo); }
+    const h = el.getBoundingClientRect().height;
+    if (!el.matches('textarea') && h > LIM.altura + 0.5) acusar(el, tipo, 'altura', h, LIM.altura, rotulo);
+  }
+  return achados;
+}
+
 function medir(regiao) {
   const achados = [];
   /* FORN-01b — o que nunca corta: numero, valor, data, hora, CPF/CNPJ, nota, contador (so' digitos e pontuacao de numero) */
@@ -3617,6 +3982,26 @@ try {
   if (!['reticencias', 'corte', 'quebra', 'data', 'cabecalho', 'altura', 'rolagem', 'valor', 'tabela', 'sobreposicao', 'italico', 'numero'].every((r) => prova.includes(r))
     || prova.filter((r) => r === 'cabecalho').length < 3 || daSobre0.filter((a) => a.regra === 'sobreposicao').length < 2) { console.error(`check-ui-cortes: AUTO-TESTE FALHOU (achou ${prova.join(',') || 'nada'})`); process.exit(2); }
 
+  /* UI-FONTES-REGUA-01 — AUTO-TESTE DA RÉGUA DE FONTE: cada limite estourado por 1px é achado; no limite (e o KPI a 16), nada */
+  { const pf = await navegador.newPage({ viewport: { width: 900, height: 500 } });
+    await pf.setContent(`<div id="mau"><table><thead><tr><th style="font-size:11px">Cab mau</th></tr></thead><tbody><tr><td style="font-size:12px">Linha ma</td>
+      <td style="font-size:10px">01/02/2026</td><td style="font-size:11px"><span style="font-size:11px">02/03/2026</span></td></tr></tbody></table>
+      <button style="font-size:12px;height:20px">Botao mau</button><button style="font-size:10px;height:30px">Alto</button><input style="font-size:12px;height:20px" value="campo mau">
+      <div role="tab" style="font-size:12px">Aba ma</div><label style="font-size:11px">Rotulo mau</label><div style="font-size:17px">R$ 1.234,56</div>
+      <div role="dialog" aria-labelledby="tt"><h2 id="tt" style="font-size:14px">Titulo mau</h2></div></div>
+      <div id="bom"><table><thead><tr><th style="font-size:10px">Cab</th></tr></thead><tbody><tr><td style="font-size:11px">Linha</td><td style="font-size:10px">03/04/2026</td></tr></tbody></table>
+      <button style="font-size:11px;height:28px">Botao</button><input style="font-size:11px;height:28px" value="campo"><label style="font-size:10px">Rotulo</label>
+      <div style="font-size:16px">R$ 9.876,54</div><p style="font-size:20px">Texto de pagina fora da regua</p>
+      <div role="dialog" aria-labelledby="tb"><h2 id="tb" style="font-size:13px">Titulo</h2></div></div>`);
+    const mau = await pf.evaluate(medirFonteRegua, '#mau'); const bom = await pf.evaluate(medirFonteRegua, '#bom'); await pf.close();
+    const tiposMau = new Set(mau.map((a) => `${a.tipo}/${a.medida}`));
+    const esperados = ['rótulo/cabeçalho/fonte', 'linha de tabela/fonte', 'data/fonte', 'botão/fonte', 'botão/altura', 'campo/fonte', 'aba/fonte', 'valor em destaque/fonte', 'título de modal/fonte'];
+    if (!esperados.every((t) => tiposMau.has(t)) || bom.length) {
+      console.error(`check-ui-cortes: AUTO-TESTE DA RÉGUA DE FONTE FALHOU (faltou: ${esperados.filter((t) => !tiposMau.has(t)).join(', ') || 'nada'}; acusou no que cabe: ${bom.map((a) => a.texto).join(' | ') || 'nada'})`); process.exit(2);
+    }
+  }
+  registrar(`check-ui-cortes: régua de fonte (UI-FONTES-REGUA-01) reprova só os elementos do diff (${(REGUA.testids ?? []).length} testids) em ${REGUA.telas.size} tela(s) do diff${REGUA.telas.size ? `: ${[...REGUA.telas].join(', ')}` : ''}${REGUA.aviso ? ` (${REGUA.aviso})` : ''}`);
+
   /* GATE-TELA-TETO-01 — AUTO-TESTE DO TETO: uma página em laço infinito tem de virar estouro (o contexto fecha) em ~2 s, não prender */
   const tt0 = Date.now(); const pgTeto = paginasDaMedicao(navegador); const pt = await pgTeto.nova({ viewport: { width: 400, height: 300 } });
   const rTeto = await comTeto(2000, async () => { await pt.setContent('<p>laço</p>'); await pt.evaluate(() => { for (;;) { /* preso */ } }); }, () => pgTeto.fecharTodas());
@@ -3652,6 +4037,16 @@ try {
       });
     }
     rastro.passo = 'medir';
+    /* UI-FONTES-REGUA-01 — a régua: reprova só na tela do diff; a das antigas vai ao relatório. Com `--so-fonte`, só ela. */
+    const daFonte = await p.evaluate(medirFonteRegua, cen.regiao ?? null);
+    /* ajuste 25/11 (Gabriel, opção 2): na tela do diff, reprova só o ELEMENTO do diff (`elementoDoDiff`, pelo testid); o antigo já aprovado vai
+       ao relatório como exceção declarada (`sobARegua: false`) */
+    const telaSob = REGUA.telas.has(telaDoCenario(cen));
+    const doDiff = (a) => telaSob && elementoDoDiff(a.elemento, REGUA.testids ?? []);
+    if (RELATORIO_FONTES && daFonte.length) fs.appendFileSync(RELATORIO_FONTES, daFonte.map((a) => JSON.stringify({ cena: cen.nome,
+      tela: telaDoCenario(cen), tamanho: `${w}x${h}`, sobARegua: doDiff(a), tipo: a.tipo, medida: a.medida, elemento: a.elemento, px: a.tamanho, limite: a.limite })).join('\n') + '\n');
+    if (SO_FONTE) { for (const a of daFonte.filter(doDiff)) meus.push({ tela: cen.nome, tamanho: `${w}x${h}`, regra: a.regra, texto: a.texto });
+      await p.close(); return meus; }
     if (FOTOS) { fs.mkdirSync(FOTOS, { recursive: true }); await p.screenshot({ path: path.join(FOTOS, `${cen.nome}_${w}x${h}.png`) }); }
     /* FORN-BUSCA-UNICA-01 — `regiao` (opcional): o cenário varre só o que o seletor pega (a tela inteira sem ele) */
     if (cen.regiao && !(await p.$(cen.regiao))) erros.push(`regiao ${cen.regiao} nao achada`);
@@ -3701,7 +4096,9 @@ try {
     }
     /* `soRegras` (UI-SEM-CORTE-02): o cenario conta so' estas regras — a tabela do Financeiro V2, suspensa (FIN-V2-SEM-CORTE-01), entra
        so' pelo texto inclinado e pela sobreposicao. Erro de pagina conta sempre. */
-    const achados = cen.soRegras ? achadosTodos.filter((a) => a.regra === 'erro' || cen.soRegras.includes(a.regra)) : achadosTodos;
+    /* UI-FONTES-REGUA-01 — a régua vale também no cenário de `soRegras` (ela só olha o máximo: as exceções ao piso não a tocam) */
+    achadosTodos.push(...daFonte.filter(doDiff).map((a) => ({ regra: a.regra, texto: a.texto })));
+    const achados = cen.soRegras ? achadosTodos.filter((a) => a.regra === 'erro' || a.regra === 'fonte' || cen.soRegras.includes(a.regra)) : achadosTodos;
     for (const a of achados) if (!EXCECOES.some((x) => x.tela === cen.nome && x.regra === a.regra && x.texto === a.texto)) meus.push({ tela: cen.nome, tamanho: `${w}x${h}`, ...a });
     await p.close();
     return meus; }, () => paginas.fecharTodas());

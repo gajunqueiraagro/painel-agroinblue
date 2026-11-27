@@ -51,7 +51,8 @@ vi.mock('@/hooks/useItensDaNota', () => ({
   }),
   useChavesComItens: () => new Set(),
 }));
-vi.mock('@/lib/financeiro/sugestaoDeContaDosItens', async (orig) => ({ ...(await orig<object>()), historicoDoEmitente: async () => [] }));
+/* NOTA-ITENS-SUGESTAO — a sugestão por item vem do banco (a escada única): aqui, nenhuma */
+vi.mock('@/lib/financeiro/nfeConsultas', async (orig) => ({ ...(await orig<object>()), sugestaoDosItensDaNota: async () => ({ ok: true, valor: null }) }));
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'nj', nome: 'NJ' } }) }));
 vi.mock('@/v2/components/edicao/LancamentoZooModal', () => ({ LancamentoZooModal: () => null }));
 /* P164 — a aba Documentos falsa: um botão faz o que o "Registrar documento" da nota que confere faz depois de gravar (avisa o que ficou) */

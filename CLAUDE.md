@@ -333,9 +333,16 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P155: trava que ESCREVE um campo (o `FazendaSelect` forçando Administrativo) só age com a classificação do lançamento ABERTO
   (`classificacaoDe`): o render de transição da abertura tem o estado do reset ("última atividade") e gravava a fazenda errada no Salvar.
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
+- VISUALIZADOR-PDF-02b: o PDF abre no LEITOR DO NAVEGADOR (`iframe` + URL `blob:` local, revogada ao fechar, `#zoom=100&navpanes=0`; cópia com o
+  título = nome do arquivo, `pdfComTitulo`); sem leitor, o pdf.js em 100% com a roda do Chrome MEDIDA (`zoomPelaRoda`: ×e^(−Δ/100), ×0,75–×1,25).
+- BOLETO-FATOR-VENC-01: o FATOR do boleto vira data por UMA regra (tela `vencimentoDoFator`, banco `_fn_boleto_vencimento_do_fator`, casos em
+  `fatorDeVencimento.casos.json`): o ciclo (base 07/10/1997 ou 22/02/2025) cuja data cai em [data da LEITURA − 3000, + 5500]; nenhuma = vazio.
 - P95 (DANFE-CHAVE-EM-GRUPOS-01): DANFE com a chave/rótulos picados em itens se lê pela linha (`chaveEmGrupos` SÓ com DV certo; `aoLado`);
   sem chave legível, DIGITAR A CHAVE (`chaveDigitada.ts`: DV, modelo 55; avulsa 890 não usa o CNPJ; o resto em branco, âmbar na prévia);
   nota no cartão em parcelas soltas acha as IRMÃS da fração k/N (`fn_nota_ja_lancada` 'fracao') e mostra soma × nota, nunca faz bater.
+- CARTAO-FATURA-GRAVAR: a fatura do cartão se lê por UMA porta (`lerFaturaDoCartao`: Ourocard e Sicredi → a mesma `FaturaLida`) e grava SÓ pela
+  `fn_fatura_cartao_gravar` (prévia `p_simular`, recusa POR LINHA, tudo ou nada, `lido_em` = o `updated_at` lido) / `_desfazer` (motivo); a compra
+  que sobra casa em 2ª passada com o que já está NESTA fatura (cartão + vencimento + valor): a recorrência prevista não duplica.
 - OC-ABRIR-LENTO-01: erro do banco nunca vai cru ao toast (frase pronta, o texto no console); leitura de tela que termina depois de
   a tela sair nao escreve nem avisa; leituras independentes da abertura saem juntas (`Promise.all`), nunca em serie.
 - Documentos da OC (OC-DOC-VENDA-01): abate E venda usam o MESMO componente (`AbaDocumentosOC`/`DocumentoFormAbate`, pelo tipo); na
@@ -350,6 +357,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - UI-GATE-RAPIDO-01: durante o trabalho, `npm run check:ui-rapido` (cortes + deslocamento so' das telas que o diff contra o origin/proto
   alcanca); sai com 3 e "rode o completo" quando o diff toca `src/components/ui/*`, `index.css`, a barra lateral, a bancada/os gates ou
   arquivo que metade das telas alcanca — ai' o completo e' obrigatorio antes de publicar. Um gate de tela completo por vez na maquina.
+- UI-FONTES-REGUA-01 (Gabriel 25/11): régua de FONTE no `check:ui-cortes`, SÓ nas telas novas/alteradas do diff (`telasDaReguaDeFonte`; gate,
+  ui/* e index.css não contam): linha de tabela e campo/botão/aba ≤ 11px, rótulo/cabeçalho/data ≤ 10, título de modal ≤ 13, altura de campo/botão ≤ 28,
+  valor em destaque (KPI) ≤ 16. As antigas só no relatório (`--so-fonte --relatorio-fontes` + `scripts/ui-fontes-relatorio.mjs`).
 - REGRA DE CORTE (21/10 07h25): nome/texto em tabela = uma linha com "…" e o texto inteiro no `title`; numero, valor, data, CPF/CNPJ e
   contador nunca cortam; corte SECO reprova; fora de tabela, nada de "…" (o texto rola no lugar dele ou quebra). Data sempre dd/mm/aaaa.
 - ALINHAMENTO SOBERANO (Gabriel 29/10, P159c): nunca valor, data e texto na mesma linha corrida; cada informação na sua coluna; numa comparação

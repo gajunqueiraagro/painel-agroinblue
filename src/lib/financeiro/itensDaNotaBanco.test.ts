@@ -10,13 +10,14 @@ vi.mock('@/integrations/supabase/client', () => ({
     from: (t: string) => {
       tabelas.filtros[t] = [];
       const b: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'not']) b[m] = (...a: unknown[]) => { tabelas.filtros[t].push(`${m}:${a.join(',')}`); return b; };
+      for (const m of ['select', 'eq', 'not', 'in', 'order', 'limit']) b[m] = (...a: unknown[]) => { tabelas.filtros[t].push(`${m}:${a.join(',')}`); return b; };
       b.then = (ok: (x: { data: unknown[]; error: null }) => unknown) => Promise.resolve({ data: tabelas.dados[t] ?? [], error: null }).then(ok);
       return b;
     },
   },
 }));
-import { candidatasDoBackfill } from './itensDaNotaBanco';
+import { candidatasDoBackfill, chavesGuardadas, lerItensGuardados } from './itensDaNotaBanco';
+import { chaveDoDocumento } from '@/lib/financeiro/nfe/formatos';
 
 const K = (d: string) => d.repeat(44);
 describe('candidatasDoBackfill', () => {
@@ -45,5 +46,31 @@ describe('candidatasDoBackfill', () => {
       expect(tabelas.filtros[t]).toEqual(expect.arrayContaining(['eq:cliente_id,cli', 'eq:cancelado,false', 'not:chave_acesso,is,', 'not:url,is,']));
     }
     expect(tabelas.filtros.nota_fiscal).toContain('eq:cliente_id,cli');
+  });
+});
+
+/* NOTA-ITENS-CLASSIF-01 (Gabriel 24/11 16:3x) — o documento guarda a chave em grupos ("5026 0921 …"): a aba Itens sumia porque a chave
+   era descartada ANTES de virar dígitos. Quem lê a nota pela chave do documento passa pela `chaveDoDocumento`. */
+const EM_GRUPOS = (d: string) => `${d.repeat(4)} ${d.repeat(4)} ${d.repeat(4)} ${d.repeat(4)} ${d.repeat(4)} ${d.repeat(4)} ${d.repeat(4)} ${d.repeat(4)} ${d.repeat(4)} ${d.repeat(4)} ${d.repeat(4)}`;
+describe('a chave como o documento a guarda', () => {
+  it('chaveDoDocumento: grupos, pontos e espaços viram os 44 (ou 50) dígitos; o que não é chave é nulo', () => {
+    expect(chaveDoDocumento(EM_GRUPOS('5'))).toBe(K('5'));
+    expect(chaveDoDocumento(`${'1'.repeat(10)}.${'1'.repeat(34)}`)).toBe(K('1'));
+    expect(chaveDoDocumento('7'.repeat(50))).toBe('7'.repeat(50));
+    expect(chaveDoDocumento('123 456')).toBeNull();
+    expect(chaveDoDocumento(null)).toBeNull();
+  });
+  it('lerItensGuardados pergunta ao banco pelos DÍGITOS da chave em grupos (antes: nem perguntava)', async () => {
+    tabelas.dados = { nota_fiscal: [] };
+    tabelas.filtros = {};
+    await lerItensGuardados('cli', [EM_GRUPOS('5')]);
+    expect(tabelas.filtros.nota_fiscal).toContain(`in:chave_acesso,${K('5')}`);
+  });
+  it('chavesGuardadas acha a chave em grupos COMO FOI MANDADA (o "Itens da nota" da OC compara a do documento)', async () => {
+    tabelas.dados = { nota_fiscal: [{ chave_acesso: K('5') }] };
+    const s = await chavesGuardadas('cli', [EM_GRUPOS('5'), EM_GRUPOS('6')]);
+    expect(s.has(EM_GRUPOS('5'))).toBe(true);
+    expect(s.has(K('5'))).toBe(true);
+    expect(s.has(EM_GRUPOS('6'))).toBe(false);
   });
 });

@@ -357,7 +357,7 @@ export async function lerEstimadasDoCliente(clienteId: string): Promise<{ ids: S
   const idsDasRegras: string[] = (Array.isArray(regras) ? regras : []).map((r: any) => String(r?.id ?? '')).filter(Boolean);
   if (idsDasRegras.length === 0) return { ids: new Set(), incompleto: false };
   const { data, error: e2 } = await cliente.from('financeiro_lancamentos_v2')
-    .select('id, recorrencia_id, valor, data_vencimento, status_transacao, valor_do_mes_em')
+    .select('id, recorrencia_id, valor, data_vencimento, status_transacao, valor_do_mes_em, numero_documento')
     .eq('cliente_id', clienteId).eq('cancelado', false).in('recorrencia_id', idsDasRegras)
     .range(0, TETO_OCORRENCIAS_ESTIMADAS - 1);
   if (e2) throw e2;
@@ -373,7 +373,8 @@ export function idsEstimados(linhas: readonly any[]): Set<string> {
   for (const l of linhas) {
     const o = lerOcorrencia(l);
     const id = String(l?.id ?? '');
-    if (id && ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: o.valorDoMesEm, status: o.status })) ids.add(id);
+    const comDocumento = typeof l?.numero_documento === 'string' && l.numero_documento.trim() !== '';
+    if (id && ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: o.valorDoMesEm, status: o.status, comDocumento })) ids.add(id);
   }
   return ids;
 }

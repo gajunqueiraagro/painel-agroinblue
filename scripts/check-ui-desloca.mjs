@@ -69,6 +69,22 @@ const noLugar = (sel) => async (p) => { await p.locator(sel).first().dispatchEve
 /* UI-MESES-PADRAO-01 — os botões de mês da Visão Geral financeira (o SeletorPeriodo da casa não tem testid por mês) */
 const MES_DA_VG = '[data-testid="vg-meses"] [data-testid="seletor-periodo-meses"] > button';
 /* o gesto e, depois, a casca da bancada de volta ao topo (o clique rola a PAGINA para trazer o botao a vista; o que se mede e' a tela) */
+/* LANC-FILTROS-02a — Class./Sem caixa/Pagamento no "Exibir ▾" do desktop: abre, clica, fecha (Esc); no celular o clique é direto */
+const naExibir = (g) => async (p) => {
+  const exibir = p.locator('[data-testid="btn-exibir"]');
+  const comExibir = await exibir.count() > 0 && await exibir.first().isVisible();
+  if (comExibir) { await exibir.first().click(); await espera(p, 300); }
+  await g(p);
+  if (comExibir) { await p.keyboard.press('Escape'); await espera(p, 300); }
+};
+/* o atalho do Período (desktop; no celular, abaixo de 768, o campo não existe e o estado não faz nada) */
+const noPeriodo = (atalho) => async (p) => {
+  const campo = p.locator('[data-testid="lanc-periodo"]');
+  if (await campo.count() === 0 || !await campo.first().isVisible()) return;
+  await campo.first().click(); await espera(p, 300);
+  await p.locator(`[data-atalho="${atalho}"]`).first().click(); await espera(p, 200);
+  await p.locator('[data-testid="lanc-periodo-aplicar"]').first().click(); await espera(p, 600);
+};
 const noTopo = (g) => async (p) => { await g(p); await p.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll('[data-casca]').forEach((c) => { c.scrollTop = 0; }); }); await espera(p, 150); };
 const ampliar = async (p) => { await p.locator('[data-testid="rodape-lancamentos"]').waitFor(); await espera(p, 900); await p.getByRole('button', { name: /^Ampliar$/ }).first().click(); await espera(p, 700); };
 const digitar = (sel, txt) => async (p) => { await p.locator(sel).first().fill(txt); await espera(p, 800); };
@@ -112,8 +128,12 @@ const CENARIOS = [
       ['por pagina 50', noTopo(botao(/^50$/))], ['por pagina 100', noTopo(botao(/^100$/))], ['por pagina 200', noTopo(botao(/^200$/))],
       ['proxima pagina', noTopo(clicar('[data-testid="pagina-proxima"]'))], ['proxima de novo', noTopo(clicar('[data-testid="pagina-proxima"]'))],
       ['pagina anterior', noTopo(clicar('[data-testid="pagina-anterior"]'))],
-      ['Classificação Macro', noTopo(botao(/^Macro$/))], ['Classificação Subcentro', noTopo(botao(/^Subcentro$/))], ['Classificação Centro', noTopo(botao(/^Centro$/))],
-      ['Sem caixa Só c/ DRE', noTopo(botao(/^Só c\/ DRE$/))], ['Sem caixa Ocultar', noTopo(botao(/^Ocultar$/))],
+      ['Classificação Macro', noTopo(naExibir(botao(/^Macro$/)))], ['Classificação Subcentro', noTopo(naExibir(botao(/^Subcentro$/)))], ['Classificação Centro', noTopo(naExibir(botao(/^Centro$/)))],
+      ['Sem caixa Só c/ DRE', noTopo(naExibir(botao(/^Só c\/ DRE$/)))], ['Sem caixa Ocultar', noTopo(naExibir(botao(/^Ocultar$/)))],
+      /* LANC-FILTROS-02a — o Período (atalhos do seletor) e o resumo: trocar o período não move a caixa, o resumo nem a tabela */
+      ['Período Este mês', noTopo(noPeriodo('este-mes'))],
+      ['Período 12 meses', noTopo(noPeriodo('ultimos-12'))],
+      ['resumo com 9 dígitos', { url: 'tela=financeiro&v=volume&n=450&estresse=1' }],
       /* TABELA-ALTURA-FIXA-01 — filtrar de muitos para poucos (6), um ou nenhum lançamento: o quadro não encolhe e a barra da página
          (Anterior/Próxima, "Por pág.") fica no mesmo lugar */
       ...[6, 1, 0].map((n) => [`filtro com ${n} lancamento(s)`, { url: `tela=financeiro&v=volume&n=450&linhas=${n}` }]),
@@ -320,6 +340,26 @@ const CENARIOS = [
       await espera(p, 900); }],
     ['abrir a senha', clicar('[data-testid="sugestao-de-senha"]')], ['aba Ignorados de novo', botao(/^Ignorados/)], ['aba A resolver de novo', botao(/^A resolver/)],
   ] },
+  /* FOLHA-NA-CAIXA-01 — a prévia do recibo do contador: marcar/desmarcar o "Criar" e aprovar não movem a faixa do documento, o
+     cabeçalho da tabela, a faixa do "sem recibo" nem o rodapé (o quadro da tabela é `data-desloca-livre`) */
+  { nome: 'folha-da-caixa', url: 'tela=caixa-boletos', regiao: '[data-testid="folha-da-caixa"]',
+    antes: async (p) => { await espera(p, 900); await clicar('[data-testid="acao-abrir_folha"]')(p); await espera(p, 800); }, estados: [
+    ['marcar Criar', clicar('[data-testid="criar-2"]')], ['desmarcar Criar', clicar('[data-testid="criar-2"]')], ['marcar de novo', clicar('[data-testid="criar-2"]')],
+    ['ver quem está sem recibo', clicar('[data-testid="ver-sem-recibo"]')], ['esconder', clicar('[data-testid="ver-sem-recibo"]')],
+    ['aprovar', clicar('[data-testid="aprovar-folha"]')],
+  ] },
+  /* FOLHA-RESUMO-CONTADOR-01 — a prévia do resumo do contador: Prever, abrir o Desfazer e ver o que volta não movem a faixa do documento,
+     o cabeçalho da tabela, a faixa da descrição nem o rodapé (o quadro da tabela é `data-desloca-livre`) */
+  { nome: 'resumo-da-caixa', url: 'tela=caixa-boletos&caso=resumo_ok', regiao: '[data-testid="resumo-do-contador"]',
+    antes: async (p) => {
+      await espera(p, 900);
+      await p.locator('[data-testid="input-da-caixa"]').setInputFiles([{ name: 'extrato.pdf', mimeType: 'application/pdf',
+        buffer: Buffer.from('%PDF Extrato Mensal 13 ficticio com nome de arquivo comprido de exemplo.pdf') }]);
+      await espera(p, 900); await clicar('[data-testid="acao-abrir_resumo"]')(p); await espera(p, 800);
+    }, estados: [
+    ['prever', clicar('[data-testid="prever-fgts"]')], ['abrir o desfazer', clicar('[data-testid="desfazer-resumo"]')],
+    ['motivo + ver o que volta', async (p) => { await p.locator('[data-testid="motivo-desfazer-resumo"]').fill('o contador mandou de novo'); await clicar('[data-testid="prever-desfazer-resumo"]')(p); }],
+  ] },
   /* BOLETO D3c — o endereço de boletos: trocar de modo (ver → trocar → prévia → cancelar → revogar) e de provedor não move o bloco do
      endereço, o da ação, as abas do passo a passo nem o rodapé (os blocos têm altura fixa; a lista dos passos é `data-desloca-livre`) */
   { nome: 'endereco-boletos', url: 'tela=caixa-boletos', regiao: '[data-testid="endereco-de-boletos"]',
@@ -349,6 +389,52 @@ const CENARIOS = [
   { nome: 'patrimonio-lancamento', url: 'tela=patrimonio-lancamento&caso=sem_bem&aba=ligar', regiao: '[data-testid="patrimonio-do-lancamento-dialog"]', estados: [
     ['escolher o bem', clicar('[data-testid="bem-para-ligar"]')], ['aba Criar o bem', botao(/^Criar o bem$/)], ['aba Ligar a um bem', botao(/^Ligar a um bem$/)],
   ] },
+  /* FOLHA-01 · PR B (telas) — Financeiro › Folha de pagamento: trocar o filtro, buscar 1/0, abrir e fechar a ficha, trocar a aba da ficha e
+     as abas da tela não movem o cabeçalho, os filtros, a ficha (340px sempre) nem o rodapé; no Histórico, o tipo e o período; nas Pendências, o
+     tipo; no modal do cadastro, ir de aba em aba (o Salvar fica no lugar, invisível fora do Cadastro) */
+  ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}`, url: `tela=folha&v=${v}&barra=32`, estados: [
+    ['Desligados', clicar('[data-testid="folha-filtros"] button:has-text("Desligados")')], ['A confirmar', clicar('[data-testid="folha-filtros"] button:has-text("A confirmar")')],
+    ['Todos', clicar('[data-testid="folha-filtros"] button:has-text("Todos")')],
+    ['busca 1', digitar('[data-testid="folha-busca"]', 'Antônio Exemplo Prado')], ['abre a ficha', clicar('[data-testid="folha-linha"]')],
+    ['ficha Documentos', clicar('[data-testid="folha-ficha"] button:has-text("Documentos")')], ['ficha Cadastro', clicar('[data-testid="folha-ficha"] button:has-text("Cadastro")')],
+    ['busca 0', digitar('[data-testid="folha-busca"]', 'zzzz nada')], ['busca limpa', digitar('[data-testid="folha-busca"]', '')],
+    ['fecha a ficha', clicar('[aria-label="Fechar a ficha"]')], ['Ativos', clicar('[data-testid="folha-filtros"] button:has-text("Ativos")')],
+  ] })),
+  /* a troca de aba muda o CONTEÚDO por desenho; o que não se desloca é a barra das abas (e o cabeçalho dela) */
+  { nome: 'folha-abas', url: 'tela=folha&v=nj&barra=32&func=f00', regiao: '[role="tablist"]', estados: [
+    ['aba Histórico', async (p) => { await p.getByRole('tab', { name: /^Histórico/ }).click(); await espera(p, 700); }],
+    ['aba Pendências', async (p) => { await p.getByRole('tab', { name: /^Pendências/ }).click(); await espera(p, 700); }],
+    ['aba Folha do mês', async (p) => { await p.getByRole('tab', { name: /^Folha do mês/ }).click(); await espera(p, 500); }],
+    ['aba Férias', async (p) => { await p.getByRole('tab', { name: /^Férias/ }).click(); await espera(p, 500); }],
+    ['aba Funcionários', async (p) => { await p.getByRole('tab', { name: /^Funcionários/ }).click(); await espera(p, 700); }],
+  ] },
+  ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-historico`, url: `tela=folha&v=${v}&barra=32&aba=historico&func=f00`, estados: [
+    ...['Salário', '13º', 'Férias', 'Rescisão', 'Benefícios', 'Tudo'].map((t) => [`tipo ${t}`, clicar(`[data-testid="folha-historico-faixa"] button:has-text("${t}")`)]),
+    /* no modo ano-mês o ano é uma caixa de seleção (não há botão "2025"): o recorte é um MÊS da fita */
+    ['período março', clicar('[data-testid="folha-historico-faixa"] [data-testid="seletor-periodo-meses"] > button:nth-child(3)')],
+    ['todo o período', clicar('[data-testid="folha-historico-todo"]')],
+  ] })),
+  /* FOLHA-TELAS-03: a faixa da Folha do mês não se desloca ao trocar o tipo nem o mês (os 4 documentos, o arrastar e o Confirmar têm lugar fixo) */
+  ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-mes`, url: `tela=folha&v=${v}&barra=32&aba=mes`, regiao: '[data-testid="folha-mes-faixa"]', estados: [
+    ...['13º · 1ª parcela', '13º · 2ª parcela', 'Mensal'].map((t) => [`tipo ${t}`, clicar(`[data-testid="folha-mes-faixa"] button:has-text("${t}")`)]),
+    ['mês março', clicar('[data-testid="folha-mes-faixa"] [data-testid="seletor-periodo-meses"] > button:nth-child(3)')],
+  ] })),
+  /* a prévia do Confirmar abre na 3ª linha (26px fixos): a faixa não cresce nem empurra a tabela */
+  { nome: 'folha-vera-mes-confirmar', url: 'tela=folha&v=vera&barra=32&aba=mes&mes=confere', regiao: '[data-testid="folha-mes-faixa"]', estados: [
+    ['prévia do Confirmar', clicar('[data-testid="folha-mes-confirmar"]')],
+  ] },
+  ...['nj', 'vera'].map((v) => ({ nome: `folha-${v}-pendencias`, url: `tela=folha&v=${v}&barra=32&aba=pendencias`, estados: [
+    ...['Sem cadastro', 'Rescisão a conferir', 'Sugestão (descrição)', 'Sem recibo', 'Documento vence', 'Todas'].map((t) => [t, clicar(`[data-testid="folha-pendencias-filtros"] button:has-text("${t}")`)]),
+  ] })),
+  { nome: 'folha-funcionario', url: 'tela=folha&v=nj&barra=32', regiao: '[role="dialog"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="folha-filtros"] button:has-text("Todos")').click(); await espera(p, 300);
+      await p.locator('[data-testid="folha-busca"]').fill('Antônio Exemplo Prado'); await espera(p, 400);
+      await p.locator('[data-testid="folha-linha"]').first().click(); await espera(p, 500);
+      await p.locator('[data-testid="folha-ficha-editar"]').click(); await p.locator('[data-testid="funcionario-dialog"]').waitFor(); await espera(p, 700);
+    },
+    estados: ['Salário e atuação', 'Situação', 'Cadastro'].map((a) => [`aba ${a}`, async (p) => {
+      await p.locator('[data-testid="funcionario-dialog"] button', { hasText: new RegExp(`^${a}`) }).first().click(); await espera(p, 500); }]) },
   /* PATR-01 PR B — Cadastros › Patrimônio: trocar a aba da tela, o chip e a busca (1/0 bens) não move os cartões, os filtros, o cabeçalho
      nem o rodapé; no modal do bem, ir de aba em aba (as seis ficam no lugar; a apagada não se clica) não move nada — o trator, a
      pastagem e o bem NOVO (Dados ↔ Lançamentos, a terra num passo) */
@@ -782,6 +868,11 @@ const CENARIOS = [
   { nome: 'contas-modal-cartao', url: 'tela=contas&barra=32&n=longo&v=editar', antes: async (p) => { await p.locator('[data-testid="modal-conta-bancaria"]').waitFor(); await espera(p, 700); },
     estados: [['o cartão', { url: 'tela=contas&barra=32&n=longo&v=editar&cartao=1' }]] },
   { nome: 'cpr', url: 'tela=cpr', auto: true },
+  /* APROVAR-PAGAMENTOS-V3 — abas, filtro (os números do filtro têm lugar reservado), o mês e a seleção (a barra fica sempre; o total muda no lugar dele) */
+  /* abaixo de 900 px a lista é de CARTÕES (750/814): a cena espera e marca linha OU cartão */
+  { nome: 'aprovar-v3', url: 'tela=aprovar-v3', antes: async (p) => { await p.locator('[data-testid="v3-linha"], [data-testid="v3-cartao"]').first().waitFor({ timeout: 20000 }); await espera(p, 400); },
+    auto: true, estados: [['2 marcados', async (p) => { const c = p.locator(':is([data-testid="v3-linha"], [data-testid="v3-cartao"]) button[role="checkbox"]:not([disabled])'); await c.nth(0).click(); await c.nth(1).click(); }],
+      ['mês seguinte', async (p) => { await p.getByRole('button', { name: 'Mês seguinte' }).click(); await espera(p, 300); }]] },
   { nome: 'mesclar', url: 'tela=mesclar', auto: true },
   /* FIN-NOTA-PDF-01 — o modal da nota: nada anda quando o "Falta:" troca pelo aviso de baixo, quando a faixa "Atualizar este" aparece,
      quando a nota e' barrada (ja' registrada, chave que nao confere) ou no pior caso de texto. Cada um contra a nota recem-aberta. */
@@ -793,6 +884,17 @@ const CENARIOS = [
     estados: [
       ['nota sem duplicata, conta do cartao', { url: 'tela=lancamento&m=novo&v=notacartao' }],
       ['o XML', { url: 'tela=lancamento&m=novo&v=xml' }],
+      /* NOTA-ITENS-SUGESTAO — a faixa com a origem (1 conta) e o aviso pequeno (3 contas + 1 a decidir): a mesma faixa, uma linha */
+      ['a sugestão pelos itens, 1 conta', { url: 'tela=lancamento&m=novo&v=xmlsug1' }],
+      ['a sugestão pelos itens, 3 contas + a decidir', { url: 'tela=lancamento&m=novo&v=xmlsug3' }],
+    ] },
+  /* NOTA-ITENS-SUGESTAO (Gabriel 27/11) — Itens › Contas: responder obra × manutenção (e trocar a resposta) não move a tabela, o total por conta
+     (as linhas ficam reservadas) nem os botões */
+  { nome: 'nota-itens-sugestao-contas', url: 'tela=lancamento&m=novo&v=xmlsug3',
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="contas-total-por-conta"]').waitFor(); await espera(p, 600); },
+    estados: [
+      ['respondido: manutenção', clicar('[data-testid="pergunta-5-manutencao"]')],
+      ['respondido: obra/reforma', clicar('[data-testid="pergunta-5-obra"]')],
     ] },
   /* D-a (Gabriel 29/10 08:32) — CADA MODO CONTRA A PRÓPRIA BASE: a nota JÁ LANÇADA tem outro conjunto de abas (5, numeradas) que a NOVA (3) —
      o desenho aprovado; trocar de modo é trocar de tela, não "deslocar". As variantes já lançadas se medem aqui, contra a já lançada recém-aberta;
@@ -858,6 +960,14 @@ const CENARIOS = [
     ['atualizar as nao pagas', noLugar('[data-testid="nota-atualizar-nao-pagas"] button')],
     ['etapa Itens da nota', clicar('[data-testid="nota-abas-ja"] button:has-text("Itens da nota")')],
     /* D-a — o "Criar novo (duplica)" troca de modo (volta para as 3 abas da nova): não se mede aqui; o ⋯ dele fica no lugar (teste no vitest) */
+  ] },
+  /* NOTA-ENTREGA-FUTURA-01 (3) — o achado com OUTRA NF: trocar ↔ criar e ir às etapas não movem a barra das etapas, as opções nem o rodapé */
+  { nome: 'nota-outra-nf', url: 'tela=nota-pdf&v=outranota', antes: async (p) => { await p.locator('[data-testid="nota-outra-nf"]').waitFor({ timeout: 8000 }); await espera(p, 300); },
+    estados: [
+    ['escolher criar', noLugar('[data-testid="nota-outra-nf-criar"]')],
+    ['escolher trocar', noLugar('[data-testid="nota-outra-nf-trocar"]')],
+    ['etapa Confirmar', clicar('[data-testid="nota-abas-ja"] button:has-text("Confirmar")')],
+    ['etapa Como vai ficar', clicar('[data-testid="nota-abas-ja"] button:has-text("Como vai ficar")')],
   ] },
   /* P102 — o Editar obrigação da compra parcelada: trocar de aba não move a barra de abas nem o rodapé (o "Voltar para à vista" e o Salvar) */
   { nome: 'obrigacao-editar', url: 'tela=contrato&v=parcelamento&np=18&docs=1', antes: async (p) => {
@@ -1012,6 +1122,24 @@ const CENARIOS = [
       await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor(); await espera(p); },
     estados: [['Nova · sugestão (5 linhas)', clicar('[data-testid="fatura-grupo-nova_sugestao"]')], ['Pagamento (1 linha)', clicar('[data-testid="fatura-grupo-pagamento"]')],
       ['Já lançado', clicar('[data-testid="fatura-grupo-ja_lancado"]')]] },
+  /* CARTAO-FATURA-GRAVAR — abrir a linha na faixa de escolha (altura reservada), o Gravar → a prévia do banco → a recusa na linha, e o
+     Desfazer (motivo → prévia): a faixa, o quadro, o cabeçalho das colunas, a barra de baixo e os botões não andam */
+  ...[['fatura', [['linha aberta na faixa de escolha', async (p) => { await p.locator('[data-testid="fatura-grupo-nova_sugestao"]').click();
+      await p.locator('[data-testid="fatura-linha"][data-estado="falta"]').first().click(); await espera(p); }],
+    ['Gravar → a prévia do banco', async (p) => { await p.locator('[data-testid="fatura-gravar"]').click(); await p.locator('[data-testid="fatura-confirmar"]').waitFor(); await espera(p); }]]],
+    ['fatura-recusa', [['Gravar → a recusa na linha', async (p) => { await p.locator('[data-testid="fatura-gravar"]').click(); await p.locator('[data-testid="fatura-confirmar"]').waitFor();
+      await p.locator('[data-testid="fatura-grupo-mover"]').click(); await espera(p); }]]],
+    ['fatura-gravada', [['Desfazer: o motivo', async (p) => { await p.locator('[data-testid="fatura-desfazer"]').click(); await p.locator('[data-testid="fatura-motivo-desfazer"]').fill('motivo');
+      await espera(p); }], ['Desfazer: a prévia', async (p) => { await p.locator('[data-testid="fatura-desfazer"]').click();
+      await p.locator('[data-testid="fatura-motivo-desfazer"]').fill('motivo'); await p.locator('[data-testid="fatura-prever-desfazer"]').click();
+      await p.locator('[data-testid="fatura-confirmar-desfazer"]').waitFor(); await espera(p); }]]]].map(([v, estados]) => ({
+    nome: `conciliacao-painel-cartao-${v}-gravar`, url: `tela=conciliacao&admin=1&v=${v}`, tamanhos: [[1000, 600], [1126, 579], [1280, 720]],
+    presos: '[data-testid="fatura-cabecalho"], [data-testid^="fatura-grupo-"], [data-testid="fatura-escolha"], [data-testid="fatura-tabela"] thead th, [data-testid="fatura-quadro"], [data-testid="fatura-barra"]',
+    antes: async (p) => { const lapis = p.locator('[data-testid="linha-saldo-conta"][data-conta="car"] [data-testid="botao-lapis"]');
+      await lapis.waitFor(); await lapis.click(); await p.locator('[data-testid="painel-da-conta"]').waitFor();
+      await p.locator('[data-testid="painel-arrastar"] input[type="file"]').setInputFiles({ name: 'fatura-bancada-out.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+      await p.locator('[data-testid="painel-soltou-ler-fatura"]').click(); await p.locator('[data-testid="fatura-grupos"]').waitFor(); await espera(p); },
+    estados })),
   /* P159a (CONC-TELAS-01) — a Conferência: trocar o chip (Sem par, Casados, Vencidos, Todos) não mexe no cabeçalho do modal, nos chips,
      na faixa nem no cabeçalho das colunas (régua fixa); o Casar lançamentos: trocar de sub-aba não mexe na barra, e o mês curto não mexe
      nas colunas do Extrato. */
@@ -1025,24 +1153,30 @@ const CENARIOS = [
       ['todas', async (p) => { await p.locator('[data-testid="notas-da-receita"] button', { hasText: /^Todas/ }).first().click(); await espera(p); }]] },
   /* P153 — procurar no histórico não mexe em nada fora do quadro: o botão, a contagem e a linha do banco ficam onde estão (a frase é linha do quadro) */
   { nome: 'casar-sugestoes-procurar', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92,
-    presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',
+    presos: '[data-testid="linha-do-banco"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',
     estados: [['procurou', async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); }]] },
   /* CONC-SUGESTOES-TABELA-01 — marcar e desmarcar as caixinhas (das sugestões e do histórico) não mexe em nada: o rodapé tem as colunas
      reservadas (N · soma · extrato · diferença) e o "Casar selecionados" fica no lugar; o cabeçalho das listas e a faixa do extrato também */
   { nome: 'casar-sugestoes-marcar', url: 'tela=sugestoes-casar&v=rural', tamanhos: TAMANHOS_DO_P92,
     antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); },
-    presos: '[data-testid="sugestoes-extrato"], [data-testid="sugestoes-rodape"] > *, [data-testid="sugestoes-lista"] thead th, [data-testid="procurar-historico-quadro"] thead th',
+    presos: '[data-testid="linha-do-banco"], [data-testid="sugestoes-rodape"] > *, [data-testid="sugestoes-lista"] thead th, [data-testid="procurar-historico-quadro"] thead th',
     estados: [['uma sugestão', async (p) => { await p.locator('[data-testid="sugestoes-lista"] tbody button[role="checkbox"]').nth(0).click(); await espera(p); }],
       ['e uma do histórico', async (p) => { await p.locator('[data-testid="procurar-historico-quadro"] tbody button[role="checkbox"]').first().click(); await espera(p); }],
       ['desmarcadas', async (p) => { await p.locator('[data-testid="sugestoes-lista"] tbody button[role="checkbox"]').nth(0).click();
         await p.locator('[data-testid="procurar-historico-quadro"] tbody button[role="checkbox"]').first().click(); await espera(p); }]] },
+  /* CONC-SUGESTOES-V2 (mock aprovado 25/11) — marcar a EXATA e a possível de outro banco não mexe em nada: a linha do banco, as faixas, o rodapé */
+  { nome: 'casar-sugestoes-v2-marcar', url: 'tela=sugestoes-casar&v=trsantana', tamanhos: [...TAMANHOS_DO_P92, [1280, 720]],
+    antes: async (p) => { await p.locator('[data-testid="faixa-exata"]').waitFor(); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); },
+    presos: '[data-testid="linha-do-banco"], [data-testid="faixa-exata"], [data-testid="faixa-possiveis"], [data-testid="sugestoes-rodape"] > *, [data-testid="sugestoes-lista"] thead th',
+    estados: [['a exata', async (p) => { await p.locator('[data-testid="exata"] button[role="checkbox"]').first().click(); await espera(p); }],
+      ['e a de outro banco', async (p) => { await p.locator('[data-testid="do-motor"] button[role="checkbox"]').first().click(); await espera(p); }]] },
   /* P153b — ordenar o histórico não mexe em nada fora do corpo da lista: o cabeçalho (a seta tem lugar reservado), a contagem, o botão */
   { nome: 'casar-sugestoes-guariroba-ordenar', url: 'tela=sugestoes-casar&v=guariroba', tamanhos: TAMANHOS_DO_P92,
     /* ⚠ abaixo do piso o quadro rola de lado: o clique do robô rolaria até o "Valor" e mediria a ROLAGEM dele, não a tela — o "Valor" vem à
        vista ANTES de medir (como o operador faz) */
     antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor();
       await p.locator('[data-testid="procurar-ordenar-valor"]').scrollIntoViewIfNeeded(); await espera(p); },
-    presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"], [data-testid="procurar-ordenar-valor"]',
+    presos: '[data-testid="linha-do-banco"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"], [data-testid="procurar-ordenar-valor"]',
     estados: [['por valor', async (p) => { await clicar('[data-testid="procurar-ordenar-valor"]')(p); await espera(p); }],
       ['por valor, subindo', async (p) => { await clicar('[data-testid="procurar-ordenar-valor"]')(p); await espera(p); }]] },
   { nome: 'conferencia-chips', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,

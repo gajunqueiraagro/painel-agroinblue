@@ -49,7 +49,7 @@ describe('quem pode ser alvo', () => {
     expect(alvoPermitido({ alvoAdmin: false, alvoId: 'a', chamadorId: 'b' })).toEqual({ ok: true });
   });
   it('admin do AGROinBLUE não é perfil criável', () => {
-    expect([...PERFIS_CRIAVEIS]).toEqual(['gestor_cliente', 'financeiro', 'campo', 'leitura']);
+    expect([...PERFIS_CRIAVEIS]).toEqual(['proprietario', 'gestor_cliente', 'financeiro', 'campo', 'leitura']);
     expect(PERFIS_CRIAVEIS).not.toContain('admin_agroinblue');
   });
 });

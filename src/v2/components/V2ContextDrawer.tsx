@@ -7,11 +7,13 @@
  * Animação: translate-x (-100% fechado → 0 aberto)
  * Backdrop: fixed bg-black/20 — clicar chama onClose()
  */
+import { useMemo } from 'react';
 import { Star, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useBpoAtivo } from '@/hooks/useBpoAtivo';
 import { secoesVisiveis } from '@/v2/lib/acessoTelas';
+import { useFolhaOkDoMenu } from '@/hooks/useFolha';
 import {
   NAV_GRUPOS,
   type V2Section,
@@ -89,6 +91,10 @@ export function V2ContextDrawer({
   /* ACESSOS-02a — o hook vem ANTES do `return` antecipado (regra dos hooks). */
   const { isAdmin, clienteAtual } = useCliente();
   const bpoAtivo = useBpoAtivo(clienteAtual?.id);
+  /* FOLHA-01 · PR B (D5): a Folha só aparece para quem tem a marca 'folha' neste cliente (o banco diz, `folha_ok`); enquanto lê, fica fora */
+  /* o admin não pergunta: o `folha_ok` dele é verdadeiro por definição (`is_admin_agroinblue or …`) */
+  const folhaOk = useFolhaOkDoMenu(isAdmin ? null : clienteAtual?.id ?? null);
+  const ocultas = useMemo<ReadonlySet<V2Section>>(() => (isAdmin || folhaOk ? new Set() : new Set<V2Section>(['folha-pagamento'])), [isAdmin, folhaOk]);
   if (!grupoAtivo) return null;
   const grupo = NAV_GRUPOS.find((g) => g.id === grupoAtivo);
   /* Produção: sem destaque de item (os cabecalhos de escopo organizam a lista). A densidade e' uma so' desde o L5. */
@@ -134,7 +140,7 @@ export function V2ContextDrawer({
                   ela do cabecalho seguinte — sem ele o item solto pareceria pertencer ao
                   grupo de baixo, que e' justamente o que o desenho quer evitar. */}
               {/* ACESSOS-02a — so' os itens que a pessoa acessa (`secoesVisiveis`, do dono); a secao sem item some. */}
-              {secoesVisiveis(clienteAtual?.perfil ?? null, isAdmin, grupo, { bpoAtivo }).map((secao, i) => (
+              {secoesVisiveis(clienteAtual?.perfil ?? null, isAdmin, grupo, { bpoAtivo, ocultas }).map((secao, i) => (
                 <div key={`${secao.titulo}-${i}`} role="group"
                   aria-label={secao.titulo || undefined}
                   /* L5: as secoes separadas por UM filete + 8px (eram 20–24px de vazio) */

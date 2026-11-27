@@ -1,6 +1,6 @@
 // CONTAS-OF-LINHA-01 — os 5 estados da coluna "Open Finance" de Contas bancárias (sintético).
 import { describe, expect, it } from 'vitest';
-import { bancoDaConta, estadoNaLinha, finaisDaConta, itemPedeOTitular, linkVivo, textoDoEstado } from './openfinanceNaLinha';
+import { bancoDaConta, estadoNaLinha, finaisDaConta, FRASE_CARTAO_EM_BREVE, FRASE_INVESTIMENTO_SEM_OF, itemPedeOTitular, linkVivo, textoDoEstado } from './openfinanceNaLinha';
 import type { EventoDaFila } from './openfinanceTela';
 
 const BANCOS = [
@@ -74,11 +74,31 @@ describe('o texto da célula e os finais da conta', () => {
     expect(textoDoEstado({ tipo: 'conectado', itemId: 'i', atualizadoEm: null }, agora).texto).toBe('● Conectado');
     expect(textoDoEstado({ tipo: 'reconectar', itemId: 'i' }, agora).texto).toBe('⚠ Reconectar');
     expect(textoDoEstado({ tipo: 'nao_se_aplica' }, agora).texto).toBe('—');
+    expect(textoDoEstado({ tipo: 'em_breve' }, agora)).toEqual({ texto: 'em breve', titulo: FRASE_CARTAO_EM_BREVE });
+    expect(textoDoEstado({ tipo: 'nao_se_aplica', motivo: 'investimento' }, agora)).toEqual({ texto: '—', titulo: FRASE_INVESTIMENTO_SEM_OF });
   });
   it('finais com e sem o dígito; curto demais = nada', () => {
     expect(finaisDaConta({ numero_conta: '25367', conta_digito: '7' })).toEqual(['3677', '5367']);
     expect(finaisDaConta({ numero_conta: '74.495', conta_digito: '6' })).toEqual(['4956', '4495']);
     expect(finaisDaConta({ numero_conta: '12', conta_digito: '3' })).toEqual([]);
     expect(finaisDaConta({ numero_conta: null, conta_digito: null })).toEqual([]);
+  });
+});
+
+/* CONTAS-BANCARIAS-AJUSTES-01 (b) — "Conectar" só em conta corrente/poupança de banco; cartão = "Em breve"; investimento = "—" */
+describe('o tipo da conta manda no Conectar', () => {
+  const convites = [{ expira_em: '2031-11-24T10:00:00Z', usado_em: null, revogado_em: null }];
+  it('cc de banco conecta; cartão de banco em breve; investimento e caixa —', () => {
+    expect(estadoNaLinha(conta('a', 'Sicredi', 'cc'), vazio)).toEqual({ tipo: 'conectar' });
+    expect(estadoNaLinha(conta('a', 'Sicredi', null), vazio)).toEqual({ tipo: 'conectar' });
+    expect(estadoNaLinha(conta('a', 'BB', 'cartao'), vazio)).toEqual({ tipo: 'em_breve' });
+    expect(estadoNaLinha(conta('a', 'BB', 'cartao'), { ...vazio, convites })).toEqual({ tipo: 'em_breve' });   // link vivo não vira "Link" no cartão
+    expect(estadoNaLinha(conta('a', 'Sicredi', 'inv'), vazio)).toEqual({ tipo: 'nao_se_aplica', motivo: 'investimento' });
+    expect(estadoNaLinha(conta('a', 'Dinheiro', 'cc'), vazio)).toEqual({ tipo: 'nao_se_aplica' });           // a cc-004 depois do conserto
+    expect(estadoNaLinha(conta('a', 'Permuta', 'permuta'), vazio)).toEqual({ tipo: 'nao_se_aplica' });
+  });
+  it('ligada segue mostrando o estado da ligação, qualquer que seja o tipo', () => {
+    const permitidas = [{ item_id: 'it1', conta_bancaria_id: 'k', final4: '1234', ativo: true }];
+    expect(estadoNaLinha(conta('k', 'BB', 'cartao'), { ...vazio, permitidas }).tipo).toBe('conectado');
   });
 });

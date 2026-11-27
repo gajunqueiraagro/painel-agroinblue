@@ -20,6 +20,7 @@ import type { ResolucaoEmitente } from './resolverEmitente';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from './formatos';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import { fraseDaRemessa, fraseDeSemCompra } from './remessaEntregaFutura';
+import type { ItemSugerido } from './sugestaoDosItens';
 
 /** O `tPag` da nota -> a forma de pagamento do SISTEMA (`FORMAS_PAGAMENTO_V2`). Mapa FECHADO: o que nao esta' aqui fica vazio
  *  (cheque 02 e deposito 16 nao tem forma correspondente na lista do sistema). */
@@ -102,6 +103,17 @@ export interface UltimaClassificacao {
   cultura?: string | null;
 }
 
+/** NOTA-ITENS-SUGESTAO — o que a proposta leva da sugestão pelos itens para o modal. */
+export interface SugestaoNaProposta {
+  itens: ItemSugerido[];
+  /** a frase da faixa (uma linha); nula = sem faixa */
+  frase: string | null;
+  /** os itens caem em mais de uma conta (ou algum pergunta obra × manutenção): o aviso pequeno com "ver por item" */
+  varias: boolean;
+  /** o title da faixa (o porquê) */
+  porque: string;
+}
+
 export type CampoDoXml =
   | 'tipo' | 'competencia' | 'fornecedor' | 'valor' | 'subcentro' | 'fazenda' | 'parcelamento' | 'forma' | 'documento' | 'descricao'
   | 'vencimento';
@@ -135,6 +147,9 @@ export interface PropostaDeLancamento {
     numero: string; serie: string; chaveAcesso: string; dataEmissao: string; valorCent: number;
     emitenteId: string | null; emitenteNome: string; emitenteDocumento: string;
   };
+  /** NOTA-ITENS-SUGESTAO (Gabriel 27/11, lote 114360) — a sugestão POR ITEM (a escada do banco) e a frase da faixa da Classificação
+   *  ("pelos itens (N): …", "último deste fornecedor …" ou o aviso "N itens em X classificações"). `null` = o caminho antigo (só o fornecedor). */
+  sugestaoDosItens: SugestaoNaProposta | null;
   /** Campo -> de onde veio, escrito pequeno ao lado do campo em ambar. */
   origens: Partial<Record<CampoDoXml, string>>;
   /** As frases de aviso, prontas, na ordem em que aparecem. */
@@ -246,6 +261,8 @@ export function proporLancamento(entrada: {
   /** O fornecedor que vale (o proposto, ou o que o operador escolheu entre dois). */
   favorecidoId: string | null;
   ultima: UltimaClassificacao | null;
+  /** NOTA-ITENS-SUGESTAO — a sugestão pelos itens já resumida (`classificacao` = a conta dela; `origem` = o rótulo curto do campo) */
+  sugestaoDosItens?: (SugestaoNaProposta & { classificacao: UltimaClassificacao | null; origem: string | null }) | null;
   /** NOTA-NFSE-LEITURA-02 — a fazenda mais usada do fornecedor (a tela a busca); so' entra sem IE e sem nome no endereco. */
   fazendaDoHistorico?: string | null;
   /** NOTA-NFSE-LEITURA-02 (12:36) — as fazendas do titular com o CPF/CNPJ do tomador (a tela as busca); passa na frente do historico. */
@@ -322,8 +339,12 @@ export function proporLancamento(entrada: {
   /* O FORNECEDOR. */
   if (favorecidoId && emitente.achadoPor) origens.fornecedor = emitente.achadoPor === 'documento' ? `pelo ${soDigitos(nota.emitente.documento).length === 11 ? 'CPF' : 'CNPJ'}` : 'pelo nome';
 
-  /* A CLASSIFICACAO: a do ultimo lancamento do fornecedor. */
-  if (ultima) origens.subcentro = `último · ${dataCurta(ultima.data)}`;
+  /* A CLASSIFICACAO: NOTA-ITENS-SUGESTAO — a dos ITENS (a escada única do banco: itens > NCM > família > fornecedor > nada); sem ela,
+     o caminho antigo (a do ultimo lancamento do fornecedor). */
+  const sugItens = entrada.sugestaoDosItens ?? null;
+  const classificacao = sugItens ? sugItens.classificacao : ultima;
+  if (sugItens) { if (sugItens.classificacao && sugItens.origem) origens.subcentro = sugItens.origem; }
+  else if (ultima) origens.subcentro = `último · ${dataCurta(ultima.data)}`;
 
   /* A FORMA: o primeiro tPag que o mapa conhece. */
   const formaPagamento = semCompra ? '' : nota.pagamentos.map((p) => FORMA_POR_TPAG[p.tPag]).find((f) => !!f) ?? '';
@@ -339,7 +360,8 @@ export function proporLancamento(entrada: {
       favorecidoId,
       fazendaId: lado.fazenda?.id ?? peloTomador?.id ?? peloEndereco?.id ?? peloHistorico?.id ?? null,
       valorCent,
-      classificacao: ultima,
+      classificacao,
+      sugestaoDosItens: sugItens ? { itens: sugItens.itens, frase: sugItens.frase, varias: sugItens.varias, porque: sugItens.porque } : null,
       parcelamento,
       duplicatas: semCompra ? [] : nota.duplicatas,
       formaPagamento,

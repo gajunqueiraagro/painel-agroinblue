@@ -7,7 +7,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { FolhaApiProvider } from '@/hooks/useFolha';
+import { apiDaFolha } from '../../../scripts/ui-cortes/dados/folha';
 import { NAV_GRUPOS, HOME_LIBERADA_CLIENTES, OPERACAO_COMERCIAL_LIBERADA_CLIENTES, TELA_OPERACAO_COMERCIAL, type V2Section } from './navGrupos';
 import { MATRIZ_ACESSO, NIVEL_POR_TELA, TELAS_SO_COM_BPO, TELAS_DA_EVOLUCAO, TELAS_DO_FINANCEIRO, TELAS_DO_GESTOR, TELA_DE_ENTRADA_PREFERIDA, gruposVisiveis, nivelDaTela, primeiraTelaPermitida, secoesVisiveis } from './acessoTelas';
 import { V2Sidebar } from '@/v2/components/V2Sidebar';
@@ -20,7 +22,7 @@ vi.mock('@/contexts/ClienteContext', () => ({
   useCliente: () => ({ isAdmin: quem.isAdmin, clienteAtual: quem.perfil === null ? null : { id: 'c1', nome: 'Cliente', perfil: quem.perfil } }),
 }));
 vi.mock('@/components/AlterarSenhaDialog', () => ({ AlterarSenhaDialog: () => null }));
-vi.mock('@/assets/logo.png', () => ({ default: 'logo.png' }));
+/* MARCA-PADRAO-01: o logo antigo saiu; o menu usa `LogoAgroinblue` (SVG do kit, resolvido pelo próprio Vite). */
 
 const como = (perfil: string | null, isAdmin = false) => { quem.perfil = perfil; quem.isAdmin = isAdmin; };
 beforeEach(() => como('financeiro'));
@@ -31,8 +33,9 @@ const PILOTO: V2Section[] = ['fin-visao-geral', 'financeiro-lanc', 'conciliacao'
 const PERFIS = ['gestor_cliente', 'financeiro', 'campo', 'leitura'] as const;
 /* ACESSOS-FIN-01 — o que o gestor e o financeiro veem no menu, na ORDEM do menu (ids e rotulos escritos a' mao, de proposito). */
 const PRODUCAO_FIN: V2Section[] = ['lancamentos-zoot', 'fechamento', 'conferencia-lancamentos', 'operacoes-comerciais', 'conferencia-mensal', 'estoque-graos', 'barter-contratos'];
+/* FOLHA-01 · PR B: a Folha de pagamento logo depois de Recorrências (no menu ESTÁTICO; o `folha_ok` do banco a tira de quem não tem a marca) */
 const FINANCEIRO_FIN: V2Section[] = ['fin-visao-geral', 'financeiro-lanc', 'conciliacao', 'visao-consolidada', 'financiamentos', 'contratos', 'recorrencias',
-  'fluxo-caixa', 'contas-a-pagar-receber', 'painel-financiamentos'];
+  'folha-pagamento', 'fluxo-caixa', 'contas-a-pagar-receber', 'painel-financiamentos'];
 const EXECUTIVO_FIN: V2Section[] = ['painel-consultor', 'valor-rebanho', 'dre'];
 /* PATR-01 (Chat 30/10, ajuste 4): Cadastros › Patrimônio entra para gestor e financeiro */
 const CADASTROS_FIN: V2Section[] = ['contas-bancarias', 'fornecedores', 'patrimonio'];
@@ -40,12 +43,14 @@ const CADASTROS_FIN: V2Section[] = ['contas-bancarias', 'fornecedores', 'patrimo
 const ROTULOS_PRODUCAO_FIN = ['Pecuária', 'Fechamento área', 'Lançamentos', 'Operações comerciais', 'Evolução no ano', 'Estoque de grãos', 'Barter'];
 const ROTULOS_FINANCEIRO_FIN = ['Visão geral', 'Lançamentos financeiros', 'Conciliação bancária', 'Visão consolidada', 'Financ. e parcelamentos', 'Contratos',
   'Recorrências', 'Fluxo de caixa', 'Contas a pagar/receber', 'Painel financiamentos'];
+/* ⚠ FOLHA-01 · PR B (D5): no DRAWER MONTADO a Folha só aparece DEPOIS que o banco diz `folha_ok` (enquanto lê, fica fora) — estes rótulos são
+   a primeira pintura; o teste "D5 no drawer" abaixo espera a resposta. No menu estático (`secoesVisiveis` sem `ocultas`) ela está nas listas de ids. */
 const todosOsItens = NAV_GRUPOS.flatMap((g) => g.drawer.flatMap((s) => s.itens.map((i) => ({ grupo: g.id, item: i }))));
 /* PERFIL-GESTOR-01 (Gabriel 16/11/2026: "a Amanda tem que ter acesso a QUASE TUDO") — o menu do GESTOR, na ORDEM do menu (escrito a' mao, de proposito) */
 const PRODUCAO_GESTOR: V2Section[] = ['lancamentos-zoot', 'lancamentos-agricultura', 'fechamento', 'rebanho-home', 'conferencia-lancamentos',
   'operacoes-comerciais', 'conferencia-mensal', 'mapa-pastos', 'mapa-geo-pastos', 'lotes', 'chuvas', 'estoque-graos', 'barter-contratos'];
 const FINANCEIRO_GESTOR: V2Section[] = ['fin-visao-geral', 'financeiro-lanc', 'conciliacao', 'visao-consolidada', 'financiamentos', 'contratos',
-  'recorrencias', 'fluxo-caixa', 'painel-periodo', 'contas-a-pagar-receber', 'painel-financiamentos'];
+  'recorrencias', 'folha-pagamento', 'fluxo-caixa', 'painel-periodo', 'contas-a-pagar-receber', 'painel-financiamentos'];
 /* do Planejamento, só as que respeitam a trava da meta (Gabriel 16/11) */
 const PLANEJAMENTO_GESTOR: V2Section[] = ['lancamentos-meta-fin', 'planejamento-home'];
 const EXECUTIVO_GESTOR: V2Section[] = ['painel-consultor', 'fechamento-periodo', 'indicadores-zoot', 'valor-rebanho', 'dre'];
@@ -63,8 +68,8 @@ describe('a marca de liberacao (navGrupos)', () => {
        fica fora das listas do gestor (o menu SEM o BPO) e entra na conta à parte (+1) */
     expect(todosOsItens.filter((x) => x.item.liberadaClientes && !TELAS_SO_COM_BPO.includes(x.item.id)).map((x) => x.item.id))
       .toEqual([...PRODUCAO_GESTOR, ...FINANCEIRO_GESTOR, ...PLANEJAMENTO_GESTOR, ...EXECUTIVO_GESTOR, ...CADASTROS_GESTOR]);
-    /* 23 do financeiro (piloto 4 + OC 1 + FIN 17 + Evolução 1) + 16 itens de menu do gestor + 1 do BPO */
-    expect(todosOsItens.filter((x) => x.item.liberadaClientes).length).toBe(4 + 1 + 17 + 1 + 16 + 1);
+    /* 24 do financeiro (piloto 4 + OC 1 + FIN 18 + Evolução 1) + 16 itens de menu do gestor + 1 do BPO */
+    expect(todosOsItens.filter((x) => x.item.liberadaClientes).length).toBe(4 + 1 + 18 + 1 + 16 + 1);
     /* nenhuma tela de Auditoria ou Validar tem a marca; do Planejamento, só as 2 do gestor */
     expect(todosOsItens.filter((x) => x.item.liberadaClientes && ['auditoria', 'validar'].includes(x.grupo))).toEqual([]);
     expect(todosOsItens.filter((x) => x.item.liberadaClientes && x.grupo === 'planejamento').map((x) => x.item.id)).toEqual(PLANEJAMENTO_GESTOR);
@@ -82,14 +87,14 @@ describe('a marca de liberacao (navGrupos)', () => {
 describe('a matriz perfil × grupo (aprovada em 16/09/2026)', () => {
   it('a matriz inteira, celula por celula', () => {
     expect(MATRIZ_ACESSO).toEqual({
-      home:         { gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'ver',    leitura: 'ver' },
-      rebanho:      { gestor_cliente: 'editar', financeiro: 'ver',    campo: 'editar', leitura: 'ver' },
-      financeiro:   { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
-      planejamento: { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
-      executivo:    { gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
-      auditoria:    { gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
-      cadastros:    { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
-      validar:      { gestor_cliente: 'nao',    financeiro: 'nao',    campo: 'nao',    leitura: 'nao' },
+      home:         { proprietario: 'ver', gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'ver',    leitura: 'ver' },
+      rebanho:      { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'ver',    campo: 'editar', leitura: 'ver' },
+      financeiro:   { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
+      planejamento: { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
+      executivo:    { proprietario: 'ver', gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
+      auditoria:    { proprietario: 'ver', gestor_cliente: 'ver',    financeiro: 'ver',    campo: 'nao',    leitura: 'ver' },
+      cadastros:    { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao',    leitura: 'ver' },
+      validar:      { proprietario: 'nao', gestor_cliente: 'nao',    financeiro: 'nao',    campo: 'nao',    leitura: 'nao' },
     });
   });
   it('todo grupo do menu tem linha na matriz (grupo novo sem linha ficaria invisivel calado)', () => {
@@ -138,7 +143,7 @@ describe('a excecao por tela (NIVEL_POR_TELA) — ACESSOS-OC-01', () => {
     }
   });
   it('a excecao VENCE a matriz do grupo: no grupo `rebanho` o financeiro veria e o campo editaria', () => {
-    expect(MATRIZ_ACESSO.rebanho).toEqual({ gestor_cliente: 'editar', financeiro: 'ver', campo: 'editar', leitura: 'ver' });
+    expect(MATRIZ_ACESSO.rebanho).toEqual({ proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'ver', campo: 'editar', leitura: 'ver' });
     expect(Object.keys(NIVEL_POR_TELA).sort())
       .toEqual([...TELAS_DA_OC, ...TELAS_DO_FINANCEIRO, ...TELAS_DA_EVOLUCAO, ...TELAS_DO_GESTOR, ...TELAS_SO_COM_BPO].sort());
   });
@@ -172,9 +177,11 @@ describe('ACESSOS-FIN-01 — perfil × tela', () => {
     ['Barter', 'barter-contratos'], ['Visão consolidada', 'visao-consolidada'], ['Fluxo de caixa', 'fluxo-caixa'],
     /* PATR-01 (Chat 30/10, ajuste 4) — a 17ª */
     ['Patrimônio', 'patrimonio'],
+    /* FOLHA-01 · PR B — a 18ª (e, por cima, a marca 'folha' do banco: D5) */
+    ['Folha de pagamento', 'folha-pagamento'],
   ];
   it('a lista do dono sao as 16 do briefing, e cada id e o item de menu com aquele rotulo (um so)', () => {
-    expect(AS_16).toHaveLength(17);
+    expect(AS_16).toHaveLength(18);
     expect([...TELAS_DO_FINANCEIRO].sort()).toEqual(AS_16.map(([, t]) => t).sort());
     for (const [rotulo, tela] of AS_16) {
       const itens = todosOsItens.filter((x) => x.item.id === tela);
@@ -372,6 +379,23 @@ describe('o drawer (V2ContextDrawer)', () => {
     for (const g of NAV_GRUPOS) {
       expect(itensDoDrawer(g.id).itens).toEqual(semObraNemEscondido(g).flatMap((s) => s.itens.map((i) => i.label)));
     }
+  });
+});
+
+describe('D5 no drawer (FOLHA-01 · PR B): a Folha só para quem o banco diz que tem a marca', () => {
+  const comFolha = (ok: boolean) => ({ ...apiDaFolha('vera', { folhaOk: ok }) });
+  const montarCom = (ok: boolean) => render(<FolhaApiProvider api={comFolha(ok)}>
+    <V2ContextDrawer grupoAtivo="financeiro" activeSection="financeiro-lanc" onSelect={vi.fn()} onClose={vi.fn()} /></FolhaApiProvider>);
+  it('financeiro com `folha_ok`: aparece depois de Recorrências', async () => {
+    const { container } = montarCom(true);
+    await waitFor(() => expect(within(container).getByText('Folha de pagamento')).toBeTruthy());
+    const rotulos = Array.from(container.querySelectorAll('nav button span')).map((x) => x.textContent);
+    expect(rotulos.indexOf('Folha de pagamento')).toBe(rotulos.indexOf('Recorrências') + 1);
+  });
+  it('financeiro sem `folha_ok`: nunca aparece', async () => {
+    const { container } = montarCom(false);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(within(container).queryByText('Folha de pagamento')).toBeNull();
   });
 });
 

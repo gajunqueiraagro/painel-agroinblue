@@ -45,30 +45,43 @@ export function BarraDeEtapas<T extends string>({ etapas, atual, onEscolher, pro
   );
 }
 
-export interface CartaoDoConfirmar { chave: 'vincular' | 'criar' | 'atualizar' | 'anexar'; rotulo: string; valor: string; sub: string }
+/** NOTA-ENTREGA-FUTURA-01 (3, mock aprovado 25/11 07:24) — o Confirmar diz SÓ O QUE ACONTECE: um item por coisa que o Aplicar faz (o ícone,
+ *  a frase em negrito e o detalhe), nunca um cartão com zero e nunca em caixa alta. Quem monta a lista põe só o que acontece. */
+export interface CartaoDoConfirmar { chave: string; icone: 'atualizar' | 'anexar' | 'criar' | 'vincular' | 'nada'; titulo: string; sub: string }
 export interface ChecagemDoConfirmar { tipo: 'ok' | 'aviso' | 'erro'; texto: string }
 
-/** O corpo da etapa 4: os 4 cartões (Vincular · Criar · Atualizar · Anexar) e as checagens, uma por linha (o texto inteiro no title). */
+const ICONE: Record<CartaoDoConfirmar['icone'], { sinal: string; classe: string }> = {
+  atualizar: { sinal: '↻', classe: 'bg-blue-50 text-blue-700' }, vincular: { sinal: '↔', classe: 'bg-blue-50 text-blue-700' },
+  anexar: { sinal: '📎', classe: 'bg-emerald-50 text-emerald-700' }, criar: { sinal: '+', classe: 'bg-orange-50 text-orange-700' },
+  nada: { sinal: '✓', classe: 'bg-slate-100 text-slate-500' },
+};
+
+/** O corpo da etapa 4: o que acontece (um item por linha, o detalhe inteiro no title) e as checagens, uma por linha. */
 export function ResumoDoConfirmar({ cartoes, checagens, compacto = false }: {
   cartoes: readonly CartaoDoConfirmar[];
   checagens: readonly ChecagemDoConfirmar[];
-  /** com o formulário das parcelas a criar embaixo: os cartões numa faixa baixa e as checagens em 2 colunas */
+  /** com o formulário das parcelas a criar embaixo: itens mais baixos e as checagens em 2 colunas */
   compacto?: boolean;
 }) {
   return (
     <div className="flex shrink-0 flex-col" data-testid="nota-confirmar-resumo">
-      <div className={cn('grid grid-cols-4 gap-2', compacto ? 'p-2' : 'p-3')}>
+      {/* compacto (com o formulário das parcelas embaixo): uma linha só, como os cartões de antes — a frase sai (o rodapé já diz "nada é gravado antes") */}
+      {!compacto && <p className="px-3 pt-1.5 text-[11px] text-muted-foreground">Ao clicar em <b className="text-foreground">Aplicar</b>, o sistema faz isto. Nada é gravado antes.</p>}
+      <ul className={cn(compacto ? 'grid grid-cols-4 gap-1.5 p-2' : 'flex max-w-[900px] flex-col gap-1 px-3 py-1.5')}>
         {cartoes.map((c) => (
-          <div key={c.chave} className={cn('min-w-0 rounded-md border', compacto ? 'px-2.5 py-1' : 'px-3 py-2')} data-testid={`nota-confirmar-${c.chave}`}>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{c.rotulo}</div>
-            <div className={cn('whitespace-nowrap font-bold text-primary', compacto ? 'text-[12px]' : 'text-[15px]')} data-testid={`nota-confirmar-${c.chave}-valor`}>{c.valor}</div>
-            <div className="truncate text-[10.5px] text-muted-foreground" title={c.sub} data-reticencias-com-title="" data-testid={`nota-confirmar-${c.chave}-sub`}>{c.sub}</div>
-          </div>
+          <li key={c.chave} className="flex h-[26px] min-w-0 items-center gap-2.5 rounded-md border px-2.5" data-testid={`nota-confirmar-${c.chave}`}>
+            <span aria-hidden className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px]', ICONE[c.icone].classe)}>{ICONE[c.icone].sinal}</span>
+            {/* uma linha: o que acontece em negrito e o detalhe ao lado (corta com "…", o inteiro no title) */}
+            <span className="flex min-w-0 items-baseline gap-2">
+              <b className="shrink-0 whitespace-nowrap text-[11px] font-semibold" data-testid={`nota-confirmar-${c.chave}-valor`}>{c.titulo}</b>
+              {c.sub && <span className="min-w-0 truncate text-[10px] text-muted-foreground" title={c.sub} data-reticencias-com-title="" data-testid={`nota-confirmar-${c.chave}-sub`}>{c.sub}</span>}
+            </span>
+          </li>
         ))}
-      </div>
+      </ul>
       <ul className={cn(compacto ? 'grid grid-cols-2 gap-x-4 px-2 pb-1' : 'px-3 pb-3')} data-testid="nota-confirmar-checagens">
         {checagens.map((x, k) => (
-          <li key={k} className="flex h-[24px] min-w-0 items-center gap-2 border-t border-border/50 text-[11px] first:border-t-0" data-testid="nota-confirmar-checagem" data-tipo={x.tipo}>
+          <li key={k} className="flex h-[22px] min-w-0 items-center gap-2 border-t border-border/50 text-[11px] first:border-t-0" data-testid="nota-confirmar-checagem" data-tipo={x.tipo}>
             <em className={cn('w-4 shrink-0 text-center font-bold not-italic', x.tipo === 'ok' ? 'text-emerald-600' : x.tipo === 'aviso' ? 'text-amber-600' : 'text-destructive')}>
               {x.tipo === 'ok' ? '✓' : '!'}</em>
             <span className="min-w-0 truncate" title={x.texto} data-reticencias-com-title="">{x.texto}</span>

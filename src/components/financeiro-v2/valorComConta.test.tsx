@@ -39,7 +39,8 @@ vi.mock('@/integrations/supabase/client', () => {
 });
 vi.mock('@/lib/financeiro/nfeConsultas', () => ({
   iePorFazenda: async () => ({}), aliasesDasFazendas: async () => ({}), fornecedorPeloNome: async () => ({ ok: true, valor: null }), notaJaRegistrada: async () => ({ ok: true, valor: [] }),   // P146: Consulta
-  ultimaClassificacaoDoFornecedor: async () => null, gravarDocumentoNoCadastro: async () => null,
+  /* NOTA-ITENS-SUGESTAO — a escada única do banco (nenhuma sugestão) */
+  sugestaoPelosItens: async () => ({ ok: true, valor: { itens: [], fornecedor: null } }), gravarDocumentoNoCadastro: async () => null,
 }));
 vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli', nome: 'Cliente' } }) }));

@@ -6,6 +6,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { oQueFica, TabelaDosLevados, type LinhaDoLevado } from './TabelaDosLevados';
 
+/* gate 26/11: a tabela dos levados só tem as colunas extras (Fornecedor · NF · Faz. · Ativ. · Plano) de 1100px; o jsdom abre a 1024 */
+Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 });
+
 const lev = (id: string, nf: string, valor: number, aplicado: string): LinhaDoLevado => ({
   lancamento_id: id, data_vencimento: '2031-10-10', descricao: `Serviço de manutenção ${id}`, fornecedor: 'Oficina Exemplo Dias-ME',
   numero_documento: nf, status_transacao: 'programado', valor_assinado: valor, valorTexto: aplicado });
@@ -21,7 +24,8 @@ describe('E2 — TabelaDosLevados', () => {
     expect(linhas.map((l) => within(l).getByTestId('levado-linha-nf').textContent)).toEqual(['000.000.404', '000.000.402', '000.000.288', '000.000.405', '000.000.289']);
     expect(within(linhas[0]).getByTestId('levado-linha-fica').textContent).toBe('parcial · falta 4.863,35');
     expect(within(linhas[1]).getByTestId('levado-linha-fica').textContent).toBe('inteira');
-    expect(screen.getByTestId('levados-extrato-historico').getAttribute('title')).toBe(EXT.historico);
+    /* o title leva o que a célula mostra E o texto cru do banco (gate 26/11) */
+    expect(screen.getByTestId('levados-extrato-historico').getAttribute('title')).toBe(`${screen.getByTestId('levados-extrato-historico').textContent}\n${EXT.historico}`);
     expect(screen.getByTestId('levados-total-aplicado').textContent).toBe('6.000,00');
     expect(screen.getByTestId('levados-diferenca').textContent).toBe('0,00');
     expect(screen.getByTestId('levados-rodape').textContent).toContain('5 lançamentos · 4 inteiras + 1 parcial');

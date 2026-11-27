@@ -216,11 +216,26 @@ export function saldoBancoXSistema(banco: number, sistema: number | null): Saldo
 
 // ── A sugestão da conta do sistema ────────────────────────────────────────────────────────────────────────────────
 
-export interface ContaDoSistema { id: string; numero_conta: string | null; conta_digito: string | null; tipo_conta: string | null; ativa: boolean | null }
-/** A conta corrente ativa cujo nº+dígito termina no final da Pluggy; só UMA (zero ou empate = sem sugestão). */
-export function contaSugerida(final4: string | null, contas: readonly ContaDoSistema[]): string | null {
+export interface ContaDoSistema {
+  id: string; numero_conta: string | null; conta_digito: string | null; tipo_conta: string | null; ativa: boolean | null; agencia?: string | null;
+}
+const soDigitos = (v: string | null | undefined): string => (v ?? '').replace(/\D/g, '');
+/**
+ * A conta corrente ativa que casa com a conta da Pluggy; só UMA (zero ou empate = sem sugestão).
+ *  · o final de 4 da Pluggy é o fim do nº+dígito do cadastro, ou do nº sem o dígito (o banco conta de um jeito ou de outro);
+ *  · OPENFINANCE-PRONTO-NJ-01 (1): com a AGÊNCIA dos dois lados, ela tem de ser a mesma (sem os zeros da frente);
+ *  · `fora` = as contas do sistema que já recebem de OUTRA conta do banco (o banco recusaria a 2ª: 23505) não são sugeridas.
+ */
+export function contaSugerida(final4: string | null, contas: readonly ContaDoSistema[], agencia: string | null = null,
+  fora: ReadonlySet<string> = new Set()): string | null {
   if (!final4 || !/^\d{4}$/.test(final4)) return null;
-  const achadas = contas.filter((c) => c.ativa !== false && c.tipo_conta === 'cc'
-    && `${c.numero_conta ?? ''}${c.conta_digito ?? ''}`.replace(/\D/g, '').endsWith(final4));
+  const ag = soDigitos(agencia).replace(/^0+/, '');
+  const achadas = contas.filter((c) => {
+    if (c.ativa === false || c.tipo_conta !== 'cc' || fora.has(c.id)) return false;
+    const nr = soDigitos(c.numero_conta);
+    const casaNumero = `${nr}${soDigitos(c.conta_digito)}`.endsWith(final4) || (nr.length >= 4 && nr.endsWith(final4));
+    const agCadastro = soDigitos(c.agencia).replace(/^0+/, '');
+    return casaNumero && (!ag || !agCadastro || ag === agCadastro);
+  });
   return achadas.length === 1 ? achadas[0].id : null;
 }

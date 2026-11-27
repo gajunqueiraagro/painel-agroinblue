@@ -14,6 +14,7 @@ import { Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
+import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { supabase } from '@/integrations/supabase/client';
@@ -57,8 +58,8 @@ function Passo1({ estreito }: { estreito: boolean }) {
   /* BPO-GUIA-01 (Gabriel 23/11 08:41): o papel de quem AGENDA entra no guia. No banco (118160) ele não é uma marca à parte: agenda quem
      edita o lançamento (gestor ou financeiro), e o gatilho `trg_00_aprovacao_agendar` só deixa virar Agendado o que tem aprovação viva. */
   const papeis: [string, string, string][] = [
-    ['Equipe financeira', 'Lança e envia', 'Lança a conta e envia à fila.'],
-    ['Dono do cliente', 'Aprova ou recusa', 'Aprova em lote ou recusa.'],
+    ['Equipe financeira', 'Lança', 'Lançou, entra sozinho na fila.'],
+    ['Dono do cliente', 'Aprova ou recusa', 'Em lote, na CPR. Quem lançou não aprova.'],
     ['Operadora', 'Agenda o aprovado', 'Só o aprovado vira Agendado.'],
     ['Banco', 'Paga o agendado', 'O pago volta pelo extrato.'],
   ];
@@ -104,7 +105,7 @@ function Passo2({ estreito }: { estreito: boolean }) {
         <Lista sim={false} titulo="✕ Não entram" itens={[
           [<Pilula key="c" tom="pg">Realizado</Pilula>, 'já pago'],
           [<Pilula key="d" tom="prev">Entrada</Pilula>, 'recebimentos'],
-          [<Pilula key="e" tom="apr">Aprovado</Pilula>, 'lançado por quem aprova já nasce aprovado'],
+          [<Pilula key="e" tom="prev">Antes do início</Pilula>, 'vencimento antes da data de início'],
         ]} />
       </div>
       <Nota>A situação da conta não muda; a aprovação fica ao lado.</Nota>
@@ -115,7 +116,7 @@ function Passo2({ estreito }: { estreito: boolean }) {
 function Passo3({ estreito }: { estreito: boolean }) {
   const etapas: [React.ReactNode, string, string][] = [
     [<Pilula key="1" tom="prog">Programado</Pilula>, 'Equipe', 'lança'],
-    [<Pilula key="2" tom="ag">Aguardando</Pilula>, 'Equipe', 'envia'],
+    [<Pilula key="2" tom="ag">Aguardando</Pilula>, 'Entra', 'sozinho'],
     [<Pilula key="3" tom="apr">Aprovado</Pilula>, 'Dono', 'aprova'],
     [<Pilula key="4" tom="agd">Agendado</Pilula>, 'Operadora', 'agenda'],
     [<Pilula key="5" tom="pg">Realizado</Pilula>, 'Banco', 'concilia'],
@@ -133,7 +134,7 @@ function Passo3({ estreito }: { estreito: boolean }) {
       </div>
       <div className="mt-3 flex items-center gap-2 rounded-lg border border-[#F1CFCD] bg-[#FDF5F5] px-3 py-2">
         <Pilula tom="rec">Recusado</Pilula>
-        <span className={`${NOWRAP} text-[12px] text-[#7A2E2B]`} data-texto-guia>volta com o motivo; a equipe corrige e reenvia</span>
+        <span className={`${NOWRAP} text-[12px] text-[#7A2E2B]`} data-texto-guia>volta com o motivo; corrigido, volta sozinho à fila</span>
       </div>
       <Nota>Só o aprovado vira Agendado.</Nota>
     </>
@@ -190,7 +191,8 @@ function Passo5({ estreito }: { estreito: boolean }) {
   );
 }
 
-interface EstadoDoLigar { aprovador: string; desde: string; dias: number[] }
+/** BPO-FUNCIONAR-01: `limite` = abaixo deste valor aprova pela regra (opcional; nulo = tudo passa pelo aprovador) */
+interface EstadoDoLigar { aprovador: string; desde: string; dias: number[]; limite: number | null }
 
 function Passo6({ estado, setEstado, candidatos, lendo, estreito }: {
   estado: EstadoDoLigar; setEstado: (e: EstadoDoLigar) => void; candidatos: CandidatoAAprovador[] | null; lendo: boolean; estreito: boolean;
@@ -228,8 +230,15 @@ function Passo6({ estado, setEstado, candidatos, lendo, estreito }: {
         </div>
         {estreito && <span className={`${NOWRAP} text-[12px] text-[#5A6A80]`} data-texto-guia data-testid="guia-dias-texto">{textoDosDias(estado.dias)}</span>}
       </div>
+      {/* BPO-FUNCIONAR-01 — o limite OPCIONAL por valor: abaixo dele, aprova pela regra (o chip diz "Aprovado · regra") */}
+      <label className="mt-3 flex items-center gap-2">
+        <span className={`${NOWRAP} text-[11px] font-medium text-[#5A6A80]`} data-texto-guia>Abaixo de</span>
+        <CampoMoeda valor={estado.limite} onChange={(v) => setEstado({ ...estado, limite: v != null && v > 0 ? v : null })} className="h-7 w-[140px]"
+          placeholder="sem limite" title="Opcional: abaixo deste valor o pagamento aprova pela regra" />
+        <span className={`${NOWRAP} text-[12px] text-[#5A6A80]`} data-texto-guia>aprova pela regra (opcional)</span>
+      </label>
       {/* Gabriel 23/11 08:46: data NUNCA trava (no máximo uma sugestão, depois); o banco só guarda os dias (`dias_semana`), nada recusa por eles */}
-      <Nota>Data não trava nada; só a aprovação trava.</Nota>
+      <Nota>Entra sozinho; quem lançou não aprova. Data não trava nada.</Nota>
     </>
   );
 }
@@ -253,7 +262,7 @@ export function GuiaDaAprovacao({ aberto, onFechar, passoInicial = 0, ehAdmin, c
   const total = ehAdmin ? 6 : 5;
   const [passo, setPasso] = useState(passoInicial);
   const [naoMostrar, setNaoMostrar] = useState(true);
-  const [estado, setEstado] = useState<EstadoDoLigar>({ aprovador: '', desde: hojeLocal(), dias: [] });
+  const [estado, setEstado] = useState<EstadoDoLigar>({ aprovador: '', desde: hojeLocal(), dias: [], limite: null });
   const [candidatos, setCandidatos] = useState<CandidatoAAprovador[] | null>(null);
   const [previa, setPrevia] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -270,9 +279,9 @@ export function GuiaDaAprovacao({ aberto, onFechar, passoInicial = 0, ehAdmin, c
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: as tabelas da 118160 não estão no types.ts
       const sb = supabase as any;
       const [membros, aprov, cfg] = await Promise.all([
-        sb.from('cliente_membros').select('user_id, perfil, ativo').eq('cliente_id', clienteId).in('perfil', ['gestor_cliente', 'financeiro']),
+        sb.from('cliente_membros').select('user_id, perfil, ativo').eq('cliente_id', clienteId).in('perfil', ['proprietario', 'gestor_cliente', 'financeiro']),
         sb.from('financeiro_aprovadores').select('user_id').eq('cliente_id', clienteId).eq('ativo', true),
-        sb.from('financeiro_bpo_config').select('desde, dias_semana').eq('cliente_id', clienteId).limit(1),
+        sb.from('financeiro_bpo_config').select('desde, dias_semana, aprova_abaixo_de').eq('cliente_id', clienteId).limit(1),
       ]);
       const ids = Array.isArray(membros.data) ? membros.data.map((m: { user_id?: unknown }) => m.user_id).filter((x: unknown): x is string => typeof x === 'string') : [];
       /* BPO-NOMES-LARGURA-01: o nome vem da fonte única (`fn_nomes_dos_autores`, por user_id e guardada pelo cliente). Ler `profiles`
@@ -287,6 +296,7 @@ export function GuiaDaAprovacao({ aberto, onFechar, passoInicial = 0, ehAdmin, c
         aprovador: e.aprovador || (lista.find((x) => x.jaAprova)?.userId ?? ''),
         desde: typeof c?.desde === 'string' ? c.desde : e.desde,
         dias: diasGravados.length ? diasGravados : e.dias,
+        limite: c?.aprova_abaixo_de == null ? e.limite : Number(c.aprova_abaixo_de),
       }));
     })();
     return () => { vivo = false; };
@@ -303,6 +313,11 @@ export function GuiaDaAprovacao({ aberto, onFechar, passoInicial = 0, ehAdmin, c
       p_cliente: clienteId, p_ativo: true, p_desde: estado.desde, p_dias: estado.dias, p_horario: null, p_email: false, p_whatsapp: false, p_simular: simular,
     });
     if (c.error) return { erro: c.error.message as string | undefined };
+    /* BPO-FUNCIONAR-01 — o limite (depois da configuração: a prévia dele lê a config de antes, então só grava de verdade) */
+    if (!simular) {
+      const l = await sb.rpc('fn_bpo_limite_gravar', { p_cliente: clienteId, p_valor: estado.limite, p_simular: false });
+      if (l.error) return { erro: typeof l.error.message === 'string' ? l.error.message : undefined };
+    }
     return { aguardando: Number(c.data?.aguardando_ao_ligar ?? 0) };
   };
 

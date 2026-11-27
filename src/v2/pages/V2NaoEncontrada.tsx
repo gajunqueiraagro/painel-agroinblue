@@ -9,11 +9,12 @@
  * obriga o operador a editar a barra de endereço.
  */
 import { Link } from 'react-router-dom';
+import { LogoAgroinblue } from '@/components/marca/LogoAgroinblue';
 
 export default function V2NaoEncontrada() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center">
-      <span className="text-4xl" aria-hidden>🐂</span>
+      <LogoAgroinblue variante="compacto" fundo="claro" alturaPx={28} />
       <h1 className="text-[15px] font-medium text-foreground">Página não encontrada</h1>
       <p className="max-w-sm text-[12px] leading-relaxed text-muted-foreground">
         O endereço que você abriu não existe no sistema. Ele pode ter mudado de lugar, ou o

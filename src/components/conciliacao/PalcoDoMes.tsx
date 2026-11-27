@@ -9,7 +9,7 @@ import {
   useConciliacaoDoMes, contarBaldes, frameDoRodape,
   type MovimentoConciliacao, type SituacaoMovimento,
 } from '@/hooks/useConciliacaoDoMes';
-import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
+import { SugestoesDoMovimento } from '@/components/conciliacao/SugestoesDoMovimento';
 import { TH_REGUA, TD_REGUA, TD_REGUA_TEXTO, TD_REGUA_NUM, TextoReservado } from '@/components/ui/regua-tabela';
 import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
@@ -425,12 +425,14 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
           comportamento do original: quem veio ver o mês inteiro continua nele
           depois de resolver uma linha. Ao voltar, a lista e os baldes recarregam
           da mesma fonte, então o vínculo recém-feito aparece sem F5. */}
+      {/* CONC-SUGESTOES-V2 MODAL ÚNICO (Gabriel 06:56): o mesmo "Sugestões para casar" da Conferência — a estação como 3º modal saiu */}
       {conciliando && (
-        <EstacaoConciliar
-          movimento={conciliando}
-          contaBancariaId={contaId}
+        <SugestoesDoMovimento
+          movimento={{ id: conciliando.id, data: conciliando.data_movimento, historico: conciliando.descricao, valor: conciliando.valor }}
+          clienteId={clienteId} contaId={contaId} nomeConta={contaNome}
           aoFechar={() => setConciliando(null)}
           aoMudar={async () => {
+            setConciliando(null);
             await recarregar();
             await aoMudar?.();
           }}

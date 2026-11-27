@@ -241,7 +241,7 @@ export interface DocDaLinha {
   /** O `title` da célula: o rótulo e, no genérico (sem prefixo), o tipo por extenso — "Documento 109122795412". '' sem número. */
   titulo: string;
   /** De onde veio: 'lancamento' = o Nº Documento do próprio lançamento; 'nota' = a NF ligada (a da compra); 'documento' = outro documento anexado. */
-  origem: 'lancamento' | 'nota' | 'documento' | null;
+  origem: 'lancamento' | 'nota' | 'documento' | 'folha' | null;
   /** Há documento vivo (arquivo anexado ou NF da compra ligada): a lista desenha o clipe. */
   clipe: boolean;
   /** O `title` do clipe: "NF 000.000.518 · 1 boleto". '' sem documento. */
@@ -249,8 +249,14 @@ export interface DocDaLinha {
 }
 
 const PLURAL: Readonly<Record<string, [string, string]>> = {
-  boleto: ['boleto', 'boletos'], recibo: ['recibo', 'recibos'], comprovante: ['comprovante', 'comprovantes'], outro: ['outro documento', 'outros documentos'],
+  boleto: ['boleto', 'boletos'], recibo: ['recibo', 'recibos'], comprovante: ['comprovante', 'comprovantes'],
+  /* FOLHA-DOC-VIEW-01 — a página do recibo/holerite do contador (origem 'folha' da view) */
+  holerite: ['holerite', 'holerites'],
+  outro: ['outro documento', 'outros documentos'],
 };
+
+/** A espécie para contar: a página da folha (origem 'folha' — no modal ela chega como 'outro', na lista como 'holerite') é holerite. */
+const especieDoResumo = (d: DocumentoDaLinha): string => (d.origem === 'folha' ? 'holerite' : d.especie ?? '');
 
 /** "NF 000.000.518 · 1 boleto · 2 comprovantes" — as notas pelo número, o resto pela contagem. */
 export function resumoDosDocumentos(docs: readonly DocumentoDaLinha[] | null | undefined): string {
@@ -258,8 +264,8 @@ export function resumoDosDocumentos(docs: readonly DocumentoDaLinha[] | null | u
   const partes: string[] = [];
   const notas = lista.filter(ehNF);
   for (const n of notas) partes.push(rotuloDoDocumento('NF', n.numero) || 'NF sem número');
-  for (const especie of ['boleto', 'recibo', 'comprovante', 'outro']) {
-    const q = lista.filter((d) => !ehNF(d) && (PLURAL[d.especie ?? ''] ? d.especie === especie : especie === 'outro')).length;
+  for (const especie of ['boleto', 'recibo', 'comprovante', 'holerite', 'outro']) {
+    const q = lista.filter((d) => !ehNF(d) && (PLURAL[especieDoResumo(d)] ? especieDoResumo(d) === especie : especie === 'outro')).length;
     if (q > 0) partes.push(`${q} ${PLURAL[especie][q === 1 ? 0 : 1]}`);
   }
   return partes.join(' · ');
@@ -290,6 +296,9 @@ export function docDaLinha(
     const r = rotuloDoDocumento(prefixo, outro.numero);
     return { rotulo: r, titulo: comTipo(prefixo, r), origem: 'documento', clipe, resumo };
   }
+  /* FOLHA-DOC-VIEW-01 (Gabriel 24/11) — sem número, o holerite da folha diz "Holerite" (o Resumo: "Holerite ✓") */
+  const holerite = lista.find((d) => especieDoResumo(d) === 'holerite');
+  if (holerite) return { rotulo: 'Holerite', titulo: (holerite.nome ?? '').trim() || 'Holerite da folha', origem: 'folha', clipe, resumo };
   return { rotulo: '', titulo: '', origem: null, clipe, resumo };
 }
 
@@ -299,7 +308,7 @@ export function docDaLinha(
 export function documentoDoResumo(doc: DocDaLinha, tipoDocumento: string | null | undefined): { numero: string; selo: string | null; titulo: string } | null {
   const tipo = (tipoDocumento ?? '').trim();
   if (doc.rotulo) {
-    const selo = doc.origem === 'nota' ? 'da compra' : doc.origem === 'documento' ? 'ligado' : null;
+    const selo = doc.origem === 'nota' ? 'da compra' : doc.origem === 'documento' ? 'ligado' : doc.origem === 'folha' ? '✓' : null;
     /* o title diz tudo: o tipo por extenso do próprio lançamento ("Nota Fiscal · NF 000.544.330") ou o da coluna Doc. ("… · nota da compra") */
     const titulo = doc.origem === 'lancamento' && tipo ? `${tipo} · ${doc.rotulo}` : doc.titulo || doc.rotulo;
     return { numero: doc.rotulo, selo, titulo };

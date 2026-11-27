@@ -8,11 +8,15 @@
  * ⚠ O FATOR REINICIOU EM 22/02/2025: o fator 1000 passou a ser 22/02/2025 (antes, a base era
  *   07/10/1997 e o fator 9999 caía em 21/02/2025). Medido nos 8 boletos reais da Vera (29/09/2026):
  *   a regra nova dá exatamente o vencimento impresso nos 8; a antiga daria 2002.
+ * ⚠ MAS O BOLETO DE ANTES DO REINÍCIO TAMBÉM CHEGA (BOLETO-FATOR-VENC-01, 25/11/2026): 4 boletos da Vera de nov/2024–fev/2025
+ *   gravaram 2049. O ciclo se escolhe pela janela da data da leitura (`vencimentoDoFator`).
  * ⚠ SEM LINHA, NULL — nunca um vencimento inventado. Fator 0000 ("sem vencimento") dá vencimento nulo.
  * ⚠ SÓ VALE COM O DÍGITO VERIFICADOR CERTO (BOLETO-DDA-API-01 D1b, 14/11/2026): a linha lida do PDF com um dígito trocado dava
  *   vencimento/valor errados em silêncio. A régua é a MESMA do banco (`_fn_boleto_normalizar`, 118100): os casos de
  *   `linhaDigitavel.casos.json` rodam nos dois (`linhaDigitavelDv.test.ts` e `supabase/tests/boleto_d1b_dv_test.sql`).
  */
+
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 export interface LeituraBoleto {
   /** Os 47 dígitos, sem separador. */
@@ -26,14 +30,28 @@ export interface LeituraBoleto {
 /** Os cinco campos da linha, com os separadores que os bancos imprimem (ponto e espaço). */
 const COM_SEPARADOR = /(\d{5})[.\s]?(\d{5})\s+(\d{5})[.\s]?(\d{6})\s+(\d{5})[.\s]?(\d{6})\s+(\d)\s+(\d{14})/;
 
-const BASE_FATOR = Date.UTC(2025, 1, 22); // fator 1000
+const BASE_ORIGINAL = Date.UTC(1997, 9, 7); // fator 0 do 1º ciclo (fator 1000 = 03/07/2000, 9999 = 21/02/2025)
+const BASE_FATOR = Date.UTC(2025, 1, 22); // fator 1000 do ciclo de hoje
 const DIA = 86_400_000;
+const CICLO = 9000; // dias: 1000…9999, e o fator volta a 1000
+const JANELA_ANTES = 3000;
+const JANELA_DEPOIS = 5500;
 
-/** Fator de vencimento -> data, pela regra vigente desde 22/02/2025. */
-export function vencimentoDoFator(fator: number): string | null {
-  if (!Number.isInteger(fator) || fator <= 0) return null;
-  const d = new Date(BASE_FATOR + (fator - 1000) * DIA);
-  return d.toISOString().slice(0, 10);
+/**
+ * Fator de vencimento -> data (BOLETO-FATOR-VENC-01, Gabriel 25/11/2026). O MESMO fator serve a mais de um ciclo (9891 = 05/11/2024 e
+ * 27/06/2049). A regra FEBRABAN: vale o ciclo cuja data cai em [data da LEITURA − 3000, + 5500] dias (D1 a: a data em que o boleto
+ * foi lido, não a de hoje). A janela tem 8.501 dias e o ciclo 9.000: no máximo uma data cabe. Nenhuma = null (nunca inventada; o
+ * fator 1–999 só existiu no 1º ciclo). A MESMA regra do banco (`_fn_boleto_vencimento_do_fator`, 118750), pelos casos de
+ * `fatorDeVencimento.casos.json`.
+ */
+export function vencimentoDoFator(fator: number, lidoEm: string = hojeLocal()): string | null {
+  if (!Number.isInteger(fator) || fator <= 0 || fator > 9999) return null;
+  const [a, m, d] = lidoEm.split('-').map(Number);
+  const ref = Date.UTC(a, m - 1, d);
+  const candidatas = [BASE_ORIGINAL + fator * DIA];
+  if (fator >= 1000) for (let k = 0; k <= 3; k++) candidatas.push(BASE_FATOR + (fator - 1000 + k * CICLO) * DIA);
+  const achada = candidatas.find((t) => t >= ref - JANELA_ANTES * DIA && t <= ref + JANELA_DEPOIS * DIA);
+  return achada === undefined ? null : new Date(achada).toISOString().slice(0, 10);
 }
 
 /* ═══ o dígito verificador (FEBRABAN) — porta linha a linha da `_fn_boleto_normalizar` (118100) ═══ */
@@ -75,7 +93,8 @@ export interface BoletoNormalizado {
   banco: string | null;
   /** Em reais; null quando zerado (valor livre) ou, na arrecadação, quando o 3º dígito não diz "valor efetivo" (6 ou 8). */
   valor: number | null;
-  /** `YYYY-MM-DD`; null no fator 0000 e sempre na arrecadação (o vencimento dela não está no código). */
+  /** `YYYY-MM-DD`; null no fator 0000 e sempre na arrecadação (o vencimento dela não está no código; o `lerBoleto`/`lerBoletos` põe o
+   *  IMPRESSO, FOLHA-VERA-PACOTE-01). */
   vencimento: string | null;
 }
 export type LinhaConferida = BoletoNormalizado | { ok: false; motivo: MotivoDaLinha };
@@ -87,9 +106,9 @@ const centavosOuNulo = (digitos: string): number | null => {
 
 /**
  * Linha de 47 (bancário), de 48 (arrecadação) ou o código de barras de 44, com ou sem separador → o boleto conferido, ou o motivo.
- * Nunca adivinha: dígito verificador errado = não confere.
+ * Nunca adivinha: dígito verificador errado = não confere. `lidoEm` = a data da leitura (escolhe o ciclo do fator; padrão: hoje).
  */
-export function normalizarBoleto(entrada: string | null | undefined): LinhaConferida {
+export function normalizarBoleto(entrada: string | null | undefined, lidoEm: string = hojeLocal()): LinhaConferida {
   const d = (entrada ?? '').replace(/[^0-9]/g, '');
   let bc: string;
   let linha: string | null = null;
@@ -140,7 +159,7 @@ export function normalizarBoleto(entrada: string | null | undefined): LinhaConfe
   }
   return {
     ok: true, codigo_barras: bc, linha, tipo: 'bancario', banco: bc.slice(0, 3),
-    valor: centavosOuNulo(bc.slice(9, 19)), vencimento: vencimentoDoFator(Number(bc.slice(5, 9))),
+    valor: centavosOuNulo(bc.slice(9, 19)), vencimento: vencimentoDoFator(Number(bc.slice(5, 9)), lidoEm),
   };
 }
 

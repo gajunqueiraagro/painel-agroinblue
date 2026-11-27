@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Save, FileText, Share2, Pencil, Trash2, MapPin, Users, Building2, ShieldCheck, Landmark, Phone, Truck, Settings, DollarSign, LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
-import logoUrl from '@/assets/logo.png';
+import { carregarLogoParaPdf, medidaDoLogoPdf } from '@/lib/marca/marca';
 import { PastosTab } from './PastosTab';
 import { FazendasList } from '@/components/FazendasList';
 import { AcessosTab } from './AcessosTab';
@@ -73,19 +73,8 @@ const MODULES: ModuleCard[] = [
 // ---------------------------------------------------------------------------
 
 function loadLogoBase64(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = img.naturalWidth;
-      c.height = img.naturalHeight;
-      c.getContext('2d')!.drawImage(img, 0, 0);
-      resolve(c.toDataURL('image/png'));
-    };
-    img.onerror = reject;
-    img.src = logoUrl;
-  });
+  /* MARCA-PADRAO-01: o PNG do kit pelo carregador da marca (o logo antigo saiu do repositório). */
+  return carregarLogoParaPdf('horizontal');
 }
 
 const normalizePdfText = (value?: string) => {
@@ -221,7 +210,7 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
   const drawPdfHeader = (doc: jsPDF, title: string) => {
     const pageW = doc.internal.pageSize.getWidth();
     let y = 10;
-    if (logoBase64) { doc.addImage(logoBase64, 'PNG', pageW / 2 - 14, y, 28, 14); y += 20; }
+    if (logoBase64) { const m = medidaDoLogoPdf(40); doc.addImage(logoBase64, 'PNG', pageW / 2 - m.w / 2, y, m.w, m.h); y += m.h + 6; }
     doc.setFontSize(16); doc.setFont('helvetica', 'bold');
     doc.text(title, pageW / 2, y, { align: 'center' });
     return y + 12;
