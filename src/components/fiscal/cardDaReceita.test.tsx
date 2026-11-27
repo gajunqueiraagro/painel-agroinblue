@@ -33,7 +33,7 @@ describe('CardDaReceita', () => {
     const abrir = vi.fn();
     const { rerender } = render(<CardDaReceita estado={{ tipo: 'parada', motivo: 'bloqueio', desde: '2026-11-27T16:45:00Z', voltaEm: '2026-11-27T17:45:00Z', validoAte: null, notas: 12 }}
       podeCadastrar onAbrir={abrir} />);
-    expect(screen.getByTestId('card-da-receita-frase').textContent).toMatch(/^12 da Receita a lançar · busca pausada até \d\d:\d\d$/);
+    expect(screen.getByTestId('card-da-receita-frase').textContent).toMatch(/^12 a lançar · busca pausada até \d\d:\d\d$/);
     fireEvent.click(screen.getByTestId('card-da-receita-abrir'));
     expect(abrir).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('card-da-receita-motivo')).toBeTruthy();

@@ -114,7 +114,8 @@ export function fraseDoCard(e: EstadoDaReceita): string {
       const n = e.notas ?? 0;
       const lista = n > 0 ? `${n > 99 ? '99+' : n} da Receita a lançar` : 'Notas da Receita';
       /* o bloqueio de 1 h é PAUSA (volta sozinho), não parada: âmbar, com a hora */
-      return pausada(e) ? `${lista} · busca pausada até ${diaHora(e.voltaEm).slice(6)}` : `Busca parada · ${lista}`;
+      /* com dois links ao lado (Abrir · ver motivo), a frase pausada fica sem o "da Receita" (o card já é o da Receita): cabe com 99+ */
+      return pausada(e) ? `${n > 0 ? `${n > 99 ? '99+' : n} a lançar` : 'Notas da Receita'} · busca pausada até ${diaHora(e.voltaEm).slice(6)}` : `Busca parada · ${lista}`;
     }
     case 'sem_busca': return 'Notas da Receita · certificado ok · primeira busca ainda não rodou';
     case 'com_notas': return `${e.notas > 99 ? '99+' : e.notas} ${e.notas === 1 ? 'nota' : 'notas'} da Receita a lançar · busca ${diaHora(e.ultimaBusca)}`;
