@@ -169,7 +169,13 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
           {aDecidirCent > 0 && somaCent > 0 && <span className="h-full" style={{ width: `${(aDecidirCent * 100) / somaCent}%`, background: COR_A_DECIDIR }} title={`a decidir · ${pct((aDecidirCent * 100) / somaCent)}`} />}
         </div>
         <div className="mt-1 flex h-[20px] min-w-0 items-center gap-2 text-[9.5px] leading-none">
-          {recusa ? (
+          {/* com a sugestão, o detalhe por conta está no "Total por conta" embaixo: aqui só a frase curta (4+ contas não cabem na linha) */}
+          {!recusa && comSugestao ? (
+            <span className="min-w-0 flex-1 uma-linha-que-rola text-muted-foreground" data-testid="contas-frase"
+              title={`Soma dos itens R$ ${reais(somaCent)} em ${porConta.length} contas${deHoje ? ` · hoje o lançamento está em 1 conta (${deHoje})` : ''}`}>
+              {itens.length} itens em {porConta.length} contas · confira o total por conta
+            </span>
+          ) : recusa ? (
             <span className="min-w-0 flex-1 uma-linha-que-rola text-amber-800" data-testid="contas-frase" title={recusa}>{recusa}</span>
           ) : (
             <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" data-testid="contas-frase"
