@@ -46,13 +46,13 @@ describe('comoVincular (V1) — o gravador que já existe', () => {
 });
 
 describe('filtrarContratos', () => {
-  const C = (id: string, numero: string, credor: string, status = 'ativo'): ContratoParaVincular => ({ id, numero, credor, descricao: `Custeio ${id}`, dataContrato: null, valorContratado: null, status });
+  const C = (id: string, numero: string, credor: string, status = 'ativo'): ContratoParaVincular => ({ id, numero, credorId: `id-${credor}`, credor, descricao: `Custeio ${id}`, dataContrato: null, valorContratado: null, status });
   const L = [C('a', '667.001.023-007', 'Banco Itaú'), C('b', '27.669', 'Banco Bradesco'), C('c', '541.203.246', 'Banco Sicredi', 'quitado')];
   it('o texto acha nº (com ou sem os pontos), credor sem acento; Ativos tira o quitado; o credor filtra', () => {
-    expect(filtrarContratos(L, { busca: '6670010', credor: null, soAtivos: true }).map((c) => c.id)).toEqual(['a']);
-    expect(filtrarContratos(L, { busca: 'itau', credor: null, soAtivos: true }).map((c) => c.id)).toEqual(['a']);
-    expect(filtrarContratos(L, { busca: '', credor: null, soAtivos: true }).map((c) => c.id)).toEqual(['a', 'b']);
-    expect(filtrarContratos(L, { busca: '', credor: null, soAtivos: false }).map((c) => c.id)).toEqual(['a', 'b', 'c']);
-    expect(filtrarContratos(L, { busca: '', credor: 'Banco Bradesco', soAtivos: false }).map((c) => c.id)).toEqual(['b']);
+    expect(filtrarContratos(L, { busca: '6670010', credorId: null, soAtivos: true }).map((c) => c.id)).toEqual(['a']);
+    expect(filtrarContratos(L, { busca: 'itau', credorId: null, soAtivos: true }).map((c) => c.id)).toEqual(['a']);
+    expect(filtrarContratos(L, { busca: '', credorId: null, soAtivos: true }).map((c) => c.id)).toEqual(['a', 'b']);
+    expect(filtrarContratos(L, { busca: '', credorId: null, soAtivos: false }).map((c) => c.id)).toEqual(['a', 'b', 'c']);
+    expect(filtrarContratos(L, { busca: '', credorId: 'id-Banco Bradesco', soAtivos: false }).map((c) => c.id)).toEqual(['b']);
   });
 });

@@ -10,6 +10,9 @@ const api = vi.hoisted(() => ({
   vincularEncargo: vi.fn(async () => null), vincularLiberacao: vi.fn(async () => null),
 }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), from: vi.fn() } }));
+vi.mock('@/hooks/useFornecedoresDoCliente', () => ({ useFornecedoresDoCliente: () => ({ fornecedores: [
+  { id: 'b1', nome: 'Banco Bradesco', nome_fantasia: null, cpf_cnpj: null, aliases_norm: null, ativo: true },
+  { id: 'b2', nome: 'Banco Itaú BBA', nome_fantasia: null, cpf_cnpj: null, aliases_norm: null, ativo: true }] }) }));
 vi.mock('@/hooks/useLancamentoNoFinanciamento', () => ({ useLancamentoNoFinanciamento: () => api }));
 vi.mock('@/hooks/useSituacaoDoContrato', () => ({ useSituacaoEmLote: () => ({ data: new Map([
   ['f1', { parcelas: [{ id: 'q9', numero: 9, dataVencimento: '2027-01-08', situacao: 'pendente' }], cartoes: {}, saldo: { saldo: 1200000 } }],
@@ -17,8 +20,8 @@ vi.mock('@/hooks/useSituacaoDoContrato', () => ({ useSituacaoEmLote: () => ({ da
 vi.mock('@/lib/financiamentos/vinculoPendente', async (orig) => ({
   ...(await orig<typeof import('@/lib/financiamentos/vinculoPendente')>()),
   consultarContratosParaVincular: async () => [
-    { id: 'f1', numero: '27.669', descricao: 'Custeio A', credor: 'Banco Bradesco', dataContrato: '2026-01-30', valorContratado: 1200000, status: 'ativo' },
-    { id: 'f2', numero: '197006191819500', descricao: 'Custeio B', credor: 'Banco Itaú BBA', dataContrato: '2026-04-30', valorContratado: 2000000, status: 'ativo' }],
+    { id: 'f1', numero: '27.669', descricao: 'Custeio A', credorId: 'b1', dataContrato: '2026-01-30', valorContratado: 1200000, status: 'ativo' },
+    { id: 'f2', numero: '197006191819500', descricao: 'Custeio B', credorId: 'b2', dataContrato: '2026-04-30', valorContratado: 2000000, status: 'ativo' }],
 }));
 
 import { VincularAUmContrato } from './VincularAUmContrato';

@@ -207,7 +207,8 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
   const semDivisaoPedida = !!todasNaConta && porConta.length <= 1 && !semConta.length;
   /* NADA SE DESLOCA: o total reserva as linhas de partida (as contas sugeridas + uma por item sem conta) */
   const linhasReservadas = useMemo(() => new Set(inicial.values()).size + itens.filter((i) => !inicial.get(i.nItem)).length, [inicial, itens]);
-  const fraseSemConta = semConta.length
+  /* sem a conta do lançamento não há para onde ir: aí vale a recusa de sempre ("Faltam N…") */
+  const fraseSemConta = semConta.length && contaDeHoje
     ? `${semConta.length} ${semConta.length === 1 ? 'item sem conta: vai' : 'itens sem conta: vão'} na conta do lançamento${deHoje ? ` (${deHoje})` : ''} — não trava o salvar`
     : null;
   const colunas = noModal

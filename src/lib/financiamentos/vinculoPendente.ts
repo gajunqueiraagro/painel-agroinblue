@@ -24,7 +24,7 @@ export interface PendenciaDeVinculo {
 export interface AnoDasPendencias { ano: number; n: number; valor: number }
 
 export interface ContratoParaVincular {
-  id: string; numero: string | null; descricao: string | null; credor: string | null; dataContrato: string | null; valorContratado: number | null;
+  id: string; numero: string | null; descricao: string | null; credorId: string | null; credor: string | null; dataContrato: string | null; valorContratado: number | null;
   status: string | null;
 }
 
@@ -72,14 +72,14 @@ export function lerPendenciasDeVinculo(bruto: unknown): { anos: AnoDasPendencias
 }
 
 /** o filtro da lista de contratos do "Vincular a um contrato" (o texto acha nº, credor e descrição; sem acento e sem maiúscula) */
-export function filtrarContratos(lista: readonly ContratoParaVincular[], f: { busca: string; credor: string | null; soAtivos: boolean }): ContratoParaVincular[] {
+export function filtrarContratos(lista: readonly ContratoParaVincular[], f: { busca: string; credorId: string | null; soAtivos: boolean }): ContratoParaVincular[] {
   const norm = (s: string | null) => normalizarParaBusca(s);
   const b = norm(f.busca.trim());
   /* o nº se acha também sem os pontos ("6670010" acha "667.001.0") */
   const digitos = b.replace(/\D/g, '');
   const casa = (x: string | null) => norm(x).includes(b) || (digitos.length >= 3 && norm(x).replace(/\D/g, '').includes(digitos));
   return lista.filter((c) => (!f.soAtivos || c.status === 'ativo' || c.status === 'prorrogado')
-    && (!f.credor || c.credor === f.credor)
+    && (!f.credorId || c.credorId === f.credorId)
     && (!b || [c.numero, c.credor, c.descricao].some(casa)));
 }
 
@@ -122,25 +122,16 @@ export async function consultarPendenciasDeVinculo(clienteId: string, ano: numbe
   return lerPendenciasDeVinculo(data) ?? 'As pendências vieram num formato que não sei ler.';
 }
 
-/** os contratos do cliente para a lista (o nome do credor pelo cadastro do fornecedor) */
-export async function consultarContratosParaVincular(clienteId: string): Promise<ContratoParaVincular[] | string> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: tabelas lidas pelo cliente
-  const sb: any = supabase;
-  const { data, error } = await sb.from('financiamentos').select('id, numero_contrato, descricao, credor_id, data_contrato, valor_total, status, natureza')
+/** os contratos do cliente para a lista; o nome do credor vem do leitor ÚNICO de fornecedores (`nomes`, o `useFornecedoresDoCliente` da tela) */
+export async function consultarContratosParaVincular(clienteId: string): Promise<Omit<ContratoParaVincular, 'credor'>[] | string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: tabela lida pelo cliente
+  const { data, error } = await (supabase as any).from('financiamentos').select('id, numero_contrato, descricao, credor_id, data_contrato, valor_total, status, natureza')
     .eq('cliente_id', clienteId).neq('natureza', 'parcelamento');
   if (error) { console.error('[financiamentos]', error); return 'Não consegui ler os contratos agora. Tente de novo.'; }
   const linhas: unknown[] = Array.isArray(data) ? data : [];
-  const credores = [...new Set(linhas.map((l) => txt(obj(l)?.credor_id)).filter((x): x is string => !!x))];
-  const nomes = new Map<string, string>();
-  if (credores.length) {
-    const r = await sb.from('financeiro_fornecedores').select('id, nome').eq('cliente_id', clienteId).in('id', credores);
-    if (r.error) { console.error('[financeiro_fornecedores]', r.error); return 'Não consegui ler os credores agora. Tente de novo.'; }
-    for (const f of Array.isArray(r.data) ? r.data : []) { const o = obj(f); const id = txt(o?.id); const nome = txt(o?.nome); if (id && nome) nomes.set(id, nome); }
-  }
   return linhas.map((l) => {
     const o = obj(l) ?? {};
-    const credorId = txt(o.credor_id);
-    return { id: txt(o.id) ?? '', numero: txt(o.numero_contrato), descricao: txt(o.descricao), credor: credorId ? nomes.get(credorId) ?? null : null,
+    return { id: txt(o.id) ?? '', numero: txt(o.numero_contrato), descricao: txt(o.descricao), credorId: txt(o.credor_id),
       dataContrato: txt(o.data_contrato), valorContratado: num(o.valor_total), status: txt(o.status) };
   }).filter((c) => c.id)
     .sort((a, b) => (b.dataContrato ?? '').localeCompare(a.dataContrato ?? '') || (a.numero ?? '').localeCompare(b.numero ?? ''));

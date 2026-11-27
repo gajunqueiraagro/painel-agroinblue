@@ -9,7 +9,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Segmentado } from '@/components/ui/segmentado';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { QUADRO_REGUA, TD_REGUA, TD_REGUA_NUM, TD_REGUA_TEXTO, TH_REGUA } from '@/components/ui/regua-tabela';
 import { useLancamentoNoFinanciamento } from '@/hooks/useLancamentoNoFinanciamento';
@@ -24,7 +25,6 @@ import { cn } from '@/lib/utils';
 
 const num2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const br = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
-const TODOS = '__todos__';
 
 export function VincularAUmContrato({ lancamentoId, clienteId, tipo, subcentro, valor, data, exata, aoFechar, aoVincular, onCriarContrato }: {
   lancamentoId: string; clienteId: string; tipo: TipoDoVinculo; subcentro: string | null; valor: number; data: string | null;
@@ -35,9 +35,11 @@ export function VincularAUmContrato({ lancamentoId, clienteId, tipo, subcentro, 
 }) {
   const api = useLancamentoNoFinanciamento(lancamentoId, clienteId);
   const situacoes = useSituacaoEmLote(clienteId, hojeLocal());
-  const [contratos, setContratos] = useState<ContratoParaVincular[] | string | null>(null);
+  const [lidos, setLidos] = useState<Omit<ContratoParaVincular, 'credor'>[] | string | null>(null);
+  /* FORN-BUSCA-UNICA-01 — o nome do credor e o filtro Credor pelo leitor e pelo seletor ÚNICOS de fornecedor */
+  const { fornecedores } = useFornecedoresDoCliente(clienteId);
   const [busca, setBusca] = useState('');
-  const [credor, setCredor] = useState(TODOS);
+  const [credorId, setCredorId] = useState('');
   const [soAtivos, setSoAtivos] = useState<'ativos' | 'todos'>('ativos');
   /* V1 ajustado (Gabriel 27/11): NENHUM contrato nasce escolhido */
   const [escolhido, setEscolhido] = useState<string | null>(null);
@@ -47,13 +49,15 @@ export function VincularAUmContrato({ lancamentoId, clienteId, tipo, subcentro, 
 
   useEffect(() => {
     let vivo = true;
-    void consultarContratosParaVincular(clienteId).then((r) => { if (vivo) setContratos(r); });
+    void consultarContratosParaVincular(clienteId).then((r) => { if (vivo) setLidos(r); });
     return () => { vivo = false; };
   }, [clienteId]);
 
-  const lista = typeof contratos === 'string' || !contratos ? [] : contratos;
-  const visiveis = useMemo(() => filtrarContratos(lista, { busca, credor: credor === TODOS ? null : credor, soAtivos: soAtivos === 'ativos' }), [lista, busca, credor, soAtivos]);
-  const credores = useMemo(() => [...new Set(lista.map((c) => c.credor).filter((x): x is string => !!x))].sort().map((c) => ({ value: c, label: c })), [lista]);
+  const contratos: ContratoParaVincular[] | string | null = useMemo(() => (Array.isArray(lidos)
+    ? lidos.map((c) => ({ ...c, credor: fornecedores.find((f) => f.id === c.credorId)?.nome ?? null })) : lidos), [lidos, fornecedores]);
+  const lista = Array.isArray(contratos) ? contratos : [];
+  const visiveis = useMemo(() => filtrarContratos(lista, { busca, credorId: credorId || null, soAtivos: soAtivos === 'ativos' }), [lista, busca, credorId, soAtivos]);
+  const credores = useMemo(() => fornecedores.filter((f) => lista.some((c) => c.credorId === f.id)), [fornecedores, lista]);
   const situacaoDe = (id: string) => situacoes.data?.get(id);
   const contrato = lista.find((c) => c.id === escolhido) ?? null;
   const como = contrato ? comoVincular({ tipo, contratoId: contrato.id, exata, proxima: proximaParcelaAberta(situacaoDe(contrato.id)?.parcelas ?? []) }) : null;
@@ -111,7 +115,10 @@ export function VincularAUmContrato({ lancamentoId, clienteId, tipo, subcentro, 
           <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="nº do contrato ou banco…" className="h-[24px] w-[220px] text-[10px]"
             aria-label="Buscar (nº, credor, descrição)" data-testid="vinculo-busca" />
           <span className="text-muted-foreground">Credor</span>
-          <div className="w-[200px]"><SearchableSelect value={credor} onValueChange={setCredor} options={credores} allValue={TODOS} allLabel="Todos" dense /></div>
+          <div className="w-[200px]" data-testid="vinculo-credor">
+            <FavorecidoSelect value={credorId} onChange={(id) => setCredorId(id || '')} fornecedores={credores} situacao="todos" limpavel
+              rotuloDoVazio="Todos" placeholder="Todos" linhaDoDocumento={false} size="compact" />
+          </div>
           <span className="text-muted-foreground">Situação</span>
           <Segmentado altura={22} valor={soAtivos} onEscolher={setSoAtivos} opcoes={[{ valor: 'ativos', rotulo: 'Ativos' }, { valor: 'todos', rotulo: 'Todos' }]} />
           <span className="ml-auto whitespace-nowrap tabular-nums text-muted-foreground" data-testid="vinculo-contagem">{visiveis.length} {visiveis.length === 1 ? 'contrato' : 'contratos'}</span>
