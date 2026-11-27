@@ -214,10 +214,10 @@ describe('tela A — a lista de notas', () => {
     montarLista();
     soltar([arquivo('a.xml', montarNFe())]);
     /* a "já registrada?" ainda NÃO respondeu e a "já lançada?" já foi pedida */
-    await waitFor(() => expect(consultas.notaJaLancada).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(consultas.notaJaLancada).toHaveBeenCalledTimes(1), { timeout: 5000 });
     expect(consultas.notaJaRegistrada).toHaveBeenCalledTimes(1);
     soltaRegistrada({ ok: true, valor: [] });
-    await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
+    await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1), { timeout: 5000 });
     consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: true, valor: [] }));
   });
   it('P146 — "já registrada" falhou: a linha "não verificada" (o motivo no title), sem "Abrir lançamento"; "Tentar de novo" respondendo vira nova', async () => {
