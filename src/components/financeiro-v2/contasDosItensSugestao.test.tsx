@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import type { ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
-import { ContasDosItens } from './ContasDosItens';
+import { ClassificarItens, ContasDosItens } from './ContasDosItens';
 
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), from: vi.fn() } }));
 
@@ -47,32 +47,50 @@ function montar(extra: Partial<React.ComponentProps<typeof ContasDosItens>> = {}
 }
 
 describe('ContasDosItens com a sugestão da escada', () => {
-  it('o item de material NÃO nasce na conta de hoje: espera a resposta; origem por linha; o total tem "a decidir"; Usar divisão desabilitado', () => {
-    montar();
-    expect(screen.getByTestId('conta-do-item-3').textContent).toBe('responda obra ou manutenção');
+  it('SUGESTAO-ITENS-02 — NUNCA TRAVA: o item do atalho nasce SEM conta (aviso pequeno, "sem conta" no total) e o Usar divisão segue livre, levando-o na conta do lançamento', () => {
+    const { onDividir } = montar();
     expect(screen.getByTestId('origem-do-item-1').textContent).toBe('mesmo produto em 14/08');
     expect(screen.getByTestId('origem-do-item-3').textContent).toBe('cerca · obra ou manutenção?');
-    expect(screen.getByTestId('contas-frase').textContent).toBe('4 itens em 3 contas · 1 espera obra ou manutenção (item 3)');
-    expect(screen.getByTestId('contas-total-a-decidir').textContent).toContain('392,00');
+    expect(screen.getByTestId('contas-frase').textContent).toBe('1 item sem conta: vai na conta do lançamento (Nutrição Engorda) — não trava o salvar');
+    expect(screen.getByTestId('contas-total-sem-conta').textContent).toContain('392,00');
     expect(screen.getAllByTestId('contas-total-linha').map((l) => l.textContent?.replace(/\s/g, ' '))).toEqual([
       'Nutrição Engorda19.600,0088,8%', 'Vacinas e Vermífugos1716,006,6%', 'Brincos de Identificação1100,000,9%']);
     expect(screen.getByTestId('contas-total-da-nota').textContent).toBe('Total da nota410.808,00100%');
     const usar = screen.getByTestId('contas-dividir');
-    expect([usar.textContent, (usar as HTMLButtonElement).disabled]).toEqual(['Usar divisão (4 contas)', true]);
+    expect([usar.textContent, usar.hasAttribute('disabled')]).toEqual(['Usar divisão (3 contas)', false]);
+    fireEvent.click(usar);
+    expect(onDividir).toHaveBeenCalledWith(new Map([[1, 'pn'], [2, 'pv'], [4, 'pb'], [3, 'pn']]));
   });
 
-  it('a resposta põe a conta (manutenção × obra), a origem vira "você escolheu", o Usar divisão libera e grava o mapa; Q3 recebe a escolha', () => {
+  it('o ATALHO (opcional) põe a conta (manutenção × obra), a origem vira "você escolheu (atalho)" e grava o mapa; Q3 recebe a escolha', () => {
     const { onDividir, onEscolhas } = montar();
     fireEvent.click(screen.getByTestId('pergunta-3-manutencao'));
-    expect(screen.getByTestId('origem-do-item-3').textContent).toBe('você escolheu');
-    expect(screen.queryByTestId('contas-total-a-decidir')).toBeNull();
+    expect(screen.getByTestId('origem-do-item-3').textContent).toBe('você escolheu (atalho)');
+    expect(screen.queryByTestId('contas-total-sem-conta')).toBeNull();
     expect(onEscolhas).toHaveBeenLastCalledWith(new Map([[3, 'pm']]));
     fireEvent.click(screen.getByTestId('pergunta-3-obra'));
     expect(onEscolhas).toHaveBeenLastCalledWith(new Map([[3, 'po']]));
     const usar = screen.getByTestId('contas-dividir');
-    expect([usar.textContent, (usar as HTMLButtonElement).disabled]).toEqual(['Usar divisão (4 contas)', false]);
+    expect([usar.textContent, usar.hasAttribute('disabled')]).toEqual(['Usar divisão (4 contas)', false]);
     fireEvent.click(usar);
     expect(onDividir).toHaveBeenCalledWith(new Map([[1, 'pn'], [2, 'pv'], [4, 'pb'], [3, 'po']]));
+  });
+
+  it('SUGESTAO-ITENS-02 — a aba mostra só o resumo; "Classificar itens ▸" abre o modal (Qtd, fonte 12, Cancelar), e o que mudou volta ao reabrir', async () => {
+    const onDividir = vi.fn();
+    render(<ClassificarItens itens={ITENS.map((i) => ({ ...i, quantidade: '20', unidade: 'SC' }))} classificacoes={CLASSIF} tipoOperacao="2-Saídas"
+      contaDeHoje="pn" sugeridas={SUGERIDAS} gravando={false} onDividir={onDividir} aoSalvar sugestoes={SUG} onJuntar={vi.fn()} />);
+    expect(screen.getByTestId('contas-frase').textContent).toBe('4 itens em 3 contas · 1 sem conta');
+    expect(screen.queryByTestId('contas-linha')).toBeNull();
+    fireEvent.click(screen.getByTestId('classificar-itens'));
+    const modal = await screen.findByTestId('classificar-itens-modal');
+    expect(within(modal).getAllByTestId('contas-linha')[0].textContent).toContain('20 SC');
+    expect(within(modal).getAllByTestId('contas-linha')[0].querySelector('td')?.className).toContain('text-[12px]');
+    fireEvent.click(within(modal).getByTestId('pergunta-3-obra'));
+    fireEvent.click(within(modal).getByTestId('contas-cancelar'));
+    expect(screen.getByTestId('contas-frase').textContent).toBe('4 itens em 4 contas');
+    fireEvent.click(screen.getByTestId('classificar-itens'));
+    expect(within(await screen.findByTestId('classificar-itens-modal')).getByTestId('origem-do-item-3').textContent).toBe('você trocou');
   });
 
   it('"Juntar tudo numa conta ▾" abre na de MAIOR valor (Q2) e põe todos os itens nela', async () => {
@@ -84,6 +102,20 @@ describe('ContasDosItens com a sugestão da escada', () => {
     fireEvent.click(within(menu).getAllByRole('menuitem')[0]);
     expect(onJuntar).toHaveBeenCalledWith('pn');
     expect(screen.getByTestId('contas-frase').textContent).toBe('Todos os itens estão na mesma conta: não há o que dividir.');
+  });
+
+  it('SUGESTAO-ITENS-02 — "Juntar ▾" termina em "Escolher outra conta…": o plano INTEIRO abre já e a escolhida junta tudo', async () => {
+    const { onJuntar } = montar();
+    fireEvent.keyDown(screen.getByTestId('contas-juntar'), { key: 'Enter' });
+    const menu = await screen.findByRole('menu');
+    const outra = within(menu).getByTestId('contas-juntar-outra-conta');
+    expect(outra.textContent).toBe('Escolher outra conta… (o plano inteiro)');
+    fireEvent.click(outra);
+    expect(await screen.findByTestId('contas-juntar-outra')).toBeTruthy();
+    /* a lista abre JÁ (sem clicar no gatilho), com a busca e a barra de atividade do seletor de sempre */
+    expect(await screen.findByPlaceholderText('Buscar subcentro...')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: /Investimento em Cercas Pecuária/ }));
+    expect(onJuntar).toHaveBeenCalledWith('po');
   });
 
   it('BUG-01: `todasNaConta` (sem divisão) põe TODOS os itens na conta do lançamento, inclusive o que perguntaria; "Usar divisão" some e volta ao trocar um item', () => {

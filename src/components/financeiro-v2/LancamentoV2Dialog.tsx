@@ -108,7 +108,7 @@ import {
   type CadastroComODocumento, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
-import { ContasDosItens } from './ContasDosItens';
+import { ClassificarItens, ContasDosItens } from './ContasDosItens';
 import { PartesDaClassificacao } from './PartesDaClassificacao';
 import { DividirClassificacaoDialog, MotivoDaDivisaoDialog } from './DivisaoDialogs';
 import {
@@ -526,6 +526,11 @@ export async function gravarParcelamento(
   /* FIN-NFE-PARCELAS-01 — o uuid do financiamento (a RPC devolve `uuid`): e' por ele que os documentos
      pendentes acham a parcela 1. */
   return typeof data === 'string' ? data : null;
+}
+
+/** SUGESTAO-ITENS-02 — a mesma lista de props vai à vista de antes (sem sugestão) ou ao resumo + "Classificar itens ▸" (com ela) */
+function ComOuSemSugestao({ comSugestao, children }: { comSugestao: boolean; children: (Vista: typeof ContasDosItens) => React.ReactNode }) {
+  return <>{children(comSugestao ? ClassificarItens : ContasDosItens)}</>;
 }
 
 function formatNotaFiscal(raw: string): string {
@@ -3977,18 +3982,19 @@ export function LancamentoV2Dialog({
                 <ItensDaNota cabecalho={itensDaNota.cabecalho} lidos={itensDaNota.lidos} contaDoLancamento={subcentro || null}
                   visaoInicial={itensEmContas && (podeDividir || podeDividirNaCriacao) ? 'contas' : undefined}
                   vistaContas={podeDividir ? (
-                    <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao}
+                    /* SUGESTAO-ITENS-02 — com sugestão: o resumo + "Classificar itens ▸" (o modal); sem ela, a vista de antes */
+                    <ComOuSemSugestao comSugestao={!lancDividido && !!sugestoesDosItens}>{(Vista) => <Vista itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao}
                       contaDeHoje={lancDividido ? null : (classificacao.plano_conta_id ?? null)} sugeridas={contasIniciaisDosItens} atividadeSugerida={classificacao.atividade}
                       gravando={!!motivoDaDivisao} onDividir={(mapa) => setMotivoDaDivisao({ tipo: 'itens', mapa })}
                       pendente={contasDosItensMudadas} onMudou={setContasDosItensMudadas}
-                      sugestoes={lancDividido ? undefined : sugestoesDosItens ?? undefined} todasNaConta={itensSeguemAGeralNoEditar} />
+                      sugestoes={lancDividido ? undefined : sugestoesDosItens ?? undefined} todasNaConta={itensSeguemAGeralNoEditar} />}</ComOuSemSugestao>
                   ) : podeDividirNaCriacao ? (
                     /* NOTA-CONTAS-NA-CRIACAO-01 A — no NOVO: a mesma vista; "Dividir … ao salvar" deixa a divisao PENDENTE (o Salvar grava) */
-                    <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao} aoSalvar
+                    <ComOuSemSugestao comSugestao={!!sugestoesDosItens}>{(Vista) => <Vista itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao} aoSalvar
                       contaDeHoje={classificacao.plano_conta_id ?? null} sugeridas={divisaoNaCriacao ?? contasAprendidas} atividadeSugerida={classificacao.atividade}
                       gravando={saving} onDividir={aplicarDivisaoNaCriacao}
                       sugestoes={sugestoesDosItens ?? undefined} onJuntar={sugestoesDosItens ? juntarNaCriacao : undefined} onEscolhas={setEscolhasDosItens}
-                      todasNaConta={itensSeguemAGeralNoNovo} />
+                      todasNaConta={itensSeguemAGeralNoNovo} />}</ComOuSemSugestao>
                   ) : undefined} />
               </TabsContent>
             )}

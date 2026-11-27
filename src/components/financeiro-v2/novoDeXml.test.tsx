@@ -841,10 +841,15 @@ describe('A — dividir pelos itens no NOVO lançamento', () => {
     await waitFor(() => expect(bloco.textContent).toContain('Nutrição Rebanho'));
     await aba(/Itens da nota/);
     fireEvent.click(await screen.findByRole('button', { name: 'Contas' }));
-    expect((await screen.findByTestId('contas-frase')).textContent).toBe('Todos os itens estão na mesma conta: não há o que dividir.');
-    expect(within(screen.getByTestId('conta-do-item-1')).getByRole('combobox').textContent).toContain('Nutrição Rebanho');
-    expect(screen.getByTestId('origem-do-item-1').textContent).toBe('a do lançamento (sugestão: Alimentação e Cantina Pecuária)');
-    expect(screen.getByTestId('contas-dividir').className).toContain('invisible');
+    expect((await screen.findByTestId('contas-frase')).textContent).toBe('6 itens em 1 conta');
+    expect(screen.getByTestId('contas-total-linha').textContent).toContain('Nutrição Rebanho');
+    fireEvent.click(screen.getByTestId('classificar-itens'));
+    const modal = await screen.findByTestId('classificar-itens-modal');
+    expect(within(modal).getByTestId('contas-frase').textContent).toBe('Todos os itens estão na mesma conta: não há o que dividir.');
+    expect(within(within(modal).getByTestId('conta-do-item-1')).getByRole('combobox').textContent).toContain('Nutrição Rebanho');
+    expect(within(modal).getByTestId('origem-do-item-1').textContent).toBe('a do lançamento (sugestão: Alimentação e Cantina Pecuária)');
+    expect(within(modal).getByTestId('contas-dividir').className).toContain('invisible');
+    fireEvent.click(within(modal).getByTestId('contas-cancelar'));
     await aba(/Geral/);
     fireEvent.click(botaoSalvar());
     await waitFor(() => expect(m.onClose).toHaveBeenCalled());
@@ -886,7 +891,7 @@ describe('A — dividir pelos itens no NOVO lançamento', () => {
 
   /* NOTA-ITENS-SUGESTAO (Gabriel 27/11, mock aprovado 10:47) — a sugestão da escada única na proposta: o aviso pequeno na faixa, "ver por item"
      abre Itens › Contas com a pergunta obra × manutenção; respondida, "Usar divisão" e o Salvar dividem; a escolha vira regra do item (Q3) */
-  it('NOTA-ITENS-SUGESTAO: aviso "N itens em X classificações · ver por item" → Contas com a pergunta → Usar divisão → Salvar divide e lembra a escolha', async () => {
+  it('NOTA-ITENS-SUGESTAO + ITENS-02: aviso "N itens em X classificações · ver por item" → resumo → Classificar itens (atalho) → Usar divisão → Salvar divide e lembra a escolha', async () => {
     bancoQueAceita();
     const CLASSIF3: ClassificacaoItem[] = [...CLASSIF,
       { id: 'pl-man', subcentro: 'Manutenção de Instalações Pecuária', centro_custo: 'Manutenção', grupo_custo: 'Manutenção', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
@@ -906,10 +911,13 @@ describe('A — dividir pelos itens no NOVO lançamento', () => {
     expect(faixa.textContent).toBe('A nota tem 6 itens em 1 classificação (1 a decidir: obra ou manutenção)ver por item');
     await waitFor(() => expect(screen.getAllByRole('tab').some((t) => /Itens da nota/.test(t.textContent ?? ''))).toBe(true));
     fireEvent.click(screen.getByTestId('ver-por-item'));
-    expect((await screen.findByTestId('contas-frase')).textContent).toBe('6 itens em 1 conta · 1 espera obra ou manutenção (item 1)');
-    expect(screen.getByTestId('origem-do-item-2').textContent).toBe('mesmo produto em 14/08');
-    fireEvent.click(screen.getByTestId('pergunta-1-manutencao'));
-    const usar = screen.getByTestId('contas-dividir');
+    /* SUGESTAO-ITENS-02 — a aba mostra o resumo; a classificação mora no modal "Classificar itens" */
+    expect((await screen.findByTestId('contas-frase')).textContent).toBe('6 itens em 1 conta · 1 sem conta');
+    fireEvent.click(screen.getByTestId('classificar-itens'));
+    const modal = await screen.findByTestId('classificar-itens-modal');
+    expect(within(modal).getByTestId('origem-do-item-2').textContent).toBe('mesmo produto em 14/08');
+    fireEvent.click(within(modal).getByTestId('pergunta-1-manutencao'));
+    const usar = within(modal).getByTestId('contas-dividir');
     expect(usar.textContent).toBe('Usar divisão (2 contas)');
     fireEvent.click(usar);
     await aba(/Geral/);

@@ -10,7 +10,8 @@ import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import type { Atividade } from '@/lib/financeiro/ultimaAtividade';
 
-export function EscolherConta({ valor, classificacoes, tipoOperacao, onEscolher, atividadeSugerida = null, label, triggerClassName, itemClassName, disabled, tabIndex }: {
+export function EscolherConta({ valor, classificacoes, tipoOperacao, onEscolher, atividadeSugerida = null, label, triggerClassName, itemClassName, disabled, tabIndex,
+  abertoAoMontar }: {
   /** o `plano_conta_id` escolhido ('' = nenhum) */
   valor: string;
   classificacoes: ClassificacaoItem[];
@@ -23,6 +24,8 @@ export function EscolherConta({ valor, classificacoes, tipoOperacao, onEscolher,
   itemClassName?: string;
   disabled?: boolean;
   tabIndex?: number;
+  /** abre a lista ao montar (cursor na busca) — o "Escolher outra conta…" */
+  abertoAoMontar?: boolean;
 }) {
   const [busca, setBusca] = useState('');
   const sub = classificacoes.find((c) => c.id === valor)?.subcentro ?? '';
@@ -31,6 +34,6 @@ export function EscolherConta({ valor, classificacoes, tipoOperacao, onEscolher,
       onSelected={(_s, cls) => { const id = cls?.id; if (cls && id) onEscolher({ ...cls, id }); }}
       classificacoes={classificacoes} tipoOperacao={tipoOperacao} search={busca} onSearchChange={setBusca} label={label}
       triggerClassName={triggerClassName} itemClassName={itemClassName} disabled={disabled} tabIndex={tabIndex}
-      atividadeNaLista atividadeInicial={atividadeSugerida} />
+      atividadeNaLista atividadeInicial={atividadeSugerida} abertoAoMontar={abertoAoMontar} />
   );
 }

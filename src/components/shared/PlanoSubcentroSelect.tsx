@@ -72,6 +72,9 @@ export interface PlanoSubcentroSelectProps {
    */
   atividadeNaLista?: boolean;
   atividadeInicial?: Atividade | null;
+  /** SUGESTAO-ITENS-02 (Gabriel 27/11) — abre JÁ ao montar (o "Escolher outra conta…" do "Juntar tudo"): a lista inteira com o cursor na busca.
+   *  Opt-in: sem a prop, o de sempre. */
+  abertoAoMontar?: boolean;
 }
 
 const atividadeValidaDaBarra = (v: string): Atividade | null => ATIVIDADES.find((a) => a.valor === v)?.valor ?? null;
@@ -87,9 +90,9 @@ export function PlanoSubcentroSelect({
   value, onChange, onSelected, classificacoes, tipoOperacao, escopoNegocio,
   escopoObrigatorio = false, somenteCompoeDre = false,
   search, onSearchChange, label, triggerClassName, size = 'default', contentClassName, itemClassName, tabIndex, disabled,
-  atividadeNaLista = false, atividadeInicial = null,
+  atividadeNaLista = false, atividadeInicial = null, abertoAoMontar = false,
 }: PlanoSubcentroSelectProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(abertoAoMontar);
   /* SELETOR-CONTA-POR-ATIVIDADE-01 — a atividade escolhida NA LISTA (estado da abertura): nasce do escopo da conta de hoje, senao da sugestao */
   const [atividadeDaLista, setAtividadeDaLista] = useState<Atividade | null>(null);
   const atividadesDaBarra = useMemo(() => (atividadeNaLista ? atividadesDoPlano(classificacoes, tipoOperacao) : []),
