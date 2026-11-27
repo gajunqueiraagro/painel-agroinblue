@@ -7,6 +7,9 @@
  * Para (sem mandar a próxima) quando: o tempo da busca passa do orçamento · a Receita recusa o LOTE (sem cStat do evento) · a conexão, a
  * leitura ou o certificado falham · a MESMA recusa do evento vem 2 vezes seguidas (recusa sistêmica: não gasta nota a nota).
  * A recusa de UMA nota (cStat ≠ 135/573) não para: a nota fica com a recusa na trilha e não é repetida (o banco tira das pendentes).
+ * CONSERTO (Gabriel 27/11): as recusas QUE SÃO DA NOTA (`RECUSAS_DA_NOTA`: 596 fora do prazo de 10 dias, 217 nota que não consta, 236 chave
+ * inválida, 650 nota cancelada/denegada) nunca contam para a parada por repetição — a Santa Rita teve as notas de novembro presas atrás de
+ * duas 596 de notas antigas. A parada por recusa repetida fica só para o que é do SISTEMA (certificado, autorização, Receita…).
  * ⚠ Só ciência. Confirmação/Desconhecimento/Não realizada seguem nota a nota com OK (a Lambda também só deixa passar o 210210).
  */
 export interface PendentesDaCiencia { ligada: boolean; limite: number; chaves: string[]; motivo?: string | null }
@@ -26,6 +29,8 @@ export interface ContadorDaCiencia {
 export const ORCAMENTO_MS = 60_000;
 
 const txt = (x: unknown): string | null => (typeof x === 'string' && x !== '' ? x : null);
+/** as recusas que dizem respeito à NOTA (não ao certificado nem à Receita): seguem para a próxima e não contam para a parada */
+export const RECUSAS_DA_NOTA: ReadonlySet<string> = new Set(['596', '217', '236', '650']);
 
 export async function cienciaAutomatica(inicioMs: number, pecas: PecasCienciaAutomatica, orcamentoMs = ORCAMENTO_MS): Promise<ContadorDaCiencia> {
   const c: ContadorDaCiencia = { ligada: false, pendentes: 0, enviadas: 0, aceitas: 0, recusadas: 0, falhas: 0, parou: null, motivo: null, cstats: [] };
@@ -60,6 +65,7 @@ export async function cienciaAutomatica(inicioMs: number, pecas: PecasCienciaAut
     c.cstats.push(cstat);
     if (r.corpo.com_ciencia === true) { c.aceitas += 1; ultimaRecusa = null; continue; }
     c.recusadas += 1;
+    if (RECUSAS_DA_NOTA.has(cstat)) continue;
     if (ultimaRecusa === cstat) { c.parou = 'recusa_repetida'; break; }
     ultimaRecusa = cstat;
   }

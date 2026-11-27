@@ -32,7 +32,7 @@ export interface LinhaRecebida {
 export type TipoNaLista = 'resumo' | 'completa';
 /* NOTAS-RECEITA-SEM-LANCAMENTO-01: + 'nao_financeira' (a nota diz que não gera lançamento: comodato, entrega futura…) e 'venda_titular' (a NF de
    entrada do comprador: é a venda do titular) — pela `classeDaNota`, automático pelo XML */
-export type SituacaoNaLista = 'nova' | 'pode_estar' | 'no_sistema' | 'pede_ciencia' | 'esperando_xml' | 'cancelada' | 'ignorada' | 'nao_financeira'
+export type SituacaoNaLista = 'nova' | 'pode_estar' | 'no_sistema' | 'pede_ciencia' | 'fora_do_prazo' | 'esperando_xml' | 'cancelada' | 'ignorada' | 'nao_financeira'
   | 'venda_titular';
 
 /** NOTA-RECEITA-CASAR-01 — um lançamento que PODE SER a nota (a regra é do banco: `fn_notas_candidatos`; a tela só lê e mostra) */
@@ -116,7 +116,7 @@ export function lerIgnoradas(dados: unknown): Map<string, IgnoradaDaNota> {
 }
 /** pode ignorar: só a nota que pede ação (a lançar ou esperando ciência/XML) */
 export const podeIgnorar = (n: Pick<NotaNaLista, 'sit'>): boolean =>
-  n.sit === 'nova' || n.sit === 'pode_estar' || n.sit === 'pede_ciencia' || n.sit === 'esperando_xml';
+  n.sit === 'nova' || n.sit === 'pode_estar' || n.sit === 'pede_ciencia' || n.sit === 'fora_do_prazo' || n.sit === 'esperando_xml';
 /** a frase do ignorar (o title do selo): "Compra pessoal · por Fulano em 23/11, 11:52 · texto" */
 export function fraseDaIgnorada(i: IgnoradaDaNota): string {
   const quando = new Date(i.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -253,11 +253,21 @@ export function numeroDaChave(chave: string): string {
 }
 export const serieDaChave = (chave: string): string => String(Number(chave.slice(22, 25)));
 
-export function situacaoNaLista(l: LinhaRecebida, chavesNoSistema: ReadonlySet<string>): SituacaoNaLista {
+/** CONSERTO DA CIÊNCIA (Gabriel 27/11) — a Receita só aceita a ciência até 10 DIAS depois da nota (cStat 596 depois): a nota só-resumo mais
+ *  velha que isso não "pede ciência" — está FORA DO PRAZO (o XML completo vem pelo fornecedor ou pela Caixa de entrada). Mesmo prazo do banco
+ *  (`fn_fiscal_dfe_ciencia_pendentes`, lote 113610). */
+export const PRAZO_DA_CIENCIA_DIAS = 10;
+export function foraDoPrazoDaCiencia(emissao: string | null, hoje: string = hojeLocal()): boolean {
+  if (!emissao || !/^\d{4}-\d{2}-\d{2}/.test(emissao) || !/^\d{4}-\d{2}-\d{2}/.test(hoje)) return false;
+  const dias = (Date.parse(`${hoje.slice(0, 10)}T00:00:00Z`) - Date.parse(`${emissao.slice(0, 10)}T00:00:00Z`)) / 86_400_000;
+  return dias > PRAZO_DA_CIENCIA_DIAS;
+}
+
+export function situacaoNaLista(l: LinhaRecebida, chavesNoSistema: ReadonlySet<string>, hoje: string = hojeLocal()): SituacaoNaLista {
   if (l.situacao === 'cancelado_na_sefaz' || l.eventos.some((e) => e.tpEvento === '110111')) return 'cancelada';
   if (l.situacao === 'ignorado') return 'ignorada';
   if (l.situacao === 'importado' || l.notaId || chavesNoSistema.has(l.chave)) return 'no_sistema';
-  if (l.situacao === 'resumo') return 'pede_ciencia';
+  if (l.situacao === 'resumo') return foraDoPrazoDaCiencia(l.emissao, hoje) ? 'fora_do_prazo' : 'pede_ciencia';
   if (l.situacao === 'manifestado') return 'esperando_xml';
   return 'nova';
 }
@@ -273,7 +283,7 @@ export function montarLista(linhas: readonly LinhaRecebida[], titulares: Readonl
     if (!x || i.em > x.em) ultimaDoEmitente.set(i.emitenteDocumento, i);
   }
   return linhas.map((l) => {
-    const base = situacaoNaLista(l, chavesNoSistema);
+    const base = situacaoNaLista(l, chavesNoSistema, hoje);
     const a = atributos.get(l.chave);
     const classe: ClasseDaNota = a ? classeDaNota(a, base === 'cancelada') : base === 'cancelada' ? { classe: 'cancelada' } : { classe: 'compra' };
     /* a classe só tira a nota do "a lançar" (nova/pode estar): já no sistema, cancelada e ciência ficam como estão */
@@ -397,7 +407,7 @@ export function lerCandidatos(dados: unknown): Map<string, CandidatoDaNota[]> | 
 export type AbaDaReceita = 'lancar' | 'ciencia' | 'no_sistema' | 'vendas' | 'nao_financeiras' | 'canceladas' | 'ignoradas' | 'todas';
 export const ABAS_DA_RECEITA: { valor: AbaDaReceita; rotulo: string; filtro: (n: NotaNaLista) => boolean }[] = [
   { valor: 'lancar', rotulo: 'A lançar', filtro: (n) => n.sit === 'nova' || n.sit === 'pode_estar' },
-  { valor: 'ciencia', rotulo: 'Ciência pendente', filtro: (n) => n.sit === 'pede_ciencia' || n.sit === 'esperando_xml' },
+  { valor: 'ciencia', rotulo: 'Ciência pendente', filtro: (n) => n.sit === 'pede_ciencia' || n.sit === 'esperando_xml' || n.sit === 'fora_do_prazo' },
   { valor: 'no_sistema', rotulo: 'Já no sistema', filtro: (n) => n.sit === 'no_sistema' },
   /* NOTAS-RECEITA-SEM-LANCAMENTO-01: saem do "A lançar" sem sumir */
   { valor: 'vendas', rotulo: 'Vendas', filtro: (n) => n.sit === 'venda_titular' },
@@ -416,6 +426,7 @@ export const SITUACAO_NA_TELA: Record<SituacaoNaLista, { rotulo: string; cor: st
   pode_estar: { rotulo: 'Pode estar lançada', cor: 'bg-orange-100 text-orange-800', dica: 'há lançamento sem nota com o mesmo valor (do mesmo CNPJ ou sem fornecedor): "Lançar" mostra antes de criar' },
   no_sistema: { rotulo: 'Já no sistema', cor: 'bg-zinc-200 text-zinc-700', dica: 'a chave desta nota já está numa nota do sistema' },
   pede_ciencia: { rotulo: 'Pede ciência', cor: 'bg-amber-100 text-amber-800', dica: 'só o resumo da Receita; o XML completo vem depois da ciência (F3.3)' },
+  fora_do_prazo: { rotulo: 'Fora do prazo', cor: 'bg-zinc-100 text-zinc-700 ring-1 ring-amber-300', dica: 'só o resumo; a Receita só aceita a ciência até 10 dias depois da nota (cStat 596): o XML completo vem pelo fornecedor (e-mail) ou pela Caixa de entrada' },
   esperando_xml: { rotulo: 'Esperando XML', cor: 'bg-sky-100 text-sky-800', dica: 'ciência enviada; o XML chega na próxima busca' },
   cancelada: { rotulo: 'Cancelada', cor: 'bg-red-100 text-red-800', dica: 'o emitente cancelou na Receita: nada a lançar' },
   ignorada: { rotulo: 'Ignorada', cor: 'bg-zinc-200 text-zinc-700', dica: 'marcada para não lançar' },
@@ -441,7 +452,7 @@ export function chavesJaLancadas(dados: unknown): Set<string> | null {
 /** só estas perguntam ao banco: a cancelada/ignorada/ligada não muda de aba por isso */
 export function precisaConferirLancamento(l: LinhaRecebida, chavesNoSistema: ReadonlySet<string>): boolean {
   const sit = situacaoNaLista(l, chavesNoSistema);
-  return sit === 'nova' || sit === 'pede_ciencia' || sit === 'esperando_xml';
+  return sit === 'nova' || sit === 'pede_ciencia' || sit === 'fora_do_prazo' || sit === 'esperando_xml';
 }
 
 /** total das que valem (sem canceladas/ignoradas) */
