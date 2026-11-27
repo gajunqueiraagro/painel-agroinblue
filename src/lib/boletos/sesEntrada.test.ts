@@ -49,6 +49,38 @@ describe('Lambda do SES', () => {
     }
     expect(f.posts[2].corpo).toMatchObject({ mensagem_id: '<m1@banco>', recebido_em: '2026-11-16T15:00:00Z', confirmacao_gmail: false });
   });
+  it('L8 ENTRADA-CENTRAL-01 F1: cada anexo é lido UMA vez (2 destinatários) e a leitura vai com o arquivo na mensagem; o corpo nunca', async () => {
+    const lidos: string[] = [];
+    const f = falsas([pdf('a.pdf'), pdf('b.pdf')]);
+    f.pecas.ler = async (bytes, tipo, nome) => { lidos.push(`${nome}:${tipo}`); expect(new TextDecoder().decode(bytes)).not.toContain(CORPO_SECRETO); return nome === 'a.pdf' ? { v: 'caixa-1', k: 'nada', frase: 'x' } : null; };
+    await processar(f.pecas, evento({ recipients: [DEST, 'outro-cliente-abc@boletos.agroinblue.com.br'] }));
+    expect(lidos).toEqual(['a.pdf:pdf', 'b.pdf:pdf']);
+    const mensagens = f.posts.filter((p) => p.corpo.etapa === 'mensagem');
+    expect(mensagens).toHaveLength(2);
+    for (const m of mensagens) {
+      expect(m.corpo.arquivos).toEqual([
+        { nome: 'a.pdf', tipo: 'pdf', tamanho: 10, md5: 'a'.repeat(32), leitura: { v: 'caixa-1', k: 'nada', frase: 'x' } },
+        { nome: 'b.pdf', tipo: 'pdf', tamanho: 10, md5: 'a'.repeat(32) },
+      ]);
+    }
+    expect(f.posts.filter((p) => p.corpo.etapa === 'arquivo').every((p) => !('leitura' in p.corpo))).toBe(true);
+  });
+  it('L9 F1: leitor que falha, que estoura o teto, ou vírus = o arquivo vai SEM leitura (o e-mail entra igual)', async () => {
+    const lento = falsas([pdf('a.pdf')]);
+    lento.pecas.tetoDaLeituraMs = 5;
+    lento.pecas.ler = () => new Promise((ok) => setTimeout(() => ok({ v: 'caixa-1', k: 'senha' }), 200));
+    await processar(lento.pecas, evento());
+    expect(lento.posts.at(-1)?.corpo.arquivos).toEqual([{ nome: 'a.pdf', tipo: 'pdf', tamanho: 10, md5: 'a'.repeat(32) }]);
+    const quebra = falsas([pdf('a.pdf')]);
+    quebra.pecas.ler = async () => { throw new Error('pdf quebrado'); };
+    await processar(quebra.pecas, evento());
+    expect(quebra.posts.at(-1)?.corpo.arquivos).toEqual([{ nome: 'a.pdf', tipo: 'pdf', tamanho: 10, md5: 'a'.repeat(32) }]);
+    let chamou = false;
+    const virus = falsas([pdf('a.pdf')]);
+    virus.pecas.ler = async () => { chamou = true; return { v: 'caixa-1', k: 'senha' }; };
+    await processar(virus.pecas, evento({ virus: 'FAIL' }));
+    expect(chamou).toBe(false);
+  });
   it('L2 vírus: nenhum arquivo sobe; a mensagem leva só os nomes', async () => {
     const f = falsas([pdf('a.pdf')]);
     await processar(f.pecas, evento({ virus: 'FAIL' }));

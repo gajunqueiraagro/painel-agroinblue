@@ -131,6 +131,19 @@ describe('etapa mensagem', () => {
     const falha = falsas({ registrar: async () => ({ ok: false, codigo: '57014' }) });
     expect((await pedir(falha.pecas, mensagem([]))).status).toBe(500);
   });
+  it('M6 ENTRADA-CENTRAL-01 F1: a leitura da Lambda vai com o arquivo ao banco; a grande demais ou que não é objeto vai sem', async () => {
+    const f = falsas();
+    await pedir(f.pecas, { etapa: 'arquivo', destinatario: DEST, conteudo_b64: b64(PDF) });
+    const leitura = { v: 'caixa-1', k: 'nada', frase: 'Sem linha digitável.' };
+    await pedir(f.pecas, mensagem([{ nome: 'b.pdf', tipo: 'pdf', tamanho: PDF.length, md5: md5(PDF), leitura }]));
+    expect(f.registros[0].arquivos).toEqual([{ nome: 'b.pdf', tipo: 'pdf', tamanho: PDF.length, md5: md5(PDF), storage_path: caminhoDoArquivo(CLIENTE, md5(PDF), 'pdf'), leitura }]);
+    for (const ruim of [{ v: 'caixa-1', k: 'nada', frase: 'x'.repeat(40000) }, 'texto', [1]]) {
+      const g = falsas();
+      await pedir(g.pecas, { etapa: 'arquivo', destinatario: DEST, conteudo_b64: b64(PDF) });
+      await pedir(g.pecas, mensagem([{ nome: 'b.pdf', tipo: 'pdf', tamanho: PDF.length, md5: md5(PDF), leitura: ruim }]));
+      expect(g.registros[0].arquivos).toEqual([{ nome: 'b.pdf', tipo: 'pdf', tamanho: PDF.length, md5: md5(PDF), storage_path: caminhoDoArquivo(CLIENTE, md5(PDF), 'pdf') }]);
+    }
+  });
   it('M5 sem Message-ID = 400; data inválida vai nula (o banco usa agora)', async () => {
     const f = falsas();
     expect((await pedir(f.pecas, mensagem([], { mensagem_id: ' ' }))).status).toBe(400);
