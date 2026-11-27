@@ -23,10 +23,10 @@ const dados = (): DadosDaReceita => ({
   titulares: [{ id: 't1', nome: 'Produtora Exemplo' }], ultimaBusca: '2026-11-16T22:46:00Z', proximaBusca: null,
 });
 const abrir = (o: { aoLancar?: (f: File) => void; aoVincular?: (f: File, id: string) => Promise<string | null>; lerXml?: (id: string) => Promise<string>;
-  d?: DadosDaReceita; abrirDanfe?: () => Window | null; mostrarNaAba?: (aba: Window | null, f: File) => Promise<void> } = {}) =>
+  d?: DadosDaReceita; abrirDanfe?: () => Window | null; mostrarNaAba?: (aba: Window | null, f: File) => Promise<void>; aoAbrindo?: (a: boolean) => void } = {}) =>
   render(<NotasDaReceitaDialog clienteNome="Cliente Bancada" dados={o.d ?? dados()} carregando={false} erro={null} aoFechar={() => {}}
     aoLancar={o.aoLancar ?? (() => {})} aoVincular={o.aoVincular ?? (async () => null)} lerXml={o.lerXml ?? (async () => '<nfeProc/>')}
-    abrirDanfe={o.abrirDanfe ?? (() => null)} mostrarNaAba={o.mostrarNaAba ?? (async () => {})} />);
+    abrirDanfe={o.abrirDanfe ?? (() => null)} mostrarNaAba={o.mostrarNaAba ?? (async () => {})} aoAbrindo={o.aoAbrindo} />);
 const linhaDe = (n: number) => screen.getAllByTestId('receita-linha').find((tr) => tr.textContent?.includes(`Emitente Exemplo ${n}`)) as HTMLElement;
 
 /* CONSERTO DA CIÊNCIA (27/11): a nota só-resumo com mais de 10 dias fica "Fora do prazo"; as datas dos exemplos (14/11) valem num dia fixo */
@@ -57,6 +57,26 @@ describe('NOTAS-RECEITA F3.4 — a tela', () => {
     expect(f.name).toBe(`NFe${chave(1)}.xml`);
     const texto = await new Promise<string>((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.readAsText(f); });
     expect(texto).toBe('<nfeProc>sintetico</nfeProc>');
+  });
+  it('NOTA-ABRIR-RAPIDO-01: o clique avisa NA HORA (antes do XML chegar) e o XML pré-carregado no mouse é lido UMA vez só', async () => {
+    const aoAbrindo = vi.fn(); const aoLancar = vi.fn();
+    let solta: (x: string) => void = () => {};
+    const lerXml = vi.fn(() => new Promise<string>((ok) => { solta = ok; }));
+    abrir({ aoLancar, lerXml, aoAbrindo });
+    fireEvent.mouseEnter(linhaDe(1));
+    expect(lerXml).toHaveBeenCalledTimes(1);
+    fireEvent.click(within(linhaDe(1)).getByTestId('receita-lancar'));
+    expect(aoAbrindo).toHaveBeenCalledWith(true);
+    expect(aoLancar).not.toHaveBeenCalled();
+    solta('<nfeProc/>');
+    await waitFor(() => expect(aoLancar).toHaveBeenCalledTimes(1));
+    expect(lerXml).toHaveBeenCalledTimes(1);
+  });
+  it('NOTA-ABRIR-RAPIDO-01: o XML que falha desliga o "Abrindo a nota…"', async () => {
+    const aoAbrindo = vi.fn();
+    abrir({ aoAbrindo, lerXml: async () => { throw new Error('Não consegui ler o XML.'); } });
+    fireEvent.click(within(linhaDe(1)).getByTestId('receita-lancar'));
+    await waitFor(() => expect(aoAbrindo).toHaveBeenLastCalledWith(false));
   });
   it('T3 resumo: Lançar escondido e PDF desligado; cancelada e já no sistema sem Lançar', () => {
     abrir();

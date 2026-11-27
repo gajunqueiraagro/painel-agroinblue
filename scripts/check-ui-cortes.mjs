@@ -2301,6 +2301,8 @@ const CENARIOS = [
     } })),
   /* NOTA-RECEITA-DANFE-ANEXO-01 — o gesto "DANFE das notas já guardadas": a lista, o Simular feito (2 sem leitura) e o 2º cliente (curto) */
   { nome: 'danfe-guardadas', url: 'tela=danfe-guardadas', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* NOTA-ABRIR-RAPIDO-01 — o "Abrindo a nota…" (mesmo tamanho do Novo Lançamento): nada corta */
+  { nome: 'abrindo-a-nota', url: 'tela=abrindo-a-nota', tamanhos: [[1126, 579], [1280, 720], [1440, 900]] },
   /* ENTREGA-FUTURA-LIGAR-01 — o "Ligar à compra" (15 remessas · a compra pré-marcada · a prévia) e o curto (sem faturamento) */
   { nome: 'ligar-compra', url: 'tela=ligar-compra', tamanhos: TAMANHOS_DO_CONSORCIO, antes: async (p) => { await p.getByText('Entregue').waitFor({ timeout: 8000 }); } },
   { nome: 'ligar-compra-curta', url: 'tela=ligar-compra&v=curta', tamanhos: TAMANHOS_DO_CONSORCIO },

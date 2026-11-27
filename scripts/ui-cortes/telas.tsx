@@ -3375,6 +3375,9 @@ if (tela === 'mesclar') {
       buscarFaturamento={async () => ({ ok: false, frase: 'bancada' })} />);
   };
   void montarLigar();
+} else if (tela === 'abrindo-a-nota') {
+  /* NOTA-ABRIR-RAPIDO-01 — o "Abrindo a nota…" do clique no "Lançar": o tamanho do Novo Lançamento, a peça da marca */
+  void import('@/components/financeiro-v2/AbrindoANota').then(({ AbrindoANota }) => montar(<AbrindoANota aberto aoFechar={() => {}} />));
 } else if (tela === 'danfe-guardadas') {
   /* NOTA-RECEITA-DANFE-ANEXO-01 — o gesto "DANFE das notas já guardadas" com dado SINTÉTICO: 21 notas (emitentes compridos, a 8.702 em 4
      parcelas, 2 sem o XML no armazenamento) ou `v=curta` (2 notas, nomes curtos — o 2º cliente da UI-LARGURA-FIXA-01) */
