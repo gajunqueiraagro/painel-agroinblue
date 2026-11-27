@@ -33,6 +33,10 @@ describe('o que se guarda', () => {
     expect(paraGravar(folha)).toEqual({ v: LEITOR_VERSAO, k: 'folha' });
     expect(paraGravar({ k: 'senha', errada: true })).toEqual({ v: LEITOR_VERSAO, k: 'senha' });
     expect(paraGravar({ k: 'erro', frase: 'x' })).toBeNull();
+    /* FOLHA-VERA-PACOTE-01: o analítico da folha (pessoa e salário) não se guarda nem como tipo: o banco não o conhece */
+    const totais = { funcionarios: 1, proventos: 1000, descontos: 0, liquido: 1000, fgts: 80 };
+    expect(paraGravar({ k: 'analitica', analitica: { empresa: 'FAZENDA SINTETICA', competencia: '2026-10', emissao: null, pessoas: [],
+      soma: { ...totais, inss: 0, irrf: 0 }, resumo: totais, confere: true, naoConfere: [] } })).toBeNull();
     expect(paraGravar({ k: 'nada', frase: 'Sem linha digitável.' })).toEqual({ v: LEITOR_VERSAO, k: 'nada', frase: 'Sem linha digitável.' });
   });
   it('o que se guarda não leva chave fora da lista do banco (_fn_entrada_leitura_valida)', () => {
@@ -81,7 +85,9 @@ function fechoDoLeitor(): string[] {
   return [...vistos].map((f) => path.relative(RAIZ, f)).sort();
 }
 /** A assinatura do leitor de hoje: md5 de "arquivo:md5" de cada arquivo, em ordem. MUDOU O LEITOR? Suba `LEITOR_VERSAO` e troque aqui. */
-const ASSINATURA: Record<string, string> = { 'caixa-1': 'd4b89f1bc1d9eeec96927889c370f628' };
+/* caixa-1 trocou de md5 ANTES de existir leitura guardada (27/11: o analítico da folha do Code 6 e o vencimento do DARF entraram no leitor
+   antes do push da F1; a coluna estava vazia). Depois do 1º push, leitor mudado = versão nova, nunca troca do md5 de uma versão. */
+const ASSINATURA: Record<string, string> = { 'caixa-1': '8591035d6c3d97bd2416cca1cab31c89' };
 
 describe('a versão do leitor', () => {
   it('o leitor de hoje tem a assinatura desta versão (mudou um arquivo do leitor = suba LEITOR_VERSAO)', () => {

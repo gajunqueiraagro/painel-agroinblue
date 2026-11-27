@@ -93,7 +93,8 @@ export interface BoletoNormalizado {
   banco: string | null;
   /** Em reais; null quando zerado (valor livre) ou, na arrecadação, quando o 3º dígito não diz "valor efetivo" (6 ou 8). */
   valor: number | null;
-  /** `YYYY-MM-DD`; null no fator 0000 e sempre na arrecadação (o vencimento dela não está no código). */
+  /** `YYYY-MM-DD`; null no fator 0000 e sempre na arrecadação (o vencimento dela não está no código; o `lerBoleto`/`lerBoletos` põe o
+   *  IMPRESSO, FOLHA-VERA-PACOTE-01). */
   vencimento: string | null;
 }
 export type LinhaConferida = BoletoNormalizado | { ok: false; motivo: MotivoDaLinha };

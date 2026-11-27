@@ -21,6 +21,8 @@ import type { FolhaLida } from '@/lib/folha/lerFolha';
 import type { ResumoLido } from '@/lib/folha/lerResumoDoContador';
 import { fraseDaLinhaDoResumo, rotuloDoResumo } from '@/lib/folha/resumoNaCaixa';
 import { ROTULO_DO_TIPO, competenciaBR, fraseDaLinhaDaFolha } from '@/lib/folha/folhaNaCaixa';
+import type { FolhaAnaliticaLida } from '@/lib/folha/lerFolhaAnalitica';
+import { TITULO_DA_ANALITICA, fraseDaLinhaDaAnalitica, rotuloDaAnalitica } from '@/lib/folha/analiticaNaCaixa';
 
 export type AbaDaCaixaV2 = 'a_resolver' | 'resolvidos' | 'ignorados';
 export const ABAS_DA_CAIXA_V2: readonly { valor: AbaDaCaixaV2; rotulo: string }[] = [
@@ -42,6 +44,8 @@ export type Lido =
   | { k: 'folha'; folha: FolhaLida }
   /** FOLHA-RESUMO-CONTADOR-01: o resumo do contador ("Extrato Mensal"): o FGTS por empresa */
   | { k: 'resumo'; resumo: ResumoLido }
+  /** FOLHA-VERA-PACOTE-01 F1: o relatório analítico da folha (o espelho): só reconhecido, nada grava */
+  | { k: 'analitica'; analitica: FolhaAnaliticaLida }
   | { k: 'nada'; frase: string }
   | { k: 'senha'; errada: boolean }
   | { k: 'erro'; frase: string };
@@ -74,6 +78,8 @@ export interface LinhaDaCaixa {
   folha: FolhaLida | null;
   /** FOLHA-RESUMO-CONTADOR-01: o resumo do contador lido (a prévia do FGTS abre pelo "Abrir") */
   resumo: ResumoLido | null;
+  /** FOLHA-VERA-PACOTE-01 F1: o relatório analítico da folha lido */
+  analitica: FolhaAnaliticaLida | null;
   /** O boleto que JÁ está gravado na caixa (o grupo "guardados", ou o "já está no sistema"). */
   boletoGuardadoId: string | null;
   /** Nesta sessão já foi resolvido (o PDF com 2 boletos: um feito, o outro não). */
@@ -141,7 +147,7 @@ function base(chave: string, tipo: TipoDaLinha, fontes: string[], arquivo: strin
   noSistema: LinhaDaCaixa['noSistema'], acoes: Acao[]): LinhaDaCaixa {
   return {
     chave, tipo, fontes, arquivo, arquivoTitulo, emitente: null, vencimento: null, valor: null, antigo: false, noSistema, acoes,
-    nota: null, notaNoSistema: null, boleto: null, previa: null, folha: null, resumo: null, boletoGuardadoId: null, feito: false,
+    nota: null, notaNoSistema: null, boleto: null, previa: null, folha: null, resumo: null, analitica: null, boletoGuardadoId: null, feito: false,
   };
 }
 
@@ -224,7 +230,7 @@ export function linhaDoBoleto(chave: string, fontes: string[], arquivo: string, 
 }
 
 /** A linha de um arquivo lido que não é boleto nem nota, ainda lendo, com senha ou com erro. */
-export function linhaSemConteudo(chave: string, fonte: string, nome: string, lido: Exclude<Lido, { k: 'nota' } | { k: 'boletos' } | { k: 'folha' } | { k: 'resumo' }>): LinhaDaCaixa {
+export function linhaSemConteudo(chave: string, fonte: string, nome: string, lido: Exclude<Lido, { k: 'nota' } | { k: 'boletos' } | { k: 'folha' } | { k: 'resumo' } | { k: 'analitica' }>): LinhaDaCaixa {
   switch (lido.k) {
     case 'lendo': return base(chave, 'lendo', [fonte], nome, nome, { selo: null, texto: 'lendo o arquivo…', titulo: 'lendo o arquivo…' }, []);
     case 'senha': {
@@ -257,6 +263,18 @@ export function linhaDoResumo(chave: string, fonte: string, nome: string, resumo
       { selo: { texto: 'a aplicar', tom: 'ambar' }, texto: t, titulo: `${t} · "Abrir" mostra a previsão do FGTS por fazenda (nada grava antes do Prever)` },
       ['abrir_resumo', 'ignorar']),
     emitente: rotuloDoResumo(resumo), valor: resumo.totalFgts, resumo,
+  };
+}
+
+/** FOLHA-VERA-PACOTE-01 F1 — a linha do relatório analítico da folha: "Folha analítica · 02/2025" · o arquivo · a empresa, N funcionários e se
+ *  confere com o resumo geral · o líquido total. Só reconhece: a ação é a de qualquer arquivo (Ignorar); o pacote da folha aplica (F3). */
+export function linhaDaAnalitica(chave: string, fonte: string, nome: string, f: FolhaAnaliticaLida): LinhaDaCaixa {
+  const t = fraseDaLinhaDaAnalitica(f);
+  const titulo = f.confere ? `${t}. ${TITULO_DA_ANALITICA}` : `${t}: ${f.naoConfere.join(' ')} ${TITULO_DA_ANALITICA}`;
+  return {
+    ...base(chave, 'folha', [fonte], nome, nome,
+      { selo: f.confere ? { texto: 'confere', tom: 'ok' } : { texto: 'não confere', tom: 'vermelho' }, texto: t, titulo }, ['ignorar']),
+    emitente: rotuloDaAnalitica(f), valor: f.soma.liquido, analitica: f,
   };
 }
 
@@ -306,6 +324,8 @@ export function linhasDasFontes(fontes: readonly FonteParaMontar[], notas: Recor
     } else if (l.k === 'resumo') {
       const linha = linhaDoResumo(`resumo:${f.chave}`, f.chave, f.nome, l.resumo);
       linhas.push(feitos.has(linha.chave) ? comoFeito(linha) : linha);
+    } else if (l.k === 'analitica') {
+      linhas.push(linhaDaAnalitica(`analitica:${f.chave}`, f.chave, f.nome, l.analitica));
     } else {
       linhas.push(linhaSemConteudo(f.chave, f.chave, f.nome, l));
     }

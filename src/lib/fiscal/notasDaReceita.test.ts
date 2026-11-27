@@ -5,7 +5,7 @@
  *   R10 NOTA-RECEITA-CASAR-01: "Pode estar lançada" (mesmo CNPJ / sem fornecedor), pré-marcado só com 1 do mesmo CNPJ, leitura dos candidatos
  *   R9 F34-SITUACAO-01 + NJ-NOTAS-LENTAS: as chaves já lançadas da resposta em lote; formato estranho = null (falha, nunca "Nova")
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, afterAll, beforeAll, vi } from 'vitest';
 import {
   ABAS_DA_RECEITA, arquivoDoXml, filtrarBusca, lerLinhasRecebidas, montarLista, numeroDaChave, pedemAcao, serieDaChave, situacaoNaLista,
   candidatoPreMarcado, chavesJaLancadas, comCandidatos, lerCandidatos, precisaConferirLancamento, totalDaLista, type LinhaRecebida, seloDaNota, ROTULO_CURTO,
@@ -18,6 +18,10 @@ const linha = (o: Partial<LinhaRecebida> & { n?: number } = {}): LinhaRecebida =
   emitenteNome: 'Casa Agro Exemplo Ltda', emissao: '2026-11-14', valorCent: 1834050, notaId: null, recebidoEm: null, eventos: [], temXml: false, ...o,
 });
 const lista = (ls: LinhaRecebida[], noSistema: string[] = []) => montarLista(ls, new Map([['t1', 'Produtora Exemplo']]), new Set(noSistema));
+
+/* CONSERTO DA CIÊNCIA (27/11): a nota só-resumo com mais de 10 dias fica "Fora do prazo"; as datas dos exemplos (14/11) valem num dia fixo */
+beforeAll(() => { vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-15T12:00:00') }); });
+afterAll(() => { vi.useRealTimers(); });
 
 describe('NOTAS-RECEITA F3.4 — a regra da lista', () => {
   it('R1 nº (pos. 26–34) e série (23–25) saem da chave', () => {
@@ -206,5 +210,18 @@ describe('NOTA-DEMONSTRACAO-01 — a ligação da demonstração', () => {
     expect(fraseDaLigacao({ papel: 'retorno', tipo: 'retorno', outra: '7.891', outraChave: D, por: 'fornecedor' }))
       .toBe('Fecha a demonstração NF 7.891 — só pelo fornecedor: confira se é o mesmo bem.');
     expect(ligacaoDaNota(chave(1), lig)).toBeNull();
+  });
+});
+
+describe('CONSERTO DA CIÊNCIA (27/11) — fora do prazo de 10 dias', () => {
+  it('R11 só-resumo com mais de 10 dias = "Fora do prazo" (não pede ciência, não entra no selo, aparece na aba Ciência pendente)', () => {
+    const velha = { ...linha(), situacao: 'resumo', emissao: '2026-11-01' } as LinhaRecebida;
+    const nova = { ...linha(), situacao: 'resumo', emissao: '2026-11-10' } as LinhaRecebida;
+    expect(situacaoNaLista(velha, new Set(), '2026-11-15')).toBe('fora_do_prazo');
+    expect(situacaoNaLista(nova, new Set(), '2026-11-15')).toBe('pede_ciencia');
+    expect(situacaoNaLista(nova, new Set(), '2026-11-21')).toBe('fora_do_prazo');
+    const lista = montarLista([velha, nova], new Map(), new Set(), new Map(), new Map(), '2026-11-15');
+    expect(pedemAcao(lista)).toBe(1);
+    expect(lista.filter(ABAS_DA_RECEITA.find((a) => a.valor === 'ciencia')?.filtro ?? (() => false)).length).toBe(2);
   });
 });

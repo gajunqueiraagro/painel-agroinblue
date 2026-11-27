@@ -41,6 +41,8 @@ export function paraGravar(l: LeituraDaCaixa): LeituraGravada | null {
     };
     case 'folha': return { v, k: 'folha' };
     case 'resumo': return { v, k: 'resumo' };
+    /* FOLHA-VERA-PACOTE-01: o analítico da folha tem pessoa e salário e o banco não conhece o tipo: não se guarda (a caixa lê no navegador) */
+    case 'analitica': return null;
     case 'nada': return { v, k: 'nada', frase: l.frase };
     case 'senha': return { v, k: 'senha' };
     case 'erro': return null;

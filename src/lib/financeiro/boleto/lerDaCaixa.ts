@@ -12,6 +12,7 @@ import { montarLinhas } from '@/lib/oc/leitura/montarLinhas';
 import { lerFolha, pareceFolha, type FolhaLida } from '@/lib/folha/lerFolha';
 import { acharChaveNFe } from '@/lib/oc/leitura/chaveNFe';
 import { lerResumoDoContador, type ResumoLido } from '@/lib/folha/lerResumoDoContador';
+import { lerFolhaAnalitica, type FolhaAnaliticaLida } from '@/lib/folha/lerFolhaAnalitica';
 
 /** A leitura de UM arquivo pela caixa (injetável: a bancada e os testes passam a sua). */
 export type LeituraDaCaixa =
@@ -19,6 +20,7 @@ export type LeituraDaCaixa =
   | { k: 'boletos'; boletos: BoletoNormalizado[]; beneficiario: ParteDoBoleto; pagador: ParteDoBoleto; paginaDeCada?: number[]; totalDePaginas?: number }
   | { k: 'folha'; folha: FolhaLida }
   | { k: 'resumo'; resumo: ResumoLido }
+  | { k: 'analitica'; analitica: FolhaAnaliticaLida }
   | { k: 'nada'; frase: string }
   | { k: 'senha'; errada: boolean }
   | { k: 'erro'; frase: string };
@@ -67,6 +69,9 @@ export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (
   /* FOLHA-RESUMO-CONTADOR-01: o "Extrato Mensal" do contador (o FGTS por empresa) */
   const resumo = paginas ? lerResumoDoContador(paginas) : null;
   if (resumo && resumo.ok === true) return { k: 'resumo', resumo: resumo.resumo };
+  /* FOLHA-VERA-PACOTE-01 F1: o relatório analítico da folha (o espelho; antes caía no "Folha ainda não é lida aqui") */
+  const analitica = paginas ? lerFolhaAnalitica(paginas) : null;
+  if (analitica && analitica.ok === true) return { k: 'analitica', analitica: analitica.folha };
   const pelaChave = notaPelaChave(paginas ? paginas.flat().join('\n') : null, nomeDoArquivo);
   if (pelaChave) return { k: 'nota', nota: pelaChave };
   return { k: 'nada', frase: paginas && pareceFolha(paginas) ? FRASE_FOLHA_AINDA_NAO : FRASE_NEM_BOLETO_NEM_NOTA };
