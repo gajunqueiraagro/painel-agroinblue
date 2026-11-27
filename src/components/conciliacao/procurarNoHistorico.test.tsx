@@ -1,7 +1,7 @@
 /**
  * P153 (CONC-HISTORICO-01) — o "Procurar no histórico": a lib pura (ler a resposta, a faixa, o modelo) e o componente.
  * ⚠ A RPC É FALSA AQUI: quem prova o banco é `supabase/tests/p153_conciliacao_historico_buscar_test.sql` (termina em RAISE). Aqui se
- *   prova a COSTURA — o campo nasce com o nome do banco (D1: vazio + frase), buscar é gesto, o que vai à RPC, a lista com a data
+ *   prova a COSTURA — o campo nasce com o nome do banco (D1: vazio + frase), a busca sai sozinha ao abrir (CONC-SUGESTOES-V2 A), o que vai à RPC, a lista com a data
  *   inteira, a faixa amarela, "não consegui" nunca vira "nada achado", e o "Criar igual" entrega o modelo.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -57,16 +57,15 @@ describe('a lib do Procurar no histórico', () => {
 });
 
 describe('o componente ProcurarNoHistorico', () => {
-  it('o campo nasce com o nome do banco e NADA sai sozinho; Procurar manda termo, lugares, período, data e valor', async () => {
+  it('CONC-SUGESTOES-V2 A: o campo nasce com o nome do banco e a busca SAI SOZINHA; manda termo, lugares, período, data e valor', async () => {
     render(<ProcurarNoHistorico clienteId="cli" movimento={MOV_BB} onCriarIgual={() => {}} />);
     expect(screen.getByTestId('procurar-historico-termo')).toHaveValue('ZEBRALUX SINT');
-    expect(M.rpc).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByTestId('procurar-historico-botao'));
     await waitFor(() => expect(M.rpc).toHaveBeenCalledTimes(1));
     expect(M.rpc).toHaveBeenCalledWith('fn_conciliacao_historico_buscar', {
       p_cliente: 'cli', p_termo: 'ZEBRALUX SINT', p_onde: ['banco', 'descricao', 'fornecedor'],
       /* P153b: o "até" é o fim do MÊS SEGUINTE ao extrato (05/10 → 30/11) — o em aberto que vence depois do movimento entra */
-      p_de: '2026-01-01', p_ate: '2026-11-30', p_valor: -1382,
+      /* CONC-SUGESTOES-V2 A: em aberto inclusive futuros — sem "até" */
+      p_de: '2026-01-01', p_ate: null, p_valor: -1382,
     });
     const linha = await screen.findByTestId('procurar-historico-achado');
     expect(within(linha).getByText('02/06/2026')).toBeInTheDocument();
@@ -77,15 +76,33 @@ describe('o componente ProcurarNoHistorico', () => {
     expect(screen.getByTestId('procurar-historico-frase').className).toContain('bg-amber-50');
   });
 
-  it('D1: banco sem nome → o campo vazio, a frase "o banco não trouxe o nome: digite" e o Procurar travado', () => {
+  it('D1: banco sem nome → o campo vazio, a frase "o banco não trouxe o nome: digite", o Procurar travado e NADA sai sozinho', () => {
     render(<ProcurarNoHistorico clienteId="cli" movimento={{ data: '2026-10-05', historico: 'PIX ENVIADO', valor: -50 }} onCriarIgual={() => {}} />);
     expect(screen.getByTestId('procurar-historico-termo')).toHaveValue('');
     expect(screen.getByTestId('procurar-historico-frase')).toHaveTextContent('o banco não trouxe o nome: digite');
     expect(screen.getByTestId('procurar-historico-botao')).toBeDisabled();
+    expect(M.rpc).not.toHaveBeenCalled();
+  });
+
+  it('CONC-SUGESTOES-V2 A: Sicredi pelo Open Finance — o campo nasce "NOME · CNPJ"; o nome vai em p_termo e os dígitos em p_documento', async () => {
+    render(<ProcurarNoHistorico clienteId="cli" onCriarIgual={() => {}}
+      movimento={{ data: '2026-11-10', historico: 'LIQUIDACAO BOLETO SICREDI 11222333000181 TRANSPORTADORA SINTETICA LTDA', valor: -6300 }} />);
+    expect(screen.getByTestId('procurar-historico-termo')).toHaveValue('TRANSPORTADORA SINTETICA LTDA · 11.222.333/0001-81');
+    expect(screen.queryByText('o banco não trouxe o nome: digite')).toBeNull();
+    await waitFor(() => expect(M.rpc).toHaveBeenCalledTimes(1));
+    expect(M.rpc.mock.calls[0][1]).toMatchObject({ p_termo: 'TRANSPORTADORA SINTETICA LTDA', p_documento: '11222333000181' });
+  });
+
+  it('CONC-SUGESTOES-V2 A: sem documento, p_documento nem vai (a busca de antes, igual)', async () => {
+    render(<ProcurarNoHistorico clienteId="cli" movimento={MOV_BB} onCriarIgual={() => {}} />);
+    await waitFor(() => expect(M.rpc).toHaveBeenCalledTimes(1));
+    expect(M.rpc.mock.calls[0][1]).not.toHaveProperty('p_documento');
   });
 
   it('desmarcar um lugar e abrir o ano anterior mudam o pedido; Enter procura', async () => {
     render(<ProcurarNoHistorico clienteId="cli" movimento={MOV_BB} onCriarIgual={() => {}} />);
+    await screen.findByTestId('procurar-historico-achado'); /* a busca de abrir */
+    M.rpc.mockClear();
     fireEvent.click(screen.getByTestId('procurar-onde-banco'));
     fireEvent.click(screen.getByTestId('procurar-periodo'));
     expect(screen.getByTestId('procurar-periodo')).toHaveTextContent('desde jan/2025');

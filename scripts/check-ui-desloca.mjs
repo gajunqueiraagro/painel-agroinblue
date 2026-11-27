@@ -1133,24 +1133,30 @@ const CENARIOS = [
       ['todas', async (p) => { await p.locator('[data-testid="notas-da-receita"] button', { hasText: /^Todas/ }).first().click(); await espera(p); }]] },
   /* P153 — procurar no histórico não mexe em nada fora do quadro: o botão, a contagem e a linha do banco ficam onde estão (a frase é linha do quadro) */
   { nome: 'casar-sugestoes-procurar', url: 'tela=sugestoes-casar', tamanhos: TAMANHOS_DO_P92,
-    presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',
+    presos: '[data-testid="linha-do-banco"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"]',
     estados: [['procurou', async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); }]] },
   /* CONC-SUGESTOES-TABELA-01 — marcar e desmarcar as caixinhas (das sugestões e do histórico) não mexe em nada: o rodapé tem as colunas
      reservadas (N · soma · extrato · diferença) e o "Casar selecionados" fica no lugar; o cabeçalho das listas e a faixa do extrato também */
   { nome: 'casar-sugestoes-marcar', url: 'tela=sugestoes-casar&v=rural', tamanhos: TAMANHOS_DO_P92,
     antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); },
-    presos: '[data-testid="sugestoes-extrato"], [data-testid="sugestoes-rodape"] > *, [data-testid="sugestoes-lista"] thead th, [data-testid="procurar-historico-quadro"] thead th',
+    presos: '[data-testid="linha-do-banco"], [data-testid="sugestoes-rodape"] > *, [data-testid="sugestoes-lista"] thead th, [data-testid="procurar-historico-quadro"] thead th',
     estados: [['uma sugestão', async (p) => { await p.locator('[data-testid="sugestoes-lista"] tbody button[role="checkbox"]').nth(0).click(); await espera(p); }],
       ['e uma do histórico', async (p) => { await p.locator('[data-testid="procurar-historico-quadro"] tbody button[role="checkbox"]').first().click(); await espera(p); }],
       ['desmarcadas', async (p) => { await p.locator('[data-testid="sugestoes-lista"] tbody button[role="checkbox"]').nth(0).click();
         await p.locator('[data-testid="procurar-historico-quadro"] tbody button[role="checkbox"]').first().click(); await espera(p); }]] },
+  /* CONC-SUGESTOES-V2 (mock aprovado 25/11) — marcar a EXATA e a possível de outro banco não mexe em nada: a linha do banco, as faixas, o rodapé */
+  { nome: 'casar-sugestoes-v2-marcar', url: 'tela=sugestoes-casar&v=trsantana', tamanhos: [...TAMANHOS_DO_P92, [1280, 720]],
+    antes: async (p) => { await p.locator('[data-testid="faixa-exata"]').waitFor(); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor(); await espera(p); },
+    presos: '[data-testid="linha-do-banco"], [data-testid="faixa-exata"], [data-testid="faixa-possiveis"], [data-testid="sugestoes-rodape"] > *, [data-testid="sugestoes-lista"] thead th',
+    estados: [['a exata', async (p) => { await p.locator('[data-testid="exata"] button[role="checkbox"]').first().click(); await espera(p); }],
+      ['e a de outro banco', async (p) => { await p.locator('[data-testid="do-motor"] button[role="checkbox"]').first().click(); await espera(p); }]] },
   /* P153b — ordenar o histórico não mexe em nada fora do corpo da lista: o cabeçalho (a seta tem lugar reservado), a contagem, o botão */
   { nome: 'casar-sugestoes-guariroba-ordenar', url: 'tela=sugestoes-casar&v=guariroba', tamanhos: TAMANHOS_DO_P92,
     /* ⚠ abaixo do piso o quadro rola de lado: o clique do robô rolaria até o "Valor" e mediria a ROLAGEM dele, não a tela — o "Valor" vem à
        vista ANTES de medir (como o operador faz) */
     antes: async (p) => { await clicar('[data-testid="procurar-historico-botao"]')(p); await p.locator('[data-testid="procurar-historico-achado"]').first().waitFor();
       await p.locator('[data-testid="procurar-ordenar-valor"]').scrollIntoViewIfNeeded(); await espera(p); },
-    presos: '[data-testid="sugestoes-extrato"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"], [data-testid="procurar-ordenar-valor"]',
+    presos: '[data-testid="linha-do-banco"], [data-testid="procurar-historico-botao"], [data-testid="procurar-historico-contagem"], [data-testid="procurar-ordenar-valor"]',
     estados: [['por valor', async (p) => { await clicar('[data-testid="procurar-ordenar-valor"]')(p); await espera(p); }],
       ['por valor, subindo', async (p) => { await clicar('[data-testid="procurar-ordenar-valor"]')(p); await espera(p); }]] },
   { nome: 'conferencia-chips', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,

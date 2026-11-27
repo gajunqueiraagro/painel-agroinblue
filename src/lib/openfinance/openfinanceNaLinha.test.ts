@@ -74,7 +74,7 @@ describe('o texto da célula e os finais da conta', () => {
     expect(textoDoEstado({ tipo: 'conectado', itemId: 'i', atualizadoEm: null }, agora).texto).toBe('● Conectado');
     expect(textoDoEstado({ tipo: 'reconectar', itemId: 'i' }, agora).texto).toBe('⚠ Reconectar');
     expect(textoDoEstado({ tipo: 'nao_se_aplica' }, agora).texto).toBe('—');
-    expect(textoDoEstado({ tipo: 'em_breve' }, agora)).toEqual({ texto: 'Em breve', titulo: FRASE_CARTAO_EM_BREVE });
+    expect(textoDoEstado({ tipo: 'em_breve' }, agora)).toEqual({ texto: 'em breve', titulo: FRASE_CARTAO_EM_BREVE });
     expect(textoDoEstado({ tipo: 'nao_se_aplica', motivo: 'investimento' }, agora)).toEqual({ texto: '—', titulo: FRASE_INVESTIMENTO_SEM_OF });
   });
   it('finais com e sem o dígito; curto demais = nada', () => {

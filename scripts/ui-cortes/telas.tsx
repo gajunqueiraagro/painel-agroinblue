@@ -1057,7 +1057,15 @@ if (tela === 'mesclar') {
     rpc: (fn: string, a: any) => fn === 'fn_conta_bancaria_painel' ? CONTAS_BANC.PAINEL
       : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Usuário Exemplo', email: null, situacao: 'membro ativo' }]
       : fn === 'fn_conciliacao_status_ano' ? CONTAS_BANC.reguaDoAno(Number(a.p_ano))
-      : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 12, ultimo: '2026-10-10' }] : null,
+      : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 12, ultimo: '2026-10-10' }]
+      /* CONTA-INATIVAR-DATA-01 — `&inativar=recusa|ok`: a prévia do "Inativa desde" (a recusa no pior caso: a frase mais longa e a lista) */
+      : fn === 'fn_conta_inativar_previa' ? (q.get('inativar') === 'ok'
+        ? { pode: true, frase: null, desde: a.p_desde, mes_do_saldo: '2026-01', saldo: 0, tem_saldo: true, abertos: 0, realizados: 0, extrato: 0, lancamentos: [] }
+        : { pode: false, desde: a.p_desde, mes_do_saldo: '2026-01', saldo: 0, tem_saldo: true, abertos: 23, realizados: 2, extrato: 0,
+            frase: 'A conta tem 25 lançamento(s) a partir de 01/02/2026 (23 em aberto, 2 realizado(s)): mova-os antes de inativar. Nada foi gravado.',
+            lancamentos: Array.from({ length: 25 }, (_, i) => ({ dia: `20${27 + Math.floor(i / 2)}-11-01`, valor: -16363.64 - i, status: i < 23 ? 'programado' : 'realizado',
+              descricao: `Parcela sintética do financiamento com a descrição bem comprida número ${i + 1}` })) })
+      : null,
     /* OPENFINANCE-PRONTO-NJ-01 — `&of=lista`: "Bancos conectados" como a Pluggy vê, no pior caso (nome comprido, Empresa, os 4 estados, a
        frase mais longa) */
     funcao: (nome: string, op: any) => (nome === 'openfinance-contas' && op?.body?.acao === 'conexoes' ? { data: { ok: true, conexoes: [
@@ -1729,6 +1737,44 @@ if (tela === 'mesclar') {
       rpc: () => null };
     montar(<SugestoesCasarModal open onClose={() => {}} onCasar={() => {}} sugestoes={sugerirCasamentos(EXT_E, CANDS, { fornecedorDoHistorico: 'f-me', maximo: 20 })} clienteId="cli"
       onCriarIgual={() => {}} onCasarDoHistorico={() => {}} contaBancariaId="bb" nomeConta="Banco do Brasil" extrato={EXT_E} />);
+  } else if (v === 'trsantana' || v === 'prudentao' || v === 'matao') {
+    /* CONC-SUGESTOES-V2 (mock aprovado 25/11) — os 3 casos do Gabriel, SINTÉTICOS (nomes e CNPJ inventados, com dígito certo):
+       trsantana = Pix −2.002,61 com a EXATA (valor + CNPJ, vencimento ESTIMADO) e 1 possível de OUTRO banco; prudentao = boleto −1.775,13 com 2
+       possíveis do mesmo CNPJ (valor diferente) e 1 nota sem lançamento; matao = boleto −6.300,00, o fornecedor achado pelo CNPJ e nada em aberto. */
+    const CNPJ = '11222333000181';
+    const casoV2 = {
+      trsantana: { ext: { data: '2026-11-23', historico: `PAGAMENTO PIX ${CNPJ} Z R SINTETICA PECAS LTDA`, valor: -2002.61 }, forn: 'ZR Sintética Peças Ltda' },
+      prudentao: { ext: { data: '2026-11-23', historico: `LIQUIDACAO BOLETO ${CNPJ} AUTO POSTO SINTETICO LTDA`, valor: -1775.13 }, forn: 'Auto Posto Sintético Ltda' },
+      matao: { ext: { data: '2026-11-10', historico: `LIQUIDACAO BOLETO SICREDI ${CNPJ} TRANSPORTADORA SINTETICA LTDA`, valor: -6300 }, forn: 'Transportadora Sintética Ltda' },
+    }[v];
+    const mc = (id: string, o: Record<string, unknown>) => ({ id, descricao: 'Anel 44,04×51,1×3,53 2224 · 13 itens', favorecido: casoV2.forn, numero_documento: '9779',
+      data_referencia: '2026-12-10', valor: '2002.61', status: 'programado', ja_conciliado: '0.00', saldo: '2002.61', delta_valor: '0.00', delta_dias: 17,
+      score: 70, pre_marcado: false, ambiguo: false, indisponivel: false, motivo_indisponivel: null, transferencia_id: null, contraparte_nome: null,
+      competencia: '2026-11-18', vencimento: '2026-12-10', pagamento: null, vencido: false, dias_atraso: null, conta_bancaria_id: 'sic', conta_nome: 'Sicredi Lavoura',
+      outra_conta: false, documento_casa: 'cnpj', exata: false, origem: 'lancamento', ...o });
+    const MOTOR = v === 'trsantana' ? [mc('ex1', { exata: true }),
+        mc('ob1', { descricao: 'Reparo Máquinas 4/4', favorecido: 'Outro Fornecedor Sintético Equipamentos Agrícolas Ltda', valor: '1199.05', saldo: '1199.05',
+          delta_valor: '803.56', documento_casa: null, outra_conta: true, conta_bancaria_id: 'bb', conta_nome: 'Banco do Brasil', vencimento: '2026-11-30', numero_documento: '8658' })]
+      : v === 'prudentao' ? [mc('p1', { descricao: 'Gasolina comum · 52,3 L', valor: '1820.40', saldo: '1820.40', delta_valor: '-45.27', numero_documento: '112973' }),
+        mc('p2', { descricao: 'Diesel S10 · 280 L', valor: '1690.00', saldo: '1690.00', delta_valor: '85.13', documento_casa: 'raiz', numero_documento: '112980' }),
+        mc('n1', { origem: 'nota', descricao: 'NF 113001', valor: '1775.13', saldo: '1775.13', delta_valor: '0.00', status: 'nota', vencimento: null, data_referencia: '2026-11-20',
+          exata: true, numero_documento: '113001' })]
+      : [];
+    const DECL = [{ lancamento_id: 'ex1', declarado: null }, { lancamento_id: 'ob1', declarado: 'boleto' }, { lancamento_id: 'p1', declarado: null }, { lancamento_id: 'p2', declarado: 'nota' }];
+    const lv = (o: Record<string, unknown>) => ({ lancamento_id: 'x', data_pagamento: null, data_vencimento: '2026-12-10', data_competencia: '2026-11-18',
+      status_transacao: 'programado', conciliado: false, banco: null, descricao: 'Anel 44,04×51,1×3,53 2224 · 13 itens', fornecedor_id: 'f1', fornecedor: casoV2.forn,
+      plano_conta_id: 'p1', centro: 'Manutenção', subcentro: 'Manutenção Máquinas Agrícolas', fazenda_id: 'fz1', fazenda: 'Fazenda Exemplo Retiro', fazenda_codigo: 'RET',
+      conta_bancaria_id: 'sic', conta: 'Sicredi Lavoura', valor: casoV2.ext.valor, onde: ['fornecedor'], ...o });
+    const HIST_V2 = { total: 4, resumo: { fornecedor_id: 'f1', fornecedor: casoV2.forn, vezes: 3, desde: '2026-03-19' }, achados: [
+      ...(v === 'matao' ? [] : [lv({ lancamento_id: 'ex1' })]),
+      lv({ lancamento_id: 'h2', status_transacao: 'conciliado', data_pagamento: '2026-10-05', data_vencimento: '2026-10-05', data_competencia: '2026-10-01', descricao: 'Manutenção Máquinas', valor: -952.2, conciliado: true }),
+      lv({ lancamento_id: 'h3', status_transacao: 'conciliado', data_pagamento: '2026-09-10', data_vencimento: '2026-09-10', data_competencia: '2026-09-10', descricao: 'Manutenção Máquinas', valor: -1194.7, conciliado: true }),
+      lv({ lancamento_id: 'h4', status_transacao: 'conciliado', data_pagamento: '2026-06-10', data_vencimento: '2026-06-10', data_competencia: '2026-06-10', descricao: 'Reparo Máquinas', valor: -1604.6, conciliado: true, conta_bancaria_id: 'bb', conta: 'Banco do Brasil' }),
+    ] };
+    g.__bancoBancada = { from: () => [],
+      rpc: (fn: string) => fn === 'fn_conciliacao_historico_buscar' ? HIST_V2 : fn === 'fn_candidatos_conciliacao' ? MOTOR : fn === 'fn_vencimentos_declarados' ? DECL : null };
+    montar(<SugestoesCasarModal open onClose={() => {}} onCasar={() => {}} onCasarSelecionados={() => {}} sugestoes={[]} clienteId="cli" extratoId="e1"
+      onCasarDoMotor={() => {}} onCriarIgual={() => {}} onCasarDoHistorico={() => {}} contaBancariaId="sic" nomeConta="Sicredi Lavoura" extrato={casoV2.ext} />);
   } else if (v === 'guariroba') {
     /* P153b — O CASO que abriu a frente, SINTÉTICO: BB 07/10, "PAGAMENTO FATURA DE ÁGUA - AGUAS GUARIROBA SA", −142,72; a sugestão nova
        ("mesmo fornecedor · valor difere: previsto 500,00", calculada pelo motor de verdade) e o histórico com os quatro casos: em aberto
@@ -1801,6 +1847,18 @@ if (tela === 'mesclar') {
         le('e288', 'Oficina Exemplo Dias ME', -1403.35, '2031-10-06', 'Rolamento diant. int. S10/Kombi/Ranger 2.3', '000000288'),
         le('e405', 'Oficina Exemplo Dias-ME', -980, '2031-10-10', 'Serviço máquinas', '000000405'),
         le('e289', 'Oficina Exemplo Dias ME', -330, '2031-10-06', 'Bomba alimentadora', '000000289')]}
+      onConciliado={() => {}} />);
+  } else if (v === 'trsantana') {
+    /* CONC-SUGESTOES-V2 C (mock aprovado 25/11) — o casar da exata do caso T R Santana, SINTÉTICO: Pix −2.002,61 em 23/11; o lançamento vence
+       em 10/12 mas o vencimento é ESTIMADO (nada o declara: "~", Δ dias neutro, a linha ⓘ diz que não conta como pago antes) */
+    g.__bancoBancada = { from: (t: string) => t === 'financeiro_lancamentos_v2' ? [{ id: 'ex1', data_pagamento: null, fazenda_id: 'fz', tipo_documento: 'nf', numero_documento: '9779',
+        subcentro: 'Manutenção Máquinas Agrícolas', escopo_negocio: 'agricultura' }] : t === 'fazendas' ? [{ id: 'fz', nome: 'Fazenda Exemplo Retiro', codigo: 'RET' }] : [],
+      rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: true, simulado: true, no_extrato: -2002.61, soma: -2002.61 }
+        : fn === 'fn_vencimentos_declarados' ? [{ lancamento_id: 'ex1', declarado: null }] : null };
+    montar(<CasarComBancoModal open onClose={() => {}} contaBancariaId="sic" nomeConta="Sicredi Lavoura" clienteId="cli"
+      extrato={{ extrato_id: 'x1', data: '2026-11-23', historico: 'PAGAMENTO PIX 11222333000181 Z R SINTETICA PECAS LTDA', valor: -2002.61 }}
+      iniciais={[{ lancamento_id: 'ex1', descricao: 'Anel 44,04×51,1×3,53 2224 · 13 itens', fornecedor: 'ZR Sintética Peças Ltda', valor_assinado: -2002.61,
+        data_vencimento: '2026-12-10', status_transacao: 'programado', numero_documento: '9779' }]}
       onConciliado={() => {}} />);
   } else if (v === 'antecipado') {
     /* CONC-CRIAR-COM-NOTA-02 D-h — pago no banco 28 dias ANTES do vencimento, com NF (sintético, valores no teto, nomes longos) */
@@ -2051,7 +2109,10 @@ if (tela === 'mesclar') {
       /* P159a — o Espelho da conta escolhida (`dados/espelho.ts`): o Casar lançamentos (Extrato, Sistema, Evolução) e a Conferência */
       : fn === 'fn_extratos_espelhados' ? ESP.espelho(v)
       /* CONC-PAINEL-02 entrega 2 — o motor de cada linha sem par (`&v=nj10`) */
-      : fn === 'fn_candidatos_conciliacao' ? (v === 'nj10' ? CONC.candidatosNj10(a.p_extrato_id) : [])
+      : fn === 'fn_candidatos_conciliacao' ? (v === 'nj10' ? CONC.candidatosNj10(a.p_extrato_id)
+        /* CONC-SUGESTOES-V2 B (`&v=sugv2`): o motor ampliado de cada sem par — 1ª de cada 3 com a EXATA, 2ª com uma de outro banco, 3ª nada */
+        : v === 'sugv2' && a.p_ampliado ? candidatosSugV2(a.p_extrato_id) : [])
+      : fn === 'fn_vencimentos_declarados' ? []
       /* CARTAO-FATURA-GRAVAR — a prévia/gravação e o desfazer da fatura (`dados/fatura.ts`, no teto) */
       : fn === 'fn_fatura_cartao_gravar' ? FAT.gravarDaBancada(v, a)
       : fn === 'fn_fatura_cartao_desfazer' ? FAT.desfazerDaBancada(a) : null,
@@ -3905,4 +3966,17 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
       renderizar();
     })();
   } else renderizar();
+}
+
+/* CONC-SUGESTOES-V2 B — o motor ampliado sintético da Conferência (`tela=conciliacao&v=sugv2`): pelo id, 1 de cada 3 com a exata */
+function candidatosSugV2(extratoId: string) {
+  const n = [...String(extratoId)].reduce((t, ch) => t + ch.charCodeAt(0), 0) % 3;
+  const base = { descricao: 'Serviço sintético de manutenção de máquinas agrícolas', favorecido: 'Fornecedor Sintético de Nome Comprido Agropecuária Ltda',
+    numero_documento: '000123456', data_referencia: '2031-09-20', valor: '1000.00', status: 'programado', ja_conciliado: '0.00', saldo: '1000.00',
+    delta_valor: '0.00', delta_dias: 3, score: 70, pre_marcado: false, ambiguo: false, indisponivel: false, motivo_indisponivel: null, transferencia_id: null,
+    contraparte_nome: null, competencia: '2031-09-01', vencimento: '2031-09-20', pagamento: null, vencido: false, dias_atraso: null, conta_bancaria_id: 'cc1',
+    conta_nome: 'Conta Sintética', outra_conta: false, documento_casa: 'cnpj', exata: false, origem: 'lancamento' };
+  if (n === 0) return [{ ...base, id: `ex-${extratoId}`, exata: true }];
+  if (n === 1) return [{ ...base, id: `ob-${extratoId}`, documento_casa: null, outra_conta: true, conta_bancaria_id: 'bb', conta_nome: 'Banco do Brasil', delta_valor: '12.50' }];
+  return [];
 }

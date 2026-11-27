@@ -87,6 +87,22 @@ export interface CandidatoConciliacao {
   motivoIndisponivel: string | null;
   /** O vencimento do lançamento (P124: a coluna "Venc." do lote). */
   vencimento?: string | null;
+  /* CONC-SUGESTOES-V2 B — só com `p_ampliado` (a tela nova das Sugestões); sem ele o motor não as manda */
+  contaBancariaId?: string | null;
+  /** O nome da conta do lançamento (o apelido do banco na linha, quando é outra) */
+  contaNome?: string | null;
+  /** Em aberto de OUTRO banco do cliente: casar troca a conta para a do extrato (com trilha) */
+  outraConta?: boolean;
+  /** O fornecedor (ou o emitente da nota) tem o documento do banco: 'cnpj' (o mesmo) ou 'raiz' (outra filial) */
+  documentoCasa?: 'cnpj' | 'raiz' | null;
+  /** valor igual + documento = a sugestão exata (nunca casa sozinha) */
+  exata?: boolean;
+  /** 'nota' = nota sem lançamento (o id é o da nota): "Criar a partir desta nota" */
+  origem?: 'lancamento' | 'nota';
+  /** Parcela de financiamento/consórcio aberta do credor (lote 114400): o id da parcela, "FCO – Curral · 1/12" e o atraso em dias úteis */
+  parcelaId?: string | null;
+  parcelaRotulo?: string | null;
+  diasUteis?: number | null;
 }
 
 export interface VinculoDoMovimento {
@@ -506,6 +522,13 @@ export const lerCandidato = (r: any): CandidatoConciliacao => ({
         indisponivel: r.indisponivel === true,
         motivoIndisponivel: r.motivo_indisponivel ?? null,
         vencimento: r.vencimento ?? null,
+        ...(r.origem === undefined ? {} : {
+          contaBancariaId: r.conta_bancaria_id ?? null, contaNome: r.conta_nome ?? null, outraConta: r.outra_conta === true,
+          documentoCasa: r.documento_casa === 'cnpj' || r.documento_casa === 'raiz' ? r.documento_casa : null,
+          exata: r.exata === true, origem: r.origem === 'nota' ? 'nota' : 'lancamento',
+          parcelaId: r.parcela_id ?? null, parcelaRotulo: r.parcela_rotulo ?? null,
+          diasUteis: r.dias_uteis == null ? null : Number(r.dias_uteis),
+        }),
       });
 
 /**

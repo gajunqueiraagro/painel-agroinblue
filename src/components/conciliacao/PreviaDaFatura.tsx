@@ -56,10 +56,10 @@ const CLARO = 'border-[#cfd8e3] bg-white text-[#1E3A5F]';
 const LARGURA_BOTOES = 200;
 
 /** o que a coluna "Conta · fazenda" diz: a escolhida; na linha a lançar sem uma das duas, o que falta (vermelho) */
-function contaEFazenda(x: LinhaDoGrupo, e: Escolha, s: EstadoDaLinha, nomeDaConta: (id: string) => string | null, nomeDaFazenda: (id: string) => string | null) {
+function contaEFazenda(x: LinhaDoGrupo, e: Escolha, s: EstadoDaLinha, contaPeloId: (id: string) => string | null, fazendaPeloId: (id: string) => string | null) {
   if (x.gesto !== 'lancar') return { texto: '—', falta: false };
   if (s.k === 'falta') return { texto: `falta ${s.falta}`, falta: true };
-  return { texto: [e.planoContaId ? nomeDaConta(e.planoContaId) ?? '—' : '—', e.fazendaId ? nomeDaFazenda(e.fazendaId) ?? '—' : '—'].join(' · '), falta: false };
+  return { texto: [e.planoContaId ? contaPeloId(e.planoContaId) ?? '—' : '—', e.fazendaId ? fazendaPeloId(e.fazendaId) ?? '—' : '—'].join(' · '), falta: false };
 }
 /** "O que o sistema vai fazer": a recusa do banco (vermelho) > resolver no Editar (âmbar) > o gesto */
 function oQueFaz(x: LinhaDoGrupo, s: EstadoDaLinha, recusa: RecusaDaLinha | undefined): { texto: string; tom: 'recusa' | 'editar' | null } {
