@@ -459,7 +459,8 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
             nomeLongoEmbaixo && escolhido && escolhido.nome.length > nomeLongoEmbaixo ? (
               <span className="whitespace-nowrap text-[8.5px] tabular-nums" data-testid="favorecido-linha-texto"
                 title={[escolhido.nome, textoDaLinhaDoDocumento(escolhido) || documentoDoEscolhido].filter(Boolean).join(' · ')}>
-                <span className="text-foreground/80" data-testid="favorecido-nome-inteiro">{escolhido.nome}</span> · {linhaDoCampo(escolhido)}
+                {/* o nome longo ocupa a linha toda (o "CNPJ · Cidade/UF" segue no title): os dois juntos não cabem com o nome de 91 letras */}
+                <span className="text-foreground/80" data-testid="favorecido-nome-inteiro">{escolhido.nome}</span>
               </span>
             ) : (
               <span className="whitespace-nowrap tabular-nums" data-testid="favorecido-linha-texto" title={textoDaLinhaDoDocumento(escolhido) || documentoDoEscolhido || undefined}>{linhaDoCampo(escolhido)}</span>

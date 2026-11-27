@@ -37,7 +37,7 @@ export function PendenciasDeVinculo({ clienteId, aoFechar }: { clienteId: string
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) aoFechar(); }}>
-      <DialogContent className="flex h-[min(560px,calc(100vh-16px))] w-[min(920px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="pendencias-de-vinculo">
+      <DialogContent className="flex h-[min(560px,calc(100vh-16px))] w-[min(920px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0 [&>button.absolute]:hidden" data-testid="pendencias-de-vinculo">
         <div className="flex h-[34px] shrink-0 items-center gap-2 bg-primary px-3 text-primary-foreground">
           <DialogTitle className="shrink-0 text-[11px] font-semibold">Lançamentos de financiamento sem contrato</DialogTitle>
           <DialogDescription className="min-w-0 flex-1 whitespace-nowrap text-[10px] text-primary-foreground/80">a pendência fica até vincular</DialogDescription>

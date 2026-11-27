@@ -16,11 +16,12 @@ const montar = (value: string, nomeLongoEmbaixo?: number) => render(<FavorecidoS
   search="" onSearchChange={() => {}} linhaDoDocumento nomeLongoEmbaixo={nomeLongoEmbaixo} />);
 
 describe('FavorecidoSelect — o nome longo inteiro na linha de baixo', () => {
-  it('mais de 45 letras: o nome inteiro antes do CNPJ · cidade (o title com tudo)', () => {
+  it('mais de 45 letras: o nome inteiro na linha (o CNPJ · cidade no title)', () => {
     montar('l', 45);
     expect(screen.getByTestId('favorecido-nome-inteiro').textContent).toBe(LONGO);
     const linha = screen.getByTestId('favorecido-linha-texto');
-    expect(linha.textContent).toContain('11.222.333/0001-81');
+    expect(linha.textContent).toBe(LONGO);
+    expect(linha.getAttribute('title')).toContain('11.222.333/0001-81');
     expect(linha.getAttribute('title')).toContain(LONGO);
   });
   it('até 45 letras, ou sem a prop: a linha de sempre (sem o nome)', () => {

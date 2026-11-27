@@ -104,7 +104,7 @@ export function VincularAUmContrato({ lancamentoId, clienteId, tipo, subcentro, 
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) aoFechar(); }}>
-      <DialogContent className="flex h-[min(520px,calc(100vh-16px))] w-[min(920px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="vincular-a-um-contrato">
+      <DialogContent className="flex h-[min(520px,calc(100vh-16px))] w-[min(920px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0 [&>button.absolute]:hidden" data-testid="vincular-a-um-contrato">
         <div className="flex h-[34px] shrink-0 items-center gap-2 bg-primary px-3 text-primary-foreground">
           <DialogTitle className="shrink-0 text-[11px] font-semibold">Vincular a um contrato</DialogTitle>
           <DialogDescription className="min-w-0 flex-1 whitespace-nowrap text-[10px] text-primary-foreground/80">
@@ -149,9 +149,10 @@ export function VincularAUmContrato({ lancamentoId, clienteId, tipo, subcentro, 
                         className={cn('cursor-pointer border-b border-border/50 hover:bg-muted/40', escolhido === c.id && 'bg-primary/10', igual && 'outline outline-1 -outline-offset-1 outline-emerald-500')}>
                         <td className={cn(TD_REGUA, 'text-center')}>{escolhido === c.id ? '◉' : '○'}</td>
                         <td className={TD_REGUA_TEXTO} title={c.descricao ? `${c.numero ?? 'sem nº'} · ${c.descricao}` : c.numero ?? undefined}>{c.numero || 'sem nº'}</td>
-                        <td className={TD_REGUA_TEXTO} title={c.credor ?? undefined}>
+                        <td className={TD_REGUA_TEXTO} title={igual ? `valor igual · parc. ${exata?.numeroParcela ?? '?'} ${c.credor ?? '—'}` : c.credor ?? undefined}>
                           {igual && <span className="mr-1 rounded-sm bg-emerald-100 px-1 text-[9.5px] text-emerald-800" data-testid="vinculo-parcela-igual"
                             title={`Parcela ${exata?.numeroParcela ?? '?'} em aberto com o valor exatamente igual (${br(exata?.vencimento ?? null)})`}>valor igual · parc. {exata?.numeroParcela ?? '?'}</span>}
+                          {igual && ' '}
                           {c.credor ?? '—'}
                         </td>
                         <td className={cn(TD_REGUA, 'tabular-nums')}>{br(c.dataContrato)}</td>

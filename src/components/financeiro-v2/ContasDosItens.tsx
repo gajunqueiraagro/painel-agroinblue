@@ -46,11 +46,12 @@ const REGUA: Record<'aba' | 'modal', Regua> = {
     linhaTotal: 15, cabTotal: 16,
   },
   modal: {
-    th: 'h-[26px] px-2 py-0 text-[11px] font-semibold text-primary-foreground normal-case tracking-normal whitespace-nowrap',
-    td: 'h-[32px] px-2 py-0 text-[12px] leading-none',
-    tdt: 'h-[28px] px-2 py-0 text-[12px] leading-[28px]',
-    gatilho: 'h-[26px] rounded px-2 text-[12px] leading-none',
-    atalho: 'h-[24px] text-[11px]',
+    /* a régua de fonte da casa (UI-FONTES-REGUA-01): linha e campo até 11, cabeçalho até 10 — o máximo dela (o mock pedia 12/11) */
+    th: 'h-[26px] px-2 py-0 text-[10px] font-semibold text-primary-foreground normal-case tracking-normal whitespace-nowrap',
+    td: 'h-[32px] px-2 py-0 text-[11px] leading-none',
+    tdt: 'h-[28px] px-2 py-0 text-[11px] leading-[28px]',
+    gatilho: 'h-[26px] rounded px-2 text-[11px] leading-none',
+    atalho: 'h-[24px] text-[10px]',
     linhaTotal: 29, cabTotal: 26,
   },
 };
@@ -243,7 +244,7 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button type="button" size="sm" variant="outline" className={cn('shrink-0 px-2', noModal ? 'h-[28px] w-[200px] text-[12px]' : 'h-[20px] w-[150px] text-[10px]')}
+          <Button type="button" size="sm" variant="outline" className={cn('shrink-0 px-2', noModal ? 'h-[28px] w-[200px] text-[11px]' : 'h-[20px] w-[150px] text-[10px]')}
             disabled={gravando || somenteLeitura} data-testid="contas-juntar">Juntar tudo numa conta ▾</Button>
         </DropdownMenuTrigger>
         {/* o menu que fecha devolve o foco ao gatilho: no "Escolher outra conta…" o foco fica na busca do plano que abriu */}
@@ -258,7 +259,7 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
     </div>
   );
   const botaoDividir = (
-    <Button type="button" size="sm" className={cn('shrink-0 px-2', noModal ? 'h-[28px] w-[200px] text-[12px]' : aoSalvar && onJuntar ? 'h-[20px] w-[150px] text-[10px]' : 'h-[20px] w-[190px] text-[10px]',
+    <Button type="button" size="sm" className={cn('shrink-0 px-2', noModal ? 'h-[28px] w-[200px] text-[11px]' : aoSalvar && onJuntar ? 'h-[20px] w-[150px] text-[10px]' : 'h-[20px] w-[190px] text-[10px]',
       /* sem divisão pedida (os itens seguem a Geral) o botão some — no lugar reservado, nada se desloca */
       semDivisaoPedida && 'invisible')} aria-hidden={semDivisaoPedida ? true : undefined}
       disabled={!!recusa || gravando || somenteLeitura} onClick={() => onDividir(mapaParaDividir)} data-testid="contas-dividir">
@@ -408,9 +409,9 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
 
       {/* ── o rodapé do modal: o aviso pequeno do que está sem conta (não trava) + Cancelar + Usar divisão ─────────────────────── */}
       {noModal && (
-        <div className="flex h-[40px] shrink-0 items-center gap-2 text-[12px]">
+        <div className="flex h-[40px] shrink-0 items-center gap-2 text-[11px]">
           <span className="min-w-0 flex-1 text-[11px] leading-[13px] text-amber-800" data-testid="contas-aviso-sem-conta">{fraseSemConta ?? ''}</span>
-          <Button type="button" size="sm" variant="outline" className="h-[28px] shrink-0 px-3 text-[12px]" onClick={onFechar} data-testid="contas-cancelar">Cancelar</Button>
+          <Button type="button" size="sm" variant="outline" className="h-[28px] shrink-0 px-3 text-[11px]" onClick={onFechar} data-testid="contas-cancelar">Cancelar</Button>
           {botaoDividir}
         </div>
       )}
@@ -437,7 +438,8 @@ export function ResumoDasContasDosItens({ itens, mapa, classificacoes, onClassif
   const th = 'h-[22px] px-2 py-0 text-[10px] font-semibold text-primary-foreground whitespace-nowrap';
   const td = 'h-[24px] px-2 py-0 text-[11px] leading-[24px]';
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2" data-testid="contas-dos-itens">
+    /* só a altura do conteúdo (o resumo nunca pede a altura da aba: o corpo do lançamento não rola por ele) */
+    <div className="flex min-h-0 flex-col gap-2" data-testid="contas-dos-itens">
       <div className="flex h-[28px] shrink-0 items-center gap-2 text-[11px]">
         <span className="whitespace-nowrap" data-testid="contas-frase">
           {itens.length} itens em {porConta.length} {porConta.length === 1 ? 'conta' : 'contas'}{semConta.length ? ` · ${semConta.length} sem conta` : ''}
@@ -500,7 +502,7 @@ export function ClassificarItens(props: Omit<ComponentProps<typeof ContasDosIten
         desabilitado={gravando || somenteLeitura} />
       <Dialog open={aberto} onOpenChange={setAberto}>
         {/* `data-painel-por-cima` (exceção declarada do gate, a mesma da gaveta do modal de análise): este modal fica POR CIMA do lançamento de propósito */}
-        <DialogContent className="flex h-[min(660px,calc(100vh-16px))] w-[min(1180px,calc(100vw-16px))] max-w-none flex-col gap-2 p-4" data-testid="classificar-itens-modal"
+        <DialogContent className="flex h-[min(660px,calc(100vh-16px))] w-[min(1180px,calc(100vw-16px))] max-w-none flex-col gap-2 p-4 [&>button.absolute]:hidden" data-testid="classificar-itens-modal"
           data-painel-por-cima>
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-[13px]">Classificar itens · {itens.length} itens</DialogTitle>

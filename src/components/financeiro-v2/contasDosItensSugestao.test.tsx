@@ -76,7 +76,7 @@ describe('ContasDosItens com a sugestão da escada', () => {
     expect(onDividir).toHaveBeenCalledWith(new Map([[1, 'pn'], [2, 'pv'], [4, 'pb'], [3, 'po']]));
   });
 
-  it('SUGESTAO-ITENS-02 — a aba mostra só o resumo; "Classificar itens ▸" abre o modal (Qtd, fonte 12, Cancelar), e o que mudou volta ao reabrir', async () => {
+  it('SUGESTAO-ITENS-02 — a aba mostra só o resumo; "Classificar itens ▸" abre o modal (Qtd, fonte 11 — a régua, Cancelar), e o que mudou volta ao reabrir', async () => {
     const onDividir = vi.fn();
     render(<ClassificarItens itens={ITENS.map((i) => ({ ...i, quantidade: '20', unidade: 'SC' }))} classificacoes={CLASSIF} tipoOperacao="2-Saídas"
       contaDeHoje="pn" sugeridas={SUGERIDAS} gravando={false} onDividir={onDividir} aoSalvar sugestoes={SUG} onJuntar={vi.fn()} />);
@@ -85,7 +85,7 @@ describe('ContasDosItens com a sugestão da escada', () => {
     fireEvent.click(screen.getByTestId('classificar-itens'));
     const modal = await screen.findByTestId('classificar-itens-modal');
     expect(within(modal).getAllByTestId('contas-linha')[0].textContent).toContain('20 SC');
-    expect(within(modal).getAllByTestId('contas-linha')[0].querySelector('td')?.className).toContain('text-[12px]');
+    expect(within(modal).getAllByTestId('contas-linha')[0].querySelector('td')?.className).toContain('text-[11px]');
     fireEvent.click(within(modal).getByTestId('pergunta-3-obra'));
     fireEvent.click(within(modal).getByTestId('contas-cancelar'));
     expect(screen.getByTestId('contas-frase').textContent).toBe('4 itens em 4 contas');
