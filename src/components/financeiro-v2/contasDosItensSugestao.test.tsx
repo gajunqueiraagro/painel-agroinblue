@@ -86,6 +86,17 @@ describe('ContasDosItens com a sugestão da escada', () => {
     expect(screen.getByTestId('contas-frase').textContent).toBe('Todos os itens estão na mesma conta: não há o que dividir.');
   });
 
+  it('BUG-01: `todasNaConta` (sem divisão) põe TODOS os itens na conta do lançamento, inclusive o que perguntaria; "Usar divisão" some e volta ao trocar um item', () => {
+    montar({ todasNaConta: 'pn' });
+    for (const n of [1, 2, 3, 4]) expect(within(screen.getByTestId(`conta-do-item-${n}`)).getByRole('combobox').textContent).toContain('Nutrição Engorda');
+    expect(screen.getByTestId('origem-do-item-2').textContent).toBe('a do lançamento (sugestão: Vacinas e Vermífugos)');
+    expect(screen.getByTestId('origem-do-item-1').textContent).toBe('a do lançamento');
+    expect(screen.queryByTestId('contas-total-a-decidir')).toBeNull();
+    expect(screen.getByTestId('contas-dividir').className).toContain('invisible');
+    fireEvent.click(screen.getByTestId('pergunta-3-obra'));
+    expect(screen.getByTestId('contas-dividir').className).not.toContain('invisible');
+  });
+
   it('sem `sugestoes` a vista é a de antes (sem as colunas novas, sem total, sem Juntar)', () => {
     render(<ContasDosItens itens={ITENS} classificacoes={CLASSIF} tipoOperacao="2-Saídas" contaDeHoje="pn" sugeridas={new Map()} gravando={false} onDividir={vi.fn()} aoSalvar />);
     expect(screen.queryByText('Obra ou manutenção?')).toBeNull();
