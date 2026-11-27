@@ -29,7 +29,7 @@ beforeAll(() => {
 
 const CONCLUSIVOS: [string, string][] = [['210200', 'Confirmacao da Operacao'], ['210220', 'Desconhecimento da Operacao'], ['210240', 'Operacao nao Realizada']];
 const mutar = (env: string, tp: string, desc: string) =>
-  env.replaceAll('210210', tp).replace('<descEvento>Ciencia da Operacao</descEvento>', `<descEvento>${desc}</descEvento>`);
+  env.split('210210').join(tp).replace('<descEvento>Ciencia da Operacao</descEvento>', `<descEvento>${desc}</descEvento>`);
 
 describe('só a ciência (210210) sai do sistema', () => {
   it('S1 o envelope de ciência passa nas travas do código e da Lambda', () => {
