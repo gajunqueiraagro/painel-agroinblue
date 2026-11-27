@@ -15,7 +15,7 @@ function analitica(empresa: string, pessoas: PessoaDaAnalitica[]): FolhaAnalitic
   const s = (f: (p: PessoaDaAnalitica) => number) => Math.round(pessoas.reduce((t, p) => t + f(p) * 100, 0)) / 100;
   const soma = { funcionarios: pessoas.length, proventos: s((p) => p.proventos ?? 0), descontos: s((p) => p.descontos ?? 0), liquido: s((p) => p.liquido ?? 0),
     fgts: s((p) => p.fgts ?? 0), inss: s((p) => p.inss), irrf: s((p) => p.irrf) };
-  return { empresa, competencia: '2026-03', emissao: null, pessoas, soma, resumo: null, confere: true, naoConfere: [] };
+  return { empresa, competencia: '2026-03', tipo: 'mensal', emissao: null, pessoas, soma, resumo: null, confere: true, naoConfere: [] };
 }
 const A = analitica('FULANO FICTICIO FAZENDA UM', [pessoa('00011', 1000, 100, 90, 10), pessoa('00012', 2000, 200, 180, 20)]);
 const B = analitica('FULANO FICTICIO FAZENDA DOIS', [pessoa('00031', 1500, 120, 100, 0)]);
