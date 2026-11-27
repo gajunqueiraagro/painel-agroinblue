@@ -12,6 +12,7 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 import { BUCKET_DOS_BOLETOS, type Resultado } from './caixaApi';
+import type { LeituraGravada } from './leituraGravada';
 
 type Linha = Record<string, unknown>;
 const txt = (v: unknown): string | null => (typeof v === 'string' ? v : null);
@@ -34,6 +35,8 @@ export interface EntradaDoEmail {
   boletoId: string | null; lancamentoId: string | null; resolvidoEm: string | null;
   /** 118610: 'arrastado' = o arquivo solto na Caixa e registrado no gesto (sem remetente; quem arrastou vem de `resolvidos`) */
   origem?: 'email' | 'arrastado';
+  /** ENTRADA-CENTRAL-01 F1 (118880): a leitura guardada, crua do banco (quem usa confere: `daGravada`); null = ainda não lida */
+  leitura?: unknown;
 }
 
 /** 118610 — o arquivo arrastado registrado no gesto: a linha da entrada e onde o arquivo sobe (já existia = a mesma linha, não sobe de novo). */
@@ -69,6 +72,7 @@ export function entradaDaLinha(r: Linha): EntradaDoEmail {
     ignoradoMotivo: MOTIVOS.find((m) => m === r.ignorado_motivo) ?? null, ignoradoDetalhe: txt(r.ignorado_detalhe), ignoradoEm: txt(r.dispensado_em),
     boletoId: txt(r.boleto_id), lancamentoId: txt(r.lancamento_id), resolvidoEm: txt(r.lido_em),
     origem: r.origem === 'arrastado' ? 'arrastado' : 'email',
+    leitura: r.leitura ?? null,
   };
 }
 
@@ -111,10 +115,12 @@ export interface EntradaEmailApi {
   /** 118610 (opcionais: a bancada antiga não tem; sem eles o arrastado fica só na sessão, como antes) */
   registrarArrastado?: (clienteId: string, a: { nome: string; tipo: 'pdf' | 'xml'; tamanho: number; md5: string }) => Promise<Resultado<ArrastadoRegistrado>>;
   resolvidos?: (clienteId: string) => Promise<Resultado<Record<string, DetalheDoResolvido>>>;
+  /** ENTRADA-CENTRAL-01 F1 (118880): guarda o resultado da leitura feita no navegador (só se a linha não tem a desta versão; o texto nunca) */
+  guardarLeitura?: (id: string, leitura: LeituraGravada) => Promise<Resultado<true>>;
 }
 
 const COLUNAS = 'id, mensagem_id, remetente, assunto, recebido_em, arquivo_nome, tipo, tamanho_bytes, storage_path, estado, motivo, chegou_de_novo, '
-  + 'ignorado_motivo, ignorado_detalhe, dispensado_em, boleto_id, lancamento_id, lido_em, origem';
+  + 'ignorado_motivo, ignorado_detalhe, dispensado_em, boleto_id, lancamento_id, lido_em, origem, leitura';
 
 export const entradaEmailApiDoBanco: EntradaEmailApi = {
   async endereco(clienteId) {
@@ -161,6 +167,11 @@ export const entradaEmailApiDoBanco: EntradaEmailApi = {
   },
   async resolver(id, estado, boletoId, lancamentoId) {
     const { error } = await (supabase as any).rpc('fn_entrada_resolver', { p_id: id, p_estado: estado, p_boleto_id: boletoId, p_lancamento_id: lancamentoId, p_simular: false });
+    if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
+    return { ok: true, dados: true };
+  },
+  async guardarLeitura(id, leitura) {
+    const { error } = await (supabase as any).rpc('fn_entrada_leitura_guardar', { p_id: id, p_leitura: leitura, p_simular: false });
     if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
     return { ok: true, dados: true };
   },
