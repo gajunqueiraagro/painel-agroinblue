@@ -146,8 +146,10 @@ export function avisosDoCronograma(entrada: {
 export type EspecieDoContrato = 'cedula' | 'aditivo' | 'demonstrativo_saldo' | 'comprovante_liberacao' | 'comprovante_pagamento' | 'outro';
 /** ESPELHO DECLARADO do CHECK de `financiamento_documentos.especie` (migration 20261027200200): quem mexer num confere o outro. */
 export const ESPECIES_DO_CONTRATO: readonly EspecieDoContrato[] = ['cedula', 'aditivo', 'demonstrativo_saldo', 'comprovante_liberacao', 'comprovante_pagamento', 'outro'];
+/* FINANC-DOC-TIPO-01 (Gabriel 27/11) — `demonstrativo_saldo` leva o nome que os bancos usam (Itaú "Posição de operações financeiras", outros
+   "Demonstrativo de saldo" / "Extrato do contrato"); a chave do banco não muda (o mesmo tipo, sem duplicar). */
 export const ROTULO_DA_ESPECIE: Record<EspecieDoContrato, string> = {
-  cedula: 'Cédula / Contrato', aditivo: 'Aditivo', demonstrativo_saldo: 'Demonstrativo de saldo',
+  cedula: 'Cédula / Contrato', aditivo: 'Aditivo', demonstrativo_saldo: 'Posição de operações / saldo do banco',
   comprovante_liberacao: 'Comprovante de liberação', comprovante_pagamento: 'Comprovante de pagamento', outro: 'Outros',
 };
 export interface DocumentoDoContrato { id: string; especie: EspecieDoContrato; nome: string; storagePath: string | null; criadoEm: string; enviadoPor: string | null }
