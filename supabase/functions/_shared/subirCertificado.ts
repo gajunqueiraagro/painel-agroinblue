@@ -10,6 +10,7 @@
  *  ⚠ A senha e os bytes nunca saem daqui na resposta nem no log; a resposta leva só os metadados.
  */
 import { FRASES_DA_RECUSA, lerCertificadoA1, type CertificadoLido } from './certificadoA1.ts';
+import { cadeiaDaSubida, type CadeiaConferida } from './dfe/credencialA1.ts';
 
 export interface TitularDoBanco { id: string; cliente_id: string; documento: string | null }
 export interface Pecas {
@@ -21,6 +22,8 @@ export interface Pecas {
   apagarObjeto(caminho: string): Promise<void>;
   registrar(o: { titularId: string; autor: string; meta: Record<string, string>; objeto: string; senha: string }): Promise<{ certificadoId: string; acao: string }>;
   registrarRecusa(titularId: string, autor: string, recusa: string): Promise<void>;
+  /** só o teste troca: a cadeia do .pfx (padrão: `cadeiaDaSubida`, com as ACs da ICP-Brasil) */
+  conferirCadeia?: (arquivo: Uint8Array, senha: string, impressaoDigital: string, agora: Date) => CadeiaConferida | null;
   novoId(): string;
   agora(): Date;
 }
@@ -54,6 +57,13 @@ export async function subirCertificado(p: Pedido, pecas: Pecas): Promise<Respost
   }
 
   const c = lido.certificado;
+  /* AGENDA-01 F3 (Gabriel 27/11): a cadeia na HORA de subir — o mesmo conferidor da busca, completando com as ACs públicas da ICP-Brasil.
+     Não fecha = recusa com a frase, nada gravado (antes, o .pfx sem a AC entrava "ativo" e nunca buscava). */
+  const cadeia = (pecas.conferirCadeia ?? cadeiaDaSubida)(p.arquivo, p.senha, c.impressaoDigital, pecas.agora());
+  if (!cadeia || cadeia.ok === false) {
+    await pecas.registrarRecusa(titular.id, autor, 'cadeia');
+    return nao(422, 'cadeia', cadeia?.frase ?? 'Não consegui conferir a cadeia do certificado. Nada foi gravado.');
+  }
   const caminho = `${titular.cliente_id}/${titular.id}/${pecas.novoId()}.pfx.enc`;
   await pecas.gravarObjeto(caminho, await pecas.cifrar(p.arquivo));
   try {
@@ -62,7 +72,7 @@ export async function subirCertificado(p: Pedido, pecas: Pecas): Promise<Respost
       meta: { documento: c.documento, emissor: c.emissor ?? '', numero_serie: c.numeroSerie, impressao_digital: c.impressaoDigital,
         valido_de: c.validoDe.toISOString(), valido_ate: c.validoAte.toISOString() },
     });
-    return { status: 200, corpo: { ok: true, certificado_id: r.certificadoId, acao: r.acao, avisos: lido.avisos,
+    return { status: 200, corpo: { ok: true, certificado_id: r.certificadoId, acao: r.acao, avisos: lido.avisos, cadeia,
       certificado: { ...c, validoDe: c.validoDe.toISOString(), validoAte: c.validoAte.toISOString() } } };
   } catch (e) {
     await pecas.apagarObjeto(caminho);

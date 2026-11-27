@@ -21,7 +21,7 @@ beforeAll(() => {
   pfx = Uint8Array.from(forge.asn1.toDer(forge.pkcs12.toPkcs12Asn1(k.privateKey, [c], SENHA, { algorithm: '3des' })).getBytes(), (ch) => ch.charCodeAt(0));
 }, 30000);
 
-function pecas(o: { pode?: boolean; falhaRegistro?: string; documento?: string } = {}) {
+function pecas(o: { pode?: boolean; falhaRegistro?: string; documento?: string; cadeia?: 'ok' | 'falta' } = {}) {
   const log: string[] = [];
   const objetos = new Map<string, Uint8Array>();
   const p: Pecas = {
@@ -39,6 +39,10 @@ function pecas(o: { pode?: boolean; falhaRegistro?: string; documento?: string }
     registrarRecusa: async (t, a, r) => { log.push(`recusa ${t} ${a} ${r}`); },
     novoId: () => 'obj-1',
     agora: () => new Date('2026-11-13T12:00:00Z'),
+    /* o certificado sintético não fecha a ICP-Brasil: a cadeia é trocada aqui (a real é provada em credencialA1/intermediarias) */
+    conferirCadeia: () => (o.cadeia === 'falta'
+      ? { ok: false, caminho: [{ nome: 'PRODUTORA DE TESTE', ate: '2027-01-01T00:00:00.000Z' }], motivo: 'sem_intermediaria', frase: 'A cadeia do certificado não fecha.' }
+      : { ok: true, caminho: [{ nome: 'PRODUTORA DE TESTE', ate: '2027-01-01T00:00:00.000Z' }, { nome: 'AC SINTETICA', ate: '2030-01-01T00:00:00.000Z' }], raiz: 'AC Raiz Brasileira v5' }),
   };
   return { p, log, objetos };
 }
@@ -100,5 +104,14 @@ describe('subirCertificado — a ordem e as recusas', () => {
     const b = pecas({ falhaRegistro: 'connection reset by peer' });
     expect((await subirCertificado(pedido(), b.p)).corpo).toMatchObject({ ok: false, frase: 'Não consegui gravar o certificado. Nada foi gravado; tente de novo.' });
     expect(b.objetos.size).toBe(0);
+  });
+
+  it('AGENDA-01 F3 — a cadeia que não fecha nem com as ACs da ICP-Brasil: 422 "cadeia", trilha, NADA cifrado nem gravado', async () => {
+    const b = pecas({ cadeia: 'falta' });
+    const r = await subirCertificado(pedido(), b.p);
+    expect(r.status).toBe(422);
+    expect(r.corpo).toMatchObject({ ok: false, recusa: 'cadeia', frase: 'A cadeia do certificado não fecha.' });
+    expect(b.log.some((l) => l.startsWith('recusa t1 u1 cadeia'))).toBe(true);
+    expect(b.log.some((l) => l === 'cifrar' || l.startsWith('gravar') || l.startsWith('registrar'))).toBe(false);
   });
 });
