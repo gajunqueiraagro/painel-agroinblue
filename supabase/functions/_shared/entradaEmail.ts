@@ -124,6 +124,13 @@ async function receberArquivo(p: Pecas, local: string, dado: Record<string, unkn
   return { status: 200, corpo: { ok: true, nome: texto(dado.nome, 255), tipo, tamanho: bytes.length, md5 } };
 }
 
+/** ENTRADA-CENTRAL-01 F1: um objeto de até 32 KB (o teto do banco); o resto vai sem leitura (a caixa lê no navegador) */
+export const LEITURA_MAX_BYTES = 32768;
+export function leituraDoPedido(x: unknown): Record<string, unknown> | null {
+  if (!ehObjeto(x)) return null;
+  return new TextEncoder().encode(JSON.stringify(x)).length <= LEITURA_MAX_BYTES ? x : null;
+}
+
 async function receberMensagem(p: Pecas, local: string, dado: Record<string, unknown>): Promise<Resposta> {
   const mensagemId = texto(dado.mensagem_id, 512);
   if (!mensagemId) return { status: 400, corpo: { ok: false, motivo: 'pedido' } };
@@ -146,7 +153,9 @@ async function receberMensagem(p: Pecas, local: string, dado: Record<string, unk
     if (!md5 || !ehTipo(a.tipo) || tamanho === null) return { status: 400, corpo: { ok: false, motivo: 'pedido' } };
     const caminho = caminhoDoArquivo(cliente, md5, a.tipo);   // refeito aqui: o caminho de fora nunca entra
     if (!(await p.objetoExiste(caminho))) return { status: 409, corpo: { ok: false, motivo: 'arquivo_ausente' } };
-    arquivos.push({ nome, tipo: a.tipo, tamanho, md5, storage_path: caminho });
+    /* ENTRADA-CENTRAL-01 F1: a leitura que a Lambda fez (só o resultado; a forma quem confere é o banco, `_fn_entrada_leitura_valida`) */
+    const leitura = leituraDoPedido(a.leitura);
+    arquivos.push({ nome, tipo: a.tipo, tamanho, md5, storage_path: caminho, ...(leitura ? { leitura } : {}) });
   }
   const recusas: Record<string, unknown>[] = [];
   for (const r of Array.isArray(dado.recusas) ? dado.recusas : []) {

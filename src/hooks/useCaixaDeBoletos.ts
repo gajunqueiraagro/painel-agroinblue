@@ -20,105 +20,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { caixaApiDoBanco, type CaixaApi, type DocumentoDaCaixa, type ListaDaCaixa, type RespostaDeEntrar } from '@/lib/financeiro/boleto/caixaApi';
 import { parcelaApiDoBanco, type ParcelaApi } from '@/lib/financeiro/boleto/boletoDaParcela';
-import { lerBoletosDoArquivo, paraEntrada, sugestoesDeSenha, type ParteDoBoleto } from '@/lib/financeiro/boleto/lerBoleto';
-import { lerNota } from '@/lib/financeiro/nfe/lerNota';
+import { paraEntrada, sugestoesDeSenha, type ParteDoBoleto } from '@/lib/financeiro/boleto/lerBoleto';
 import type { BoletoNormalizado } from '@/lib/financeiro/linhaDigitavel';
 import { entradaEmailApiDoBanco, rotuloDoMotivo, type DetalheDoResolvido, type EntradaDoEmail, type EntradaEmailApi, type MotivoDeIgnorar } from '@/lib/financeiro/boleto/entradaEmailApi';
 import { md5 } from '@/lib/arquivo/md5';
 import {
-  FRASE_FOLHA_AINDA_NAO, FRASE_NEM_BOLETO_NEM_NOTA, MOTIVO_DO_DESFEITO, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes, numeroDaNotaComPontos,
-  type ConsultaDaNota, type ConsultaDoBoleto, type FonteParaMontar, type GrupoDaCaixa, type LinhaDaCaixa, type Lido, type ResumoDaNota,
+  MOTIVO_DO_DESFEITO, boletoJaLigado, grupoDosGuardados, gruposDosEmails, linhasDasFontes, numeroDaNotaComPontos,
+  type ConsultaDaNota, type ConsultaDoBoleto, type FonteParaMontar, type GrupoDaCaixa, type LinhaDaCaixa, type Lido,
 } from '@/lib/financeiro/boleto/caixaPorEmail';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { importarDoApp } from '@/lib/app/falhaDeVersao';
-import { itensDoPdf, type PdfjsMinimo } from '@/lib/financeiro/nfe/lerNotaPdf';
-import { montarLinhas } from '@/lib/oc/leitura/montarLinhas';
-import { lerFolha, pareceFolha, type FolhaLida } from '@/lib/folha/lerFolha';
-import { acharChaveNFe } from '@/lib/oc/leitura/chaveNFe';
-import { lerResumoDoContador, type ResumoLido } from '@/lib/folha/lerResumoDoContador';
-
-/** A leitura de UM arquivo pela caixa (injetável: a bancada e os testes passam a sua). */
-export type LeituraDaCaixa =
-  | { k: 'nota'; nota: ResumoDaNota }
-  | { k: 'boletos'; boletos: BoletoNormalizado[]; beneficiario: ParteDoBoleto; pagador: ParteDoBoleto; paginaDeCada?: number[]; totalDePaginas?: number }
-  | { k: 'folha'; folha: FolhaLida }
-  | { k: 'resumo'; resumo: ResumoLido }
-  | { k: 'nada'; frase: string }
-  | { k: 'senha'; errada: boolean }
-  | { k: 'erro'; frase: string };
-export type LerArquivoDaCaixa = (bytes: ArrayBuffer, tipo: 'xml' | 'pdf', senha?: string, nomeDoArquivo?: string) => Promise<LeituraDaCaixa>;
-
-/**
- * CAIXA-DANFE-CHAVE-01 (Gabriel 24/11, NJ, NF 48.053): a DANFE que o `lerNota` não lê ainda tem a CHAVE — impressa em grupos ("5026 1104 …") e,
- * muitas vezes, no NOME do arquivo ("<chave>-danfe.pdf"). Vale a 1ª chave VÁLIDA (`acharChaveNFe`: DV, UF, mês, modelo 55, CNPJ) do texto do
- * PDF; sem ela, a do nome. Com a chave, a linha é uma nota: a consulta de sempre (`fn_nota_ja_lancada` pela chave) acha o lançamento.
- * O número sai da própria chave; emitente, valor e vencimento ficam vazios ("—"), nunca inventados.
- */
-export function notaPelaChave(textoDoPdf: string | null, nomeDoArquivo: string | undefined): ResumoDaNota | null {
-  const chave = (textoDoPdf ? acharChaveNFe(textoDoPdf) : null) ?? (nomeDoArquivo ? acharChaveNFe(nomeDoArquivo) : null);
-  if (!chave) return null;
-  return { chave, numero: String(Number(chave.slice(25, 34))), emitente: null, valor: null, vencimento: null };
-}
-
-export const FRASE_PDF_IMAGEM = 'O PDF é uma imagem (escaneado): sem linha digitável nem chave legível.';
-
-/** O leitor de verdade: XML → a nota; PDF → os boletos (D7); sem boleto, a nota (o DANFE, pelo `lerNota` de sempre); senão, nada
- *  (o que parece folha diz que a folha ainda não é lida aqui, CAIXA-FOLHA-AVISO-01). `pdfjs`: o do teste (no app, o de sempre). */
-export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (bytes, tipo, senha, nomeDoArquivo) => {
-  if (tipo === 'xml') {
-    const n = await lerNota(bytes);
-    if ('nota' in n && n.ok) return { k: 'nota', nota: resumoDaNota(n.nota) };
-    return { k: 'nada', frase: 'frase' in n ? n.frase : 'Não consegui ler a nota.' };
-  }
-  const b = await lerBoletosDoArquivo(bytes.slice(0), { senha, pdfjs });
-  if (b.ok === false) {
-    if (b.motivo === 'senha' || b.motivo === 'senha_errada') return { k: 'senha', errada: b.motivo === 'senha_errada' };
-    if (b.motivo === 'sem_texto') {
-      /* a DANFE escaneada ainda pode ter a chave no nome do arquivo */
-      const pelaChave = notaPelaChave(null, nomeDoArquivo);
-      return pelaChave ? { k: 'nota', nota: pelaChave } : { k: 'nada', frase: FRASE_PDF_IMAGEM };
-    }
-    return { k: 'erro', frase: b.frase };
-  }
-  if (b.leitura.boletos.length) return { k: 'boletos', ...b.leitura };
-  const n = await lerNota(bytes.slice(0), { pdfjs });
-  if (n.ok && n.nota.chave) return { k: 'nota', nota: resumoDaNota(n.nota) };
-  /* FOLHA-NA-CAIXA-01: o recibo do contador (3º tipo); o que só PARECE folha (layout que o lerFolha não lê) avisa */
-  const paginas = await linhasDasPaginas(bytes, senha, pdfjs);
-  const f = paginas ? lerFolha(paginas) : null;
-  if (f && f.ok === true) return { k: 'folha', folha: f.folha };
-  if (f && f.ok === false && f.motivo === 'nao_fecha') return { k: 'nada', frase: `Folha que não fecha: ${f.frase} Fale com o consultor.` };
-  /* FOLHA-RESUMO-CONTADOR-01: o "Extrato Mensal" do contador (o FGTS por empresa) */
-  const resumo = paginas ? lerResumoDoContador(paginas) : null;
-  if (resumo && resumo.ok === true) return { k: 'resumo', resumo: resumo.resumo };
-  const pelaChave = notaPelaChave(paginas ? paginas.flat().join('\n') : null, nomeDoArquivo);
-  if (pelaChave) return { k: 'nota', nota: pelaChave };
-  return { k: 'nada', frase: paginas && pareceFolha(paginas) ? FRASE_FOLHA_AINDA_NAO : FRASE_NEM_BOLETO_NEM_NOTA };
-};
-export const lerDaCaixa: LerArquivoDaCaixa = lerDaCaixaCom();
-/** As linhas de cada página (as do `montarLinhas`, como o `lerFolha` pede); falhou a leitura = null (fica o "sem linha digitável"). */
-async function linhasDasPaginas(bytes: ArrayBuffer, senha?: string, pdfjs?: PdfjsMinimo): Promise<string[][] | null> {
-  try {
-    const { paginas } = await itensDoPdf(bytes.slice(0), pdfjs, { senha });
-    return paginas.map((p) => montarLinhas([p]));
-  } catch {
-    return null;
-  }
-}
-/** CAIXA-FOLHA-AVISO-01: o PDF parece recibo de pagamento? */
-export async function pdfPareceFolha(bytes: ArrayBuffer, senha?: string, pdfjs?: PdfjsMinimo): Promise<boolean> {
-  const p = await linhasDasPaginas(bytes, senha, pdfjs);
-  return !!p && pareceFolha(p);
-}
-function resumoDaNota(n: { chave: string; numero: string; emitente: { nome: string }; totais: { notaCent: number }; duplicatas: { vencimento: string }[] }): ResumoDaNota {
-  return { chave: n.chave, numero: n.numero, emitente: n.emitente.nome || null, valor: n.totais.notaCent / 100, vencimento: n.duplicatas[0]?.vencimento ?? null };
-}
+import { lerDaCaixa, type LerArquivoDaCaixa, type LeituraDaCaixa } from '@/lib/financeiro/boleto/lerDaCaixa';
+import { daGravada, paraGravar } from '@/lib/financeiro/boleto/leituraGravada';
+/* ENTRADA-CENTRAL-01 F1: o leitor mudou para `lerDaCaixa.ts` (puro, o mesmo da Lambda); os chamadores de sempre seguem importando daqui */
+export { FRASE_PDF_IMAGEM, lerDaCaixa, lerDaCaixaCom, notaPelaChave, pdfPareceFolha, type LeituraDaCaixa, type LerArquivoDaCaixa } from '@/lib/financeiro/boleto/lerDaCaixa';
 
 /** O arquivo arrastado nesta sessão (não está no banco: ignorar = tirar da lista). */
 interface Local { chave: string; arquivo: File }
 /** O que a leitura guardou de cada fonte: os bytes (para ver, subir e lançar) e as partes do boleto (para a prévia do banco). */
 interface DaFonte {
-  bytes: ArrayBuffer; nome: string; tipo: 'xml' | 'pdf'; partes: { beneficiario: ParteDoBoleto; pagador: ParteDoBoleto } | null; boletos: BoletoNormalizado[];
+  /** ENTRADA-CENTRAL-01 F1: null = a leitura veio GUARDADA (não se baixou); quem precisa do arquivo baixa na hora (`bytesDe`) */
+  bytes: ArrayBuffer | null; nome: string; tipo: 'xml' | 'pdf'; partes: { beneficiario: ParteDoBoleto; pagador: ParteDoBoleto } | null; boletos: BoletoNormalizado[];
   /** BOLETO-SEPARAR-01: a página de cada boleto (na ordem de `boletos`) e o total do PDF; null = não se sabe (não divide) */
   paginas: { deCada: number[]; total: number } | null;
 }
@@ -181,16 +103,10 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   }, [api, clienteId]);
 
   /* ── ler uma fonte (o e-mail baixa; o arrastado já tem o arquivo) ── */
-  const lerFonte = useCallback(async (chave: string, obter: () => Promise<{ bytes: ArrayBuffer; nome: string } | string>, tipo: 'xml' | 'pdf', senha?: string) => {
-    setLidos((x) => ({ ...x, [chave]: { k: 'lendo' } }));
-    const o = await obter();
-    if (!vivo.current) return;
-    if (typeof o === 'string') { setLidos((x) => ({ ...x, [chave]: { k: 'erro', frase: o } })); return; }
-    let r: LeituraDaCaixa;
-    try { r = await ler(o.bytes.slice(0), tipo, senha, o.nome); } catch (e) { console.error('[caixa] leitura', e); r = { k: 'erro', frase: 'Não consegui ler este arquivo.' }; }
-    if (!vivo.current) return;
+  /** a leitura (feita agora ou guardada) vira a fonte e a linha */
+  const aplicarLeitura = useCallback((chave: string, nome: string, tipo: 'xml' | 'pdf', bytes: ArrayBuffer | null, r: LeituraDaCaixa) => {
     fontes.current.set(chave, {
-      bytes: o.bytes, nome: o.nome, tipo, partes: r.k === 'boletos' ? { beneficiario: r.beneficiario, pagador: r.pagador } : null,
+      bytes, nome, tipo, partes: r.k === 'boletos' ? { beneficiario: r.beneficiario, pagador: r.pagador } : null,
       boletos: r.k === 'boletos' ? r.boletos : [],
       paginas: r.k === 'boletos' && r.paginaDeCada && r.totalDePaginas && r.paginaDeCada.length === r.boletos.length
         ? { deCada: r.paginaDeCada, total: r.totalDePaginas } : null,
@@ -199,7 +115,22 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
       ? { k: 'boletos', boletos: r.boletos.map((b) => ({ codigoBarras: b.codigo_barras, linha: b.linha, vencimento: b.vencimento, valor: b.valor, beneficiario: r.beneficiario.nome })) }
       : r;
     setLidos((x) => ({ ...x, [chave]: lido }));
-  }, [ler]);
+  }, []);
+  /** `guardarEm`: a linha da entrada que ainda não tem a leitura desta versão — lida aqui (sem senha), a leitura fica nela e não se relê */
+  const lerFonte = useCallback(async (chave: string, obter: () => Promise<{ bytes: ArrayBuffer; nome: string } | string>, tipo: 'xml' | 'pdf', senha?: string, guardarEm?: string) => {
+    setLidos((x) => ({ ...x, [chave]: { k: 'lendo' } }));
+    const o = await obter();
+    if (!vivo.current) return;
+    if (typeof o === 'string') { setLidos((x) => ({ ...x, [chave]: { k: 'erro', frase: o } })); return; }
+    let r: LeituraDaCaixa;
+    try { r = await ler(o.bytes.slice(0), tipo, senha, o.nome); } catch (e) { console.error('[caixa] leitura', e); r = { k: 'erro', frase: 'Não consegui ler este arquivo.' }; }
+    if (!vivo.current) return;
+    aplicarLeitura(chave, o.nome, tipo, o.bytes, r);
+    const g = guardarEm && !senha ? paraGravar(r) : null;
+    if (g && guardarEm && entradaApi.guardarLeitura) {
+      void entradaApi.guardarLeitura(guardarEm, g).then((x) => { if (x.ok === false) console.error('[caixa] guardar a leitura', x.erro); });
+    }
+  }, [ler, aplicarLeitura, entradaApi]);
 
   const baixarDoEmail = useCallback((e: EntradaDoEmail) => async (): Promise<{ bytes: ArrayBuffer; nome: string } | string> => {
     if (!e.storagePath) return 'Esta linha não tem arquivo.';
@@ -211,17 +142,24 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   /* as entradas abertas com arquivo: lê cada uma uma vez (3 por vez) */
   useEffect(() => {
     if (!entradas) return;
-    const fila = entradas.filter((e) => (e.estado === 'a_ler' || e.estado === 'nao_reconhecido') && e.storagePath && e.tipo && !pedidos.current.has(`ler:${e.id}`));
-    fila.forEach((e) => pedidos.current.add(`ler:${e.id}`));
+    const abertas = entradas.filter((e) => (e.estado === 'a_ler' || e.estado === 'nao_reconhecido') && e.storagePath && e.tipo && !pedidos.current.has(`ler:${e.id}`));
+    abertas.forEach((e) => pedidos.current.add(`ler:${e.id}`));
+    /* ENTRADA-CENTRAL-01 F1: a leitura guardada (desta versão do leitor) não se relê nem se baixa; o resto lê como sempre e guarda */
+    const fila: EntradaDoEmail[] = [];
+    for (const e of abertas) {
+      const g = daGravada(e.leitura);
+      if (g) aplicarLeitura(e.id, e.arquivoNome ?? 'arquivo', e.tipo ?? 'pdf', null, g);
+      else fila.push(e);
+    }
     let i = 0;
     const proximo = async (): Promise<void> => {
       const e = fila[i++];
       if (!e || !vivo.current) return;
-      await lerFonte(e.id, baixarDoEmail(e), e.tipo ?? 'pdf');
+      await lerFonte(e.id, baixarDoEmail(e), e.tipo ?? 'pdf', undefined, e.id);
       return proximo();
     };
     void Promise.all([proximo(), proximo(), proximo()]);
-  }, [entradas, lerFonte, baixarDoEmail]);
+  }, [entradas, lerFonte, baixarDoEmail, aplicarLeitura]);
 
   /* ── as consultas ao banco ── */
   const origemDe = useCallback((fonte: string) => entradas?.find((e) => e.id === fonte)?.mensagemId ?? null, [entradas]);
@@ -310,14 +248,15 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
       f = { bytes: await b.dados.arrayBuffer(), nome: i.boleto.arquivoNome ?? 'boleto.pdf', tipo: 'pdf', partes: null, boletos: [], paginas: null };
       fontes.current.set(fonte, f);
     }
-    if (!f) {
+    if (!f || !f.bytes) {
       const e = entradas?.find((x) => x.id === fonte);
       if (!e) return null;
       const o = await baixarDoEmail(e)();
       if (typeof o === 'string') return null;
-      f = { bytes: o.bytes, nome: o.nome, tipo: e.tipo ?? 'pdf', partes: null, boletos: [], paginas: null };
+      f = f ? { ...f, bytes: o.bytes } : { bytes: o.bytes, nome: o.nome, tipo: e.tipo ?? 'pdf', partes: null, boletos: [], paginas: null };
       fontes.current.set(fonte, f);
     }
+    if (!f.bytes) return null;
     return new File([f.bytes], f.nome, { type: f.tipo === 'xml' ? 'text/xml' : 'application/pdf' });
   }, [baixarDoEmail, entradas, entradaApi, lista]);
 
@@ -334,7 +273,9 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     const grupo = paginasDosBoletos(f.paginas.deCada, f.paginas.total)[i];
     const aviso = f.paginas.deCada.filter((p) => p === f.paginas?.deCada[i]).length > 1 ? FRASE_PAGINA_COM_2 : null;
     if (grupo.length >= f.paginas.total) return { ok: true, arquivo: await arquivoDe(fonte), separado: false, aviso };
-    const d = await dividirPdf(f.bytes.slice(0), [grupo]);
+    const todo = f.bytes ?? await (await arquivoDe(fonte))?.arrayBuffer() ?? null;
+    if (!todo) return { ok: false, frase: FRASE_NAO_SEPAROU };
+    const d = await dividirPdf(todo.slice(0), [grupo]);
     if (d.ok === false) return { ok: false, frase: FRASE_NAO_SEPAROU };
     const nome = nomeDoSeparado(f.nome, i, f.boletos.length);
     return { ok: true, arquivo: new File([d.arquivos[0].slice().buffer], nome, { type: 'application/pdf' }), separado: true, aviso };

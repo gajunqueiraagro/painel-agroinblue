@@ -2747,14 +2747,32 @@ export function LancamentoV2Dialog({
       centro_custo: c.centro_custo, escopo_negocio: c.escopo_negocio || '', atividade: atividadeValida(c.escopo_negocio),
       safra_id: escopo === 'administrativo' || escopo !== (atual.escopo_negocio || '').trim() ? '' : atual.safra_id }));
   };
-  /* NOTA-ITENS-SUGESTAO — a conta sugerida pelos itens chega só com o id e o subcentro: no NOVO que nasce da nota, o resto da linha do
-     plano (macro, grupo, centro, atividade) vem do plano carregado — a mesma regra do "Usar divisão". Só no novo da nota: nunca mexe no
-     que um lançamento salvo já tem. */
-  const contaSemHierarquia = !lancamento && !!xml && !!classificacao.plano_conta_id && !classificacao.macro_custo ? classificacao.plano_conta_id : null;
+  /* NOTA-ITENS-SUGESTAO (caso NJ, Gabriel 27/11 12:18 — NF 1.119: Atividade, Centro e "Compõe DRE" em branco) — o subcentro que chega
+     PREENCHIDO por qualquer origem (a sugestão da nota, a prévia da Receita/Ler a NF, o duplicar, a planilha) e sem o resto da linha do plano
+     herda atividade, macro, grupo e centro do PLANO, como a escolha manual: pela chave; sem ela, pelo nome + tipo. Só no NOVO: nunca mexe no
+     que um lançamento salvo já tem. A chave do efeito leva os campos: se a hidratação os zerar de novo, ele refaz. */
+  const linhaIncompleta = !isEdit && (!!classificacao.plano_conta_id || !!classificacao.subcentro)
+    && (!classificacao.macro_custo || !classificacao.centro_custo || !classificacao.escopo_negocio || !classificacao.atividade);
+  const chaveDaLinhaIncompleta = linhaIncompleta
+    ? [classificacao.plano_conta_id ?? '', classificacao.subcentro, classificacao.macro_custo, classificacao.centro_custo, classificacao.escopo_negocio, classificacao.atividade ?? ''].join('|')
+    : null;
   useEffect(() => {
-    if (contaSemHierarquia) porNaContaDoLancamento(contaSemHierarquia);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- so' quando a conta sem a linha do plano aparece (ou o plano chega)
-  }, [contaSemHierarquia, classificacoesDoModal]);
+    if (!chaveDaLinhaIncompleta) return;
+    const nome = (classificacao.subcentro || '').trim().toLowerCase();
+    const c = (classificacao.plano_conta_id ? classificacoesDoModal.find((x) => x.id === classificacao.plano_conta_id) : undefined)
+      ?? classificacoesDoModal.find((x) => (x.subcentro || '').trim().toLowerCase() === nome && x.tipo_operacao === tipoOperacao && !!x.macro_custo);
+    if (!c || !c.macro_custo || !c.escopo_negocio) return;
+    setClassificacao((atual) => ({ ...atual, plano_conta_id: atual.plano_conta_id ?? c.id ?? null, subcentro: c.subcentro, macro_custo: c.macro_custo,
+      grupo_custo: c.grupo_custo || '', centro_custo: c.centro_custo, escopo_negocio: c.escopo_negocio || '', atividade: atividadeValida(c.escopo_negocio) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a chave diz quando a linha está incompleta; o plano chegando refaz
+  }, [chaveDaLinhaIncompleta, classificacoesDoModal]);
+  /* SUGESTAO-ITENS-BUG-01 (Gabriel 27/11) — UMA conta tem UM dono. Sem divisão ativa, a conta da GERAL é a de todos os itens: no Editar
+     (o item não guarda conta sem divisão: nunca a sugestão de novo) e no Novo assim que o operador troca a conta da Geral (ou junta tudo).
+     Com divisão ativa, a Geral mostra "dividida em N contas" e quem manda são os itens. */
+  const contaPropostaDaNota = xml?.proposta.classificacao?.plano_conta_id ?? null;
+  const geralMudouPeloOperador = !!classificacao.plano_conta_id && classificacao.plano_conta_id !== contaPropostaDaNota;
+  const itensSeguemAGeralNoNovo = !divisaoNaCriacao && (geralMudouPeloOperador || !!juntadaEm) ? (classificacao.plano_conta_id ?? null) : null;
+  const itensSeguemAGeralNoEditar = lancDividido ? null : (classificacao.plano_conta_id ?? null);
   /** NOTA-ITENS-SUGESTAO — "Juntar tudo numa conta": sem divisão; a conta escolhida vira a do lançamento. */
   const juntarNaCriacao = (planoContaId: string) => {
     setErroAntesDeSalvar(null);
@@ -2766,9 +2784,16 @@ export function LancamentoV2Dialog({
    *  regra do item (`fn_item_regra_gravar`); na próxima nota o mesmo produto já vem decidido. Falha não desfaz nada (só o console). */
   const lembrarEscolhasDosItens = async () => {
     const cli = clienteAtual?.id;
-    if (!cli || !xml || !escolhasDosItens.size) return;
+    if (!cli || !xml) return;
     const valeu = (n: number, p: string) => (divisaoNaCriacao ? divisaoNaCriacao.get(n) === p : juntadaEm === p);
     const m = new Map([...escolhasDosItens].filter(([n, p]) => valeu(n, p)));
+    /* SUGESTAO-ITENS-BUG-01 (c) — sem divisão, a conta que o operador pôs na GERAL (diferente da sugerida) é a correção de todos os itens
+       cuja sugestão era outra: vira a regra do item (cliente + fornecedor + produto → conta) e vence a escada na próxima nota */
+    const geral = classificacao.plano_conta_id;
+    if (!divisaoNaCriacao && geralMudouPeloOperador && geral && itensDaNota) {
+      const sugDe = new Map((sugestoesDosItens ?? []).map((x) => [x.nItem, x.planoContaId]));
+      for (const i of itensDaNota.lidos.itens) if (!m.has(i.nItem) && sugDe.get(i.nItem) !== geral) m.set(i.nItem, geral);
+    }
     if (!m.size) return;
     const falhas = await lembrarContasDosItens(cli, xml.proposta.documento.chaveAcesso, m, `Escolhido no lançamento da ${xml.proposta.rotuloNota}`);
     if (falhas.length) console.error('[lembrarContasDosItens]', falhas);
@@ -3956,13 +3981,14 @@ export function LancamentoV2Dialog({
                       contaDeHoje={lancDividido ? null : (classificacao.plano_conta_id ?? null)} sugeridas={contasIniciaisDosItens} atividadeSugerida={classificacao.atividade}
                       gravando={!!motivoDaDivisao} onDividir={(mapa) => setMotivoDaDivisao({ tipo: 'itens', mapa })}
                       pendente={contasDosItensMudadas} onMudou={setContasDosItensMudadas}
-                      sugestoes={lancDividido ? undefined : sugestoesDosItens ?? undefined} />
+                      sugestoes={lancDividido ? undefined : sugestoesDosItens ?? undefined} todasNaConta={itensSeguemAGeralNoEditar} />
                   ) : podeDividirNaCriacao ? (
                     /* NOTA-CONTAS-NA-CRIACAO-01 A — no NOVO: a mesma vista; "Dividir … ao salvar" deixa a divisao PENDENTE (o Salvar grava) */
                     <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao} aoSalvar
                       contaDeHoje={classificacao.plano_conta_id ?? null} sugeridas={divisaoNaCriacao ?? contasAprendidas} atividadeSugerida={classificacao.atividade}
                       gravando={saving} onDividir={aplicarDivisaoNaCriacao}
-                      sugestoes={sugestoesDosItens ?? undefined} onJuntar={sugestoesDosItens ? juntarNaCriacao : undefined} onEscolhas={setEscolhasDosItens} />
+                      sugestoes={sugestoesDosItens ?? undefined} onJuntar={sugestoesDosItens ? juntarNaCriacao : undefined} onEscolhas={setEscolhasDosItens}
+                      todasNaConta={itensSeguemAGeralNoNovo} />
                   ) : undefined} />
               </TabsContent>
             )}
