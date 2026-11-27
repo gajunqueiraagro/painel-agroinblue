@@ -7,7 +7,7 @@
  */
 import { propostaDoEmitente } from '@/lib/fornecedores/compararCadastro';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { LancamentoV2Form, ClassificacaoItem, ContaBancariaV2, FornecedorV2, Safra } from '@/hooks/useFinanceiroV2';
@@ -59,6 +59,13 @@ const consultas = vi.hoisted(() => ({
   notaJaLancada: vi.fn(async (_c: string, _e: unknown): Promise<Consulta<{ id: string }[]>> => ({ ok: true, valor: [] })),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
+/* NOTA-TIPO-ABATE-01 — o papel do titular e a OC do comprador (padrão: nenhum titular, nenhuma OC; a regra pura é a de verdade) */
+const venda = vi.hoisted(() => ({
+  documentosDosTitulares: vi.fn(async () => ({ ok: true as const, valor: new Set<string>() })),
+  vendaNaOcProxima: vi.fn(async (): Promise<{ ok: true; valor: { operacaoId: string; data: string; valor: number | null } | null }> => ({ ok: true, valor: null })),
+  planoEhDeEntrada: vi.fn(async () => ({ ok: true as const, valor: false })),
+}));
+vi.mock('@/lib/fiscal/vendaDoTitular', async (orig) => ({ ...(await orig<typeof import('@/lib/fiscal/vendaDoTitular')>()), ...venda }));
 vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli', nome: 'Cliente' } }) }));
 vi.mock('@/v2/components/edicao/LancamentoZooModal', () => ({ LancamentoZooModal: () => null }));
@@ -78,7 +85,7 @@ import { resolverEmitente, type ResolucaoEmitente } from '@/lib/financeiro/nfe/r
 import { arquivoXmlDaNota, danfeDaNota, pendenteDaNota, prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import type { ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
 import { documentoFormatado } from '@/lib/financeiro/nfe/formatos';
-import { CTE, EMITENTE_CNPJ, chaveDe, montarNFe, utf8, type OpcoesNota } from '@/lib/financeiro/nfe/__fixtures__/notas';
+import { CTE, DESTINATARIO_CPF, EMITENTE_CNPJ, chaveDe, montarNFe, utf8, type OpcoesNota } from '@/lib/financeiro/nfe/__fixtures__/notas';
 import type { Consulta, OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 import { TIPOS_ACEITOS } from '@/hooks/useLancamentoDocumentos';
 import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
@@ -1149,5 +1156,31 @@ describe('NOTA-RECEITA-DANFE-ANEXO-01 — o DANFE da nota', () => {
     expect(gerar).not.toHaveBeenCalled();
     const r = await danfeDaNota(d, 'agro', async (): Promise<Gerado> => ({ ok: false, frase: 'Não consegui gerar o PDF do DANFE.' }));
     expect(r).toEqual({ pendente: null, aviso: 'O DANFE em PDF não foi gerado (Não consegui gerar o PDF do DANFE.); a nota segue com o XML.' });
+  });
+});
+
+describe('NOTA-TIPO-ABATE-01 — a NF de entrada do frigorífico com o titular no destinatário é a VENDA do titular', () => {
+  const vendaDoFrigorifico = () => arquivo('venda.xml', montarNFe().replace(/<tpNF>1<\/tpNF>/, '<tpNF>0</tpNF>'));
+  it('com o abate já na OC (mesmo comprador, ±10 dias): a linha manda para a OC e NÃO abre o Novo Lançamento', async () => {
+    venda.documentosDosTitulares.mockImplementationOnce(async () => ({ ok: true as const, valor: new Set([DESTINATARIO_CPF]) }));
+    venda.vendaNaOcProxima.mockImplementationOnce(async () => ({ ok: true, valor: { operacaoId: 'oc-1', data: '2026-09-28', valor: 1000 } }));
+    const { onAbrir } = montarLista();
+    soltar([vendaDoFrigorifico()]);
+    await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1), { timeout: 5000 });
+    expect(screen.getByTestId('xml-linha').textContent).toContain('É a sua venda');
+    expect(onAbrir).not.toHaveBeenCalled();
+  });
+  it('sem OC: abre como ENTRADA e a conta de despesa sugerida não vem (mutação: a mesma nota com tpNF 1 abre como Saída)', async () => {
+    venda.documentosDosTitulares.mockImplementation(async () => ({ ok: true as const, valor: new Set([DESTINATARIO_CPF]) }));
+    const { onAbrir } = montarLista();
+    soltar([vendaDoFrigorifico()]);
+    await waitFor(() => expect(onAbrir).toHaveBeenCalledTimes(1), { timeout: 5000 });
+    expect(onAbrir.mock.calls[0][0].proposta.tipoOperacao).toBe('1-Entradas');
+    cleanup();
+    const segundo = montarLista();
+    soltar([arquivo('compra.xml', montarNFe())]);
+    await waitFor(() => expect(segundo.onAbrir).toHaveBeenCalledTimes(1), { timeout: 5000 });
+    expect(segundo.onAbrir.mock.calls[0][0].proposta.tipoOperacao).toBe('2-Saídas');
+    venda.documentosDosTitulares.mockImplementation(async () => ({ ok: true as const, valor: new Set<string>() }));
   });
 });
