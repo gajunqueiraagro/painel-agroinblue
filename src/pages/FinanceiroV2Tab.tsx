@@ -1,5 +1,6 @@
 import { casaNaBusca } from '@/lib/texto/busca';
 import { useEstadoDaReceita } from '@/hooks/useEstadoDaReceita';
+import { AbrindoANota } from '@/components/financeiro-v2/AbrindoANota';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CabecalhoDaTela } from '@/components/ui/cabecalho-da-tela';
 import { SeletorDePeriodo } from '@/components/ui/seletor-de-periodo';
@@ -788,7 +789,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [prefillXml, setPrefillXml] = useState<React.ComponentProps<typeof LancamentoV2Dialog>['prefill'] | null>(null);
   const [linhaXmlAberta, setLinhaXmlAberta] = useState<string | null>(null);
   const [linhasXmlLancadas, setLinhasXmlLancadas] = useState<ReadonlySet<string>>(new Set());
+  /* NOTA-ABRIR-RAPIDO-01 (Gabriel 27/11) — "Abrindo a nota…" NO CLIQUE do "Lançar" (a Receita avisa), até o Novo Lançamento abrir ou a leitura
+     terminar sem abrir (recusada / já lançada: a linha aparece no "Da nota fiscal"); 20 s de teto para nunca prender a tela */
+  const [abrindoNota, setAbrindoNota] = useState(false);
+  useEffect(() => { if (!abrindoNota) return; const t = window.setTimeout(() => setAbrindoNota(false), 20_000); return () => window.clearTimeout(t); }, [abrindoNota]);
   const abrirLancamentoDoXml = (doXml: DoXml, linhaId: string) => {
+    setAbrindoNota(false);
     setEditingLanc(null);
     setPrefillDuplicar(null);
     setPrefillXml(prefillDaNota(doXml));
@@ -3530,6 +3536,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           /* BOLETO D3d (D3) — "Lançar nota": a MESMA prévia do "+ Da nota", com o arquivo que chegou por e-mail */
           aoLancarNota={(arquivo) => { setCaixaAberta(false); voltarParaCaixa.current = true; setXmlDaReceita([arquivo]); setXmlAberto(true); }} />
       )}
+      {/* NOTA-ABRIR-RAPIDO-01 — enquanto "Abrindo a nota…" está na tela, o "Da nota fiscal" lê por baixo, INVISÍVEL (a camada coberta da casa) */}
+      <Camada coberta={abrindoNota}>
       <NovoDeXmlDialog
         open={xmlAberto && !dialogOpen && !notaAberta}
         onClose={() => {
@@ -3548,9 +3556,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         notasDaReceita={receita.data?.lista.length ?? null}
         onNotasDaReceita={() => { setXmlAberto(false); setReceitaAberta(true); camadas.abrir('receita'); void receita.refetch(); }}
         estadoReceita={estadoReceita}
+        aoTerminarLeitura={() => setAbrindoNota(false)}
         podeCadastrarCertificado={podeCadastrarCertificado && !!onIrParaProdutores}
         onCadastrarCertificado={onIrParaProdutores ? () => { setXmlAberto(false); onIrParaProdutores(); } : undefined}
       />
+      </Camada>
+      <AbrindoANota aberto={abrindoNota} aoFechar={() => setAbrindoNota(false)} />
       {receitaAberta && (
         <Camada coberta={camadas.coberta('receita')}>
         {formaPeloExtrato && clienteAtual?.id && (
@@ -3563,6 +3574,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           registrarBem={clienteAtual?.id ? (chave, previsao, observacao, simular) => registrarBemDeTerceiro(clienteAtual.id, chave, previsao, observacao, simular) : undefined}
           /* NAV-VOLTA-ORIGEM-01: a lista NÃO fecha — o "Da nota fiscal" abre POR CIMA dela */
           aoLancar={(arquivo) => { setXmlDaReceita([arquivo]); setXmlAberto(true); camadas.abrir('xml', 'receita', { passagem: true }); }}
+          aoAbrindo={setAbrindoNota}
           /* ENTREGA-FUTURA-LIGAR-01 — a remessa de entrega futura guardada na compra (sem lançamento novo); ligou = a lista relê */
           ligarACompra={clienteAtual?.id ? { clienteId: clienteAtual.id, buscarFaturamento: buscarNaReceitaPelaChave, aoLigar: () => { void receita.refetch(); } } : undefined}
           /* NOTA-IGNORAR-01 — ignorar/desfazer pelas funções do banco (lote 33); gravou = a lista relê */

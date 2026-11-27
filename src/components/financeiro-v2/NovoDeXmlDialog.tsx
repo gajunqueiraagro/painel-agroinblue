@@ -13,6 +13,7 @@
  * ⚠ O PADRAO DA TABELA E' O A31: cabecalho navy 9,5px, linha de 18px a 10px, uma linha por nota; numero, valor e data nunca
  *   cortam, texto longo corta com o inteiro no `title`.
  */
+import { fraseDeSemCompra } from '@/lib/financeiro/nfe/remessaEntregaFutura';
 import { CardDaReceita } from '@/components/fiscal/CardDaReceita';
 import type { EstadoDaReceita } from '@/lib/fiscal/estadoDaReceita';
 import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
@@ -37,6 +38,7 @@ import { arquivoXmlDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { itensDoPdf as itensDaNotaDoPdf, itensDoXml } from '@/lib/financeiro/nfe/itensDaNota';
 import { sugestaoParaAProposta } from '@/lib/financeiro/nfe/sugestaoNaProposta';
 import { parcelasParaCasar } from '@/lib/financeiro/nfe/jaLancada';
+import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import { dataInteira, fraseDaChaveNaoConfere, type NotaLidaOk, type NotaParaLancar } from './NotaFiscalDialog';
 import { ItensDasNotasGuardadasDialog } from './ItensDasNotasGuardadasDialog';
 import { DanfeDasNotasGuardadasDialog } from './DanfeDasNotasGuardadasDialog';
@@ -180,12 +182,22 @@ export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 're
      do Caixa, Notas da Receita, Ler a NF). Falhou = a faixa diz e o campo fica vazio (é sugestão: não trava o lançamento). */
   const itensLidos = lido.origem === 'xml' ? itensDoXml(bytes) : itensDaNotaDoPdf(nota, lido.extras ?? {});
   const itensDaNota = itensLidos?.itens ?? [];
-  const [registrada, sugerida, fazendaDoHistorico, fazendasDoTomadorDaNota] = await Promise.all([
+  /* NOTA-ABRIR-RAPIDO-01 (Gabriel 27/11) — a "já lançada?" corria DEPOIS destas quatro (uma ida ao banco a mais, ~0,3 s no servidor + a rede).
+     As parcelas e o nº que ela usa saem só da NOTA (as duplicatas da proposta = as da nota, ou nenhuma se não é compra): ela vai JUNTO, e o
+     resultado só vale nas mesmas condições de antes (registrada e não está numa OC). */
+  const duplicatasDaNota = fraseDeSemCompra(nota) ? [] : nota.duplicatas;
+  const jaLancadaJunto = notaJaLancada(cli, {
+    parcelas: lido.pelaChave ? [] : parcelasParaCasar(duplicatasDaNota, nota.totais.notaCent, duplicatasDaNota[0]?.vencimento ?? nota.emissao),
+    numero: formatNFNumber(nota.numero) || nota.numero, chave: nota.chave, emitenteDocumento: nota.emitente.documento,
+    nomes: [nota.emitente.nome, nota.emitente.fantasia],
+  });
+  const [registrada, sugerida, fazendaDoHistorico, fazendasDoTomadorDaNota, jaNaHora] = await Promise.all([
     notaJaRegistrada(cli, nota.chave),
     sugestaoPelosItens(cli, { emitenteDocumento: nota.emitente.documento, destIe: nota.destinatario.ie ?? null, emissao: nota.emissao || null,
       favorecidoId: resolucao.propostoId, itens: itensDaNota }),
     nota.destinatario.ie ? Promise.resolve(null) : fazendaPeloHistoricoDoFornecedor(cli, nota.emitente.documento),
     nota.destinatario.ie ? Promise.resolve([]) : fazendasDoTomador(cli, nota.destinatario.documento, nota.servico?.competencia || nota.emissao),
+    jaLancadaJunto,
   ]);
   if (registrada.ok === false) falhas.push(`se a nota já está registrada (${registrada.motivo})`);
   const ocorrencias = registrada.ok === false ? [] : registrada.valor;
@@ -201,16 +213,11 @@ export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 're
   };
   /* NOTA-JA-LANCADA-01 — a nota ja' lancada (qualquer status, cadastro parecido): a linha avisa e abre a previa da nota
      (que oferece anexar), nunca o Novo lancamento direto. P95 — pela chave, sem valor nem data: so' o numero, o CNPJ e a chave. */
-  const pr = proposta.proposta;
   let jaLancados = 0;
   const naOc = ocorrencias.some((o) => o.origem === 'oc');
   const noLancamento = ocorrencias.some((o) => o.origem === 'lancamento');
   if (registrada.ok === true && !naOc) {
-    const ja = await notaJaLancada(cli, {
-      parcelas: lido.pelaChave ? [] : parcelasParaCasar(pr.duplicatas, nota.totais.notaCent, pr.duplicatas[0]?.vencimento ?? nota.emissao),
-      numero: pr.numeroDocumento || nota.numero, chave: nota.chave, emitenteDocumento: nota.emitente.documento,
-      nomes: [nota.emitente.nome, nota.emitente.fantasia],
-    });
+    const ja = jaNaHora;
     if (ja.ok === false) falhas.push(`se a nota já foi lançada (${ja.motivo})`); else jaLancados = ja.valor.length;
   }
   const naoVerificada = falhas.length ? `Não consegui verificar ${falhas.join('; ')}. Nada será lançado até verificar.` : null;
@@ -225,7 +232,7 @@ export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 're
 }
 
 export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedores, onAbrirLancamento, onAbrirNota, lancadas, linhasIniciais, avisoInicial,
-  arquivosIniciais, notasDaReceita, onNotasDaReceita, estadoReceita, podeCadastrarCertificado = false, onCadastrarCertificado }: {
+  arquivosIniciais, notasDaReceita, onNotasDaReceita, estadoReceita, podeCadastrarCertificado = false, onCadastrarCertificado, aoTerminarLeitura }: {
   open: boolean;
   onClose: () => void;
   clienteId: string | null;
@@ -249,6 +256,8 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
   estadoReceita?: EstadoDaReceita;
   podeCadastrarCertificado?: boolean;
   onCadastrarCertificado?: () => void;
+  /** NOTA-ABRIR-RAPIDO-01 — terminou de ler os arquivos (abriu o lançamento ou mostrou a linha): quem hospeda tira o "Abrindo a nota…" */
+  aoTerminarLeitura?: () => void;
 }) {
   const [linhas, setLinhas] = useState<LinhaDeNota[]>(() => linhasIniciais ?? []);
   const [lendo, setLendo] = useState(false);
@@ -273,7 +282,9 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
     if (!clienteId || arquivos.length === 0) return;
     setLendo(true);
     try {
-      const fazendasComIE = await fazendasDoCliente(clienteId);
+      /* NOTA-ABRIR-RAPIDO-01 — as fazendas do cliente correm JUNTO com a leitura do arquivo (antes: uma ida ao banco antes de abrir o XML) */
+      const fazendasP = fazendasDoCliente(clienteId);
+      fazendasP.catch(() => undefined);
       const novas: LinhaDeNota[] = [];
       const repetidos: string[] = [];
       for (const arquivo of arquivos) {
@@ -289,7 +300,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
         }
         /* A mesma nota (a chave) ja' na lista: a segunda nao entra */
         if (jaEstaNaLista([...linhasRef.current, ...novas], { name: '', size: -1 }, lido.nota.chave)) { repetidos.push(arquivo.name); continue; }
-        novas.push(await montarLinha(clienteId, base, arquivo, bytes, lido, fazendasComIE));
+        novas.push(await montarLinha(clienteId, base, arquivo, bytes, lido, await fazendasP));
       }
       setAviso(repetidos.length ? repetidos.map(fraseJaNaLista).join(' ') : null);
       /* FIN-NOTA-PDF-01 — uma nota so', lida e aceita: abre direto, sem passar pela lista — a já lançada na tela da nota; a que não está, no
@@ -310,8 +321,9 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
       });
     } finally {
       setLendo(false);
+      aoTerminarLeitura?.();
     }
-  }, [clienteId, onAbrirNota, onAbrirLancamento, fazendasDoCliente, montarLinha]);
+  }, [clienteId, onAbrirNota, onAbrirLancamento, fazendasDoCliente, montarLinha, aoTerminarLeitura]);
 
   /* P146 — "Tentar de novo" na linha não verificada: refaz as consultas com o MESMO lido (nada se relê do arquivo) e troca a linha */
   const refazer = useCallback(async (l: LinhaDeNota) => {

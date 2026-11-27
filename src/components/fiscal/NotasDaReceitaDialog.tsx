@@ -118,7 +118,7 @@ export function baixarArquivo(arquivo: File) {
 }
 
 export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoFechar, aoLancar, aoVincular, lerXml = lerXmlDaReceita, abaInicial,
-  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem, retorno = null, ligarACompra, ignorar, lancadasAgora }: {
+  abrirDanfe = abrirAbaDoDanfe, mostrarNaAba = mostrarDanfe, registrarBem, retorno = null, ligarACompra, ignorar, lancadasAgora, aoAbrindo }: {
   clienteNome?: string | null;
   dados: DadosDaReceita | undefined;
   carregando: boolean;
@@ -126,6 +126,8 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   aoFechar: () => void;
   /** D1 — o XML vai para o "Da nota fiscal" de hoje (o mesmo caminho do arquivo solto) */
   aoLancar: (arquivo: File) => void;
+  /** NOTA-ABRIR-RAPIDO-01 — o "Lançar" foi clicado (true: quem hospeda mostra "Abrindo a nota…" NO CLIQUE) ou falhou (false) */
+  aoAbrindo?: (abrindo: boolean) => void;
   /** NOTA-RECEITA-CASAR-01 — o XML vai à porta 2 do "+ Da nota" a partir do lançamento escolhido; devolve a frase quando não abre */
   aoVincular: (arquivo: File, lancamentoId: string) => Promise<string | null>;
   /** a bancada injeta o leitor; a tela usa o banco */
@@ -187,9 +189,17 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
   const pedemCiencia = todas.filter((n) => n.sit === 'pede_ciencia').length;
   const aLancar = todas.filter((n) => n.sit === 'nova' || n.sit === 'pode_estar').length;
 
+  /* NOTA-ABRIR-RAPIDO-01 — o XML de cada nota é lido UMA vez e pode começar ANTES do clique (ao passar o mouse na linha): o clique reaproveita */
+  const xmls = useRef(new Map<string, Promise<string>>());
+  const xmlDe = (id: string): Promise<string> => {
+    let p = xmls.current.get(id);
+    if (!p) { p = lerXml(id); xmls.current.set(id, p); p.catch(() => xmls.current.delete(id)); }
+    return p;
+  };
+  const preCarregar = (n: NotaNaLista) => { if (n.tipo === 'completa' && (n.sit === 'nova' || n.sit === 'pode_estar')) void xmlDe(n.id).catch(() => undefined); };
   const comXml = async (n: NotaNaLista, fazer: (f: File) => void | Promise<void>) => {
     setOcupada(n.id); setAviso(null);
-    try { await fazer(arquivoDoXml(n.chave, await lerXml(n.id))); } catch (e) { setLancando(null); setAviso(e instanceof Error ? e.message : 'Não consegui ler o XML.'); } finally { setOcupada(null); }
+    try { await fazer(arquivoDoXml(n.chave, await xmlDe(n.id))); } catch (e) { setLancando(null); aoAbrindo?.(false); setAviso(e instanceof Error ? e.message : 'Não consegui ler o XML.'); } finally { setOcupada(null); }
   };
   /* NOTA-IGNORAR-01 — "Desfazer" na aba Ignoradas: a nota volta para onde estava (a lista relê por quem chama) */
   const desfazerIgnorar = async (n: NotaNaLista) => {
@@ -201,7 +211,7 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
     <button type="button" className={cn(BOTAO, largura, 'whitespace-nowrap', podeLancar ? 'bg-[#E7C873] font-semibold text-foreground hover:bg-[#D9B95F]' : 'invisible')}
       disabled={!podeLancar || ocupada === n.id || lancando === n.chave} data-testid="receita-lancar"
       title='Abre o "Da nota fiscal" com este XML (o mesmo caminho do arquivo solto)'
-      onClick={() => { marcarOrigem(n); setLancando(n.chave); if (n.candidatos.length) setCasar(n); else void comXml(n, aoLancar); }}>Lançar</button>
+      onClick={() => { marcarOrigem(n); setLancando(n.chave); if (n.candidatos.length) setCasar(n); else { aoAbrindo?.(true); void comXml(n, aoLancar); } }}>Lançar</button>
   );
 
   return (
@@ -264,7 +274,8 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
                   return (
                     <tr key={n.id} className={cn(LINHA, 'cursor-pointer hover:bg-muted/60', apagada && 'text-muted-foreground',
                       destaque === n.chave && 'bg-sky-50 outline outline-1 -outline-offset-1 outline-sky-400')} data-testid="receita-linha"
-                      data-situacao={n.sit} data-chave={n.chave} data-destaque={destaque === n.chave ? '' : undefined} onClick={() => setAberta(n)}>
+                      data-situacao={n.sit} data-chave={n.chave} data-destaque={destaque === n.chave ? '' : undefined} onClick={() => setAberta(n)}
+                      onMouseEnter={() => preCarregar(n)}>
                       <td className={TD_REGUA}>{dataBR(n.emissao)}</td>
                       <td className={TD_REGUA_TEXTO} title={n.emitenteNome ?? undefined}>{n.emitenteNome ?? '—'}</td>
                       <td className={cn(TD_REGUA, 'tabular-nums')}>{n.emitenteNaTabela || '—'}</td>
@@ -378,7 +389,7 @@ export function NotasDaReceitaDialog({ clienteNome, dados, carregando, erro, aoF
         )}
         {bem && registrarBem && <RegistrarBemDeTerceiro n={bem} registrar={registrarBem} aoFechar={(frase) => { setBem(null); if (frase) setAviso(frase); }} />}
         {casar && <PodeEstarLancada n={casar} ocupada={ocupada === casar.id} aviso={aviso} aoFechar={() => { setCasar(null); setLancando(null); }}
-          aoLancarNova={() => { const n = casar; setCasar(null); void comXml(n, aoLancar); }}
+          aoLancarNova={() => { const n = casar; setCasar(null); aoAbrindo?.(true); void comXml(n, aoLancar); }}
           aoVincular={async (id) => {
             const n = casar;
             setOcupada(n.id); setAviso(null);

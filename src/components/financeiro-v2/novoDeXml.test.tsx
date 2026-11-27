@@ -217,6 +217,19 @@ describe('tela A — a lista de notas', () => {
 
   /* P146 — a consulta que FALHA nao vira "nada achado": a linha fica "não verificada", nao abre (nem previa, nem Novo lancamento) e
      "Tentar de novo" refaz as consultas com o mesmo lido */
+  it('NOTA-ABRIR-RAPIDO-01 (mutação): a "já lançada?" sai JUNTO com a "já registrada?" — antes ela esperava a resposta (uma ida ao banco a mais)', async () => {
+    let soltaRegistrada: (v: { ok: true; valor: unknown[] }) => void = () => {};
+    consultas.notaJaRegistrada.mockImplementation(() => new Promise((ok) => { soltaRegistrada = ok; }));
+    consultas.notaJaLancada.mockClear();
+    montarLista();
+    soltar([arquivo('a.xml', montarNFe())]);
+    /* a "já registrada?" ainda NÃO respondeu e a "já lançada?" já foi pedida */
+    await waitFor(() => expect(consultas.notaJaLancada).toHaveBeenCalledTimes(1), { timeout: 5000 });
+    expect(consultas.notaJaRegistrada).toHaveBeenCalledTimes(1);
+    soltaRegistrada({ ok: true, valor: [] });
+    await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1), { timeout: 5000 });
+    consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: true, valor: [] }));
+  });
   it('P146 — "já registrada" falhou: a linha "não verificada" (o motivo no title), sem "Abrir lançamento"; "Tentar de novo" respondendo vira nova', async () => {
     consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: false, motivo: 'tempo esgotado' }));
     const { onAbrir } = montarLista();
@@ -226,7 +239,8 @@ describe('tela A — a lista de notas', () => {
     expect(sit.textContent).toBe('não verificada');
     expect(sit.getAttribute('title')).toBe('Não consegui verificar se a nota já está registrada (tempo esgotado). Nada será lançado até verificar.');
     expect(screen.queryByTestId('xml-abrir-lancamento')).toBeNull();
-    expect(consultas.notaJaLancada).not.toHaveBeenCalled();
+    /* NOTA-ABRIR-RAPIDO-01: a "já lançada?" corre JUNTO (não espera a "já registrada?"); com a registrada falhando, o resultado dela NÃO conta */
+    expect(sit.getAttribute('title')).not.toContain('já foi lançada');
     consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: true, valor: [] }));
     fireEvent.click(screen.getByTestId('xml-tentar-de-novo'));
     await waitFor(() => expect(screen.getByTestId('xml-situacao').textContent).toBe('autorizada · nova'));

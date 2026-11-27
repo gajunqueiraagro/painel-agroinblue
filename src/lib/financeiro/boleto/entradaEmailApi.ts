@@ -117,12 +117,22 @@ export interface EntradaEmailApi {
   resolvidos?: (clienteId: string) => Promise<Resultado<Record<string, DetalheDoResolvido>>>;
   /** ENTRADA-CENTRAL-01 F1 (118880): guarda o resultado da leitura feita no navegador (só se a linha não tem a desta versão; o texto nunca) */
   guardarLeitura?: (id: string, leitura: LeituraGravada) => Promise<Resultado<true>>;
+  /** CAIXA-ATUALIZAR-01: a pergunta barata da atualização automática — quando entrou a linha mais nova do cliente (null = nenhuma) */
+  ultimaChegada?: (clienteId: string) => Promise<Resultado<string | null>>;
 }
 
 const COLUNAS = 'id, mensagem_id, remetente, assunto, recebido_em, arquivo_nome, tipo, tamanho_bytes, storage_path, estado, motivo, chegou_de_novo, '
   + 'ignorado_motivo, ignorado_detalhe, dispensado_em, boleto_id, lancamento_id, lido_em, origem, leitura';
 
 export const entradaEmailApiDoBanco: EntradaEmailApi = {
+  async ultimaChegada(clienteId) {
+    const { data, error } = await (supabase as any).from('entrada_arquivos').select('criado_em, ultima_chegada_em').eq('cliente_id', clienteId)
+      .order('criado_em', { ascending: false }).limit(1);
+    if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
+    const r: unknown = Array.isArray(data) ? data[0] : null;
+    const em = r && typeof r === 'object' && 'criado_em' in r && typeof r.criado_em === 'string' ? r.criado_em : null;
+    return { ok: true, dados: em };
+  },
   async endereco(clienteId) {
     const [d, e] = await Promise.all([
       (supabase as any).rpc('_fn_entrada_dominio'),

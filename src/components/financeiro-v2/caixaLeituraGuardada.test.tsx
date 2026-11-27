@@ -63,6 +63,7 @@ beforeEach(() => {
     notasNoSistema: vi.fn<EntradaEmailApi['notasNoSistema']>(async () => ({ ok: true, dados: {} })),
     registrarArrastado: vi.fn(), resolvidos: vi.fn(async () => ({ ok: true as const, dados: {} })),
     guardarLeitura: vi.fn<NonNullable<EntradaEmailApi['guardarLeitura']>>(async () => ({ ok: true, dados: true })),
+    ultimaChegada: vi.fn<NonNullable<EntradaEmailApi['ultimaChegada']>>(async () => ({ ok: true, dados: null })),
   };
   if (!Blob.prototype.arrayBuffer) {
     Blob.prototype.arrayBuffer = function (this: Blob) {
