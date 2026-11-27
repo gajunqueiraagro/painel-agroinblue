@@ -1,0 +1,455 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  OF-IP-FIXO-01 (AGROinBLUE) - a saida do Open Finance com IP FIXO: VPC minima em sa-east-1, NAT Gateway + Elastic IP,
+  Lambda agro-of-saida numa sub-rede PRIVADA (sem nenhuma entrada), segredos no Secrets Manager, HMAC no padrao da
+  agro-dfe-mtls, logs sem corpo nem cabecalho, alarmes por e-mail. A saida "IpDeSaida" e o IP para cadastrar no provedor.
+
+Parameters:
+  DestinoBase:
+    Type: String
+    Description: >-
+      O endereco BASE do provedor, so https e so o host (ex.: https://api.exemplo.com.br). Vem da TecnoSpeed.
+      A Lambda NUNCA chama outro host.
+    AllowedPattern: '^https://[a-z0-9.-]+(:443)?$'
+    ConstraintDescription: so https://host (sem caminho, sem barra no fim)
+  CaminhosPermitidos:
+    Type: String
+    Default: ''
+    Description: >-
+      Os prefixos de caminho que a Lambda aceita, separados por virgula (ex.: /openfinance/v1/). Vazio = NENHUM caminho passa
+      (a pilha sobe segura e fechada; preencher depois da documentacao da TecnoSpeed).
+    AllowedPattern: '^(/[A-Za-z0-9/_.-]*)?(,/[A-Za-z0-9/_.-]*)*$'
+  EmailDosAlertas:
+    Type: String
+    Description: O e-mail que recebe os alarmes (a AWS manda um e-mail de confirmacao; clicar em "Confirm subscription").
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+  ZonaDeDisponibilidade:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: sa-east-1a
+    Description: A zona da NAT e das sub-redes (1 NAT / 1 IP agora; a 2a zona entra depois, com o 2o IP).
+  IpFixoExistente:
+    Type: String
+    Default: ''
+    Description: >-
+      OPCIONAL. O AllocationId (eipalloc-...) de um IP elastico JA EXISTENTE (o agro-of-saida-ip-fixo guardado de uma pilha anterior).
+      Preenchido = a NAT usa ESTE IP e a pilha NAO cria outro (o IP cadastrado no provedor nao muda). Vazio = a pilha cria um IP novo.
+    AllowedPattern: '^(eipalloc-[0-9a-f]{8,17})?$'
+    ConstraintDescription: vazio ou eipalloc- seguido de 8 a 17 caracteres hexadecimais
+  EnderecoDoIpExistente:
+    Type: String
+    Default: ''
+    Description: >-
+      O NUMERO do IP guardado (EC2 > IPs elasticos > agro-of-saida-ip-fixo > Endereco IPv4 alocado), ex. 18.x.x.x. OBRIGATORIO quando
+      IpFixoExistente estiver preenchido (o CloudFormation nao le o numero de um IP que nao criou); so aparece na saida IpDeSaida.
+    AllowedPattern: '^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$|^$'
+    ConstraintDescription: vazio ou um IPv4 (quatro numeros de 0 a 255 separados por ponto)
+  TetoDeExecucoes:
+    Type: String
+    Default: ''
+    Description: >-
+      OPCIONAL. Concorrencia reservada da funcao (teto de execucoes ao mesmo tempo). Vazio = sem reserva (OBRIGATORIO enquanto a conta
+      tiver a cota de 10, conta nova: a AWS recusa qualquer reserva que deixe menos de 10 livres). Preencher so depois de a cota subir.
+    AllowedPattern: '^([1-9][0-9]{0,2})?$'
+    ConstraintDescription: vazio ou um numero de 1 a 999
+
+Conditions:
+  CriaIpNovo: !Equals [!Ref IpFixoExistente, '']
+  ComTeto: !Not [!Equals [!Ref TetoDeExecucoes, '']]
+
+Rules:
+  SoSaoPaulo:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::Region', sa-east-1]
+        AssertDescription: Esta pilha so sobe em sa-east-1 (Sao Paulo).
+  IpGuardadoComNumero:
+    Assertions:
+      - Assert: !Or [!Equals [!Ref IpFixoExistente, ''], !Not [!Equals [!Ref EnderecoDoIpExistente, '']]]
+        AssertDescription: Com IpFixoExistente preenchido, preencha tambem EnderecoDoIpExistente (o numero do IP, em EC2 > IPs elasticos).
+
+Resources:
+  # ─── rede ───────────────────────────────────────────────────────────────────────────────────────────────
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.80.0.0/24
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{ Key: Name, Value: agro-of-saida }, { Key: Projeto, Value: agroinblue }, { Key: Frente, Value: OF-IP-FIXO-01 }]
+
+  SubRedePublica:            # so a NAT mora aqui; nenhuma maquina, nenhum IP publico automatico
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.80.0.0/26
+      AvailabilityZone: !Ref ZonaDeDisponibilidade
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Name, Value: agro-of-saida-publica }]
+
+  SubRedePrivada:            # a Lambda; sem rota de entrada
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.80.0.64/26
+      AvailabilityZone: !Ref ZonaDeDisponibilidade
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Name, Value: agro-of-saida-privada }]
+
+  PortaDaInternet:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: [{ Key: Name, Value: agro-of-saida }]
+  LigaPortaDaInternet:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: { VpcId: !Ref Vpc, InternetGatewayId: !Ref PortaDaInternet }
+
+  RotasPublicas:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref Vpc, Tags: [{ Key: Name, Value: agro-of-saida-publica }] }
+  RotaPublicaParaInternet:
+    Type: AWS::EC2::Route
+    DependsOn: LigaPortaDaInternet
+    Properties: { RouteTableId: !Ref RotasPublicas, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref PortaDaInternet }
+  LigaRotasPublicas:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref SubRedePublica, RouteTableId: !Ref RotasPublicas }
+
+  IpFixo:                    # O IP QUE O PROVEDOR CADASTRA (saida "IpDeSaida"); Retain: apagar a pilha NAO perde o IP
+    Type: AWS::EC2::EIP      # so nasce com IpFixoExistente VAZIO; preenchido, a NAT usa o IP guardado
+    Condition: CriaIpNovo
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    DependsOn: LigaPortaDaInternet
+    Properties:
+      Domain: vpc
+      Tags: [{ Key: Name, Value: agro-of-saida-ip-fixo }]
+
+  Nat:
+    Type: AWS::EC2::NatGateway
+    DependsOn: LigaPortaDaInternet   # a NAT publica precisa da porta da internet ligada (antes vinha pelo IpFixo, que pode nao existir)
+    Properties:
+      AllocationId: !If [CriaIpNovo, !GetAtt IpFixo.AllocationId, !Ref IpFixoExistente]
+      SubnetId: !Ref SubRedePublica
+      ConnectivityType: public
+      Tags: [{ Key: Name, Value: agro-of-saida }]
+
+  RotasPrivadas:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref Vpc, Tags: [{ Key: Name, Value: agro-of-saida-privada }] }
+  RotaPrivadaPelaNat:
+    Type: AWS::EC2::Route
+    Properties: { RouteTableId: !Ref RotasPrivadas, DestinationCidrBlock: 0.0.0.0/0, NatGatewayId: !Ref Nat }
+  LigaRotasPrivadas:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref SubRedePrivada, RouteTableId: !Ref RotasPrivadas }
+
+  # o DynamoDB pela rede da AWS (sem passar pela NAT; sem custo) e SO para a tabela do nonce
+  CaminhoPrivadoDynamo:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.dynamodb
+      VpcEndpointType: Gateway
+      RouteTableIds: [!Ref RotasPrivadas]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: dynamodb:PutItem
+            Resource: !GetAtt TabelaDeNonces.Arn
+
+  FirewallDaLambda:          # NENHUMA entrada; saida so 443 (HTTPS). O DNS da AWS nao passa por grupo de seguranca.
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: agro-of-saida - sem entrada; saida so HTTPS
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: HTTPS de saida (provedor pela NAT; Secrets Manager pelo endpoint privado) }
+      Tags: [{ Key: Name, Value: agro-of-saida }]
+
+  # o Secrets Manager por DENTRO da rede da AWS (Gabriel 26/11: "a chave nunca sai da rede da AWS"): endpoint privado com DNS privado — o
+  # SDK da Lambda resolve secretsmanager.sa-east-1.amazonaws.com para IPs DESTA sub-rede; nada do segredo passa pela NAT ou pela internet
+  FirewallDoEndpointSecrets: # entra SO a Lambda (443); nao sai para lugar nenhum
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: agro-of-saida - endpoint do Secrets Manager; entrada so da Lambda, 443
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, SourceSecurityGroupId: !Ref FirewallDaLambda, Description: so a Lambda agro-of-saida }
+      SecurityGroupEgress:
+        - { IpProtocol: '-1', CidrIp: 127.0.0.1/32, Description: nenhuma saida (anula o liberado padrao) }
+      Tags: [{ Key: Name, Value: agro-of-saida-endpoint-secrets }]
+
+  CaminhoPrivadoSecrets:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.secretsmanager
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: [!Ref SubRedePrivada]
+      SecurityGroupIds: [!Ref FirewallDoEndpointSecrets]
+      PolicyDocument:            # pelo endpoint, SO ler os DOIS segredos desta pilha, e SO pelo papel desta funcao
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: secretsmanager:GetSecretValue
+            Resource: [!Ref SegredoHmac, !Ref SegredoDoProvedor]
+            Condition: { StringEquals: { 'aws:PrincipalArn': !GetAtt PapelDaFuncao.Arn } }
+
+  # ─── segredos (fora do codigo; so esta funcao le) ──────────────────────────────────────────────────────
+  SegredoHmac:               # a AWS gera; o MESMO valor vai ao segredo OF_SAIDA_HMAC do Supabase (passo a passo)
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: agro-of-saida/hmac
+      Description: OF-IP-FIXO-01 - o segredo HMAC entre a borda do Supabase e a Lambda (1 linha; na troca, 2 linhas = atual e anterior)
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+        IncludeSpace: false
+
+  SegredoDoProvedor:         # o token da TecnoSpeed: preencher no console DEPOIS (o modelo do JSON esta no passo a passo)
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: agro-of-saida/provedor
+      Description: 'OF-IP-FIXO-01 - credenciais do provedor (JSON: {"cabecalhos":{"Authorization":"..."},"cert":"(opcional, PEM)","key":"(opcional, PEM)"})'
+      SecretString: '{}'
+
+  # a TRAVA no proprio cofre: o papel desta funcao so le os segredos PELO endpoint privado (se o DNS privado falhar e a leitura tentar sair
+  # pela NAT, a AWS recusa). O console do Gabriel segue lendo/editando normalmente (a negacao vale so para o papel da funcao).
+  TravaDoHmacSoPeloEndpoint:
+    Type: AWS::SecretsManager::ResourcePolicy
+    Properties:
+      SecretId: !Ref SegredoHmac
+      BlockPublicPolicy: true
+      ResourcePolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: SoPeloEndpointPrivado
+            Effect: Deny
+            Principal: '*'
+            Action: secretsmanager:GetSecretValue
+            Resource: '*'
+            Condition:
+              ArnEquals: { 'aws:PrincipalArn': !GetAtt PapelDaFuncao.Arn }
+              StringNotEquals: { 'aws:SourceVpce': !Ref CaminhoPrivadoSecrets }
+  TravaDoProvedorSoPeloEndpoint:
+    Type: AWS::SecretsManager::ResourcePolicy
+    Properties:
+      SecretId: !Ref SegredoDoProvedor
+      BlockPublicPolicy: true
+      ResourcePolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: SoPeloEndpointPrivado
+            Effect: Deny
+            Principal: '*'
+            Action: secretsmanager:GetSecretValue
+            Resource: '*'
+            Condition:
+              ArnEquals: { 'aws:PrincipalArn': !GetAtt PapelDaFuncao.Arn }
+              StringNotEquals: { 'aws:SourceVpce': !Ref CaminhoPrivadoSecrets }
+
+  # ─── a tabela do uso unico (nonce) ─────────────────────────────────────────────────────────────────────
+  TabelaDeNonces:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: agro-of-saida-nonces
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{ AttributeName: nonce, AttributeType: S }]
+      KeySchema: [{ AttributeName: nonce, KeyType: HASH }]
+      TimeToLiveSpecification: { AttributeName: expira, Enabled: true }
+      SSESpecification: { SSEEnabled: true }
+
+  # ─── a funcao ──────────────────────────────────────────────────────────────────────────────────────────
+  RegistroDaFuncao:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/agro-of-saida
+      RetentionInDays: 90
+
+  PapelDaFuncao:             # MENOR PRIVILEGIO: so o que a funcao usa, nos recursos DESTA pilha
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: agro-of-saida
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition: { StringEquals: { 'aws:SourceAccount': !Ref 'AWS::AccountId' } }
+      Policies:
+        - PolicyName: agro-of-saida
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub '${RegistroDaFuncao.Arn}:*'
+              - Sid: LerOsDoisSegredos
+                Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: [!Ref SegredoHmac, !Ref SegredoDoProvedor]
+              - Sid: GravarONonce
+                Effect: Allow
+                Action: dynamodb:PutItem
+                Resource: !GetAtt TabelaDeNonces.Arn
+              - Sid: RedeDaVpc         # exigido pela Lambda em VPC (a AWS nao aceita recurso especifico para estas acoes)
+                Effect: Allow
+                Action: [ec2:CreateNetworkInterface, ec2:DescribeNetworkInterfaces, ec2:DeleteNetworkInterface,
+                         ec2:AssignPrivateIpAddresses, ec2:UnassignPrivateIpAddresses]
+                Resource: '*'
+
+  Funcao:
+    Type: AWS::Lambda::Function
+    DependsOn: [RotaPrivadaPelaNat, LigaRotasPrivadas, CaminhoPrivadoSecrets, CaminhoPrivadoDynamo, TravaDoHmacSoPeloEndpoint, TravaDoProvedorSoPeloEndpoint]
+    Properties:
+      FunctionName: agro-of-saida
+      Description: OF-IP-FIXO-01 - a saida do Open Finance com IP fixo (HMAC, host fixo, caminhos permitidos, sem log de conteudo)
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      Handler: index.handler
+      MemorySize: 256
+      Timeout: 30
+      # sem reserva por padrao: a conta nova tem cota 10 e a AWS recusa reservar abaixo do minimo de 10 livres (falha de 26/11 14:36)
+      ReservedConcurrentExecutions: !If [ComTeto, !Ref TetoDeExecucoes, !Ref 'AWS::NoValue']
+      Role: !GetAtt PapelDaFuncao.Arn
+      LoggingConfig: { LogGroup: !Ref RegistroDaFuncao, LogFormat: Text }
+      VpcConfig:
+        SubnetIds: [!Ref SubRedePrivada]
+        SecurityGroupIds: [!Ref FirewallDaLambda]
+      Environment:
+        Variables:
+          SEGREDO_HMAC_ID: !Ref SegredoHmac
+          SEGREDO_PROVEDOR_ID: !Ref SegredoDoProvedor
+          TABELA_NONCES: !Ref TabelaDeNonces
+          DESTINO_BASE: !Ref DestinoBase
+          CAMINHOS_PERMITIDOS: !Ref CaminhosPermitidos
+      Code:
+        # o codigo de verdade entra pelo console ("Carregar de > arquivo .zip": of-saida.zip). Ate la, a funcao so responde 503.
+        ZipFile: |
+          exports.handler = async () => ({ statusCode: 503, headers: { 'Content-Type': 'application/json' }, body: '{"ok":false,"falha":"sem_codigo"}' });
+
+  EnderecoDaFuncao:          # aberto na rede, mas NADA acontece sem a assinatura HMAC (o padrao da agro-dfe-mtls)
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref Funcao
+      AuthType: NONE
+      InvokeMode: BUFFERED
+  PermissaoDoEndereco:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Funcao
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+  # a mudanca de 2025 da AWS: o endereco publico pede TAMBEM lambda:InvokeFunction — so quando a chamada vem PELO ENDERECO
+  # (InvokedViaFunctionUrl); ninguem invoca a funcao direto pela API por causa desta permissao
+  PermissaoDeInvocarPeloEndereco:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Funcao
+      Action: lambda:InvokeFunction
+      Principal: '*'
+      InvokedViaFunctionUrl: true
+
+  # ─── alarmes (por e-mail) ──────────────────────────────────────────────────────────────────────────────
+  Avisos:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: agro-of-saida-avisos
+      Subscription: [{ Protocol: email, Endpoint: !Ref EmailDosAlertas }]
+
+  ContaFalhasDeSaida:        # a funcao devolve a falha (nao "erra"): conta pelo log as que sao da SAIDA
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref RegistroDaFuncao
+      FilterPattern: '{ ($.resultado = "interno") || ($.resultado = "conexao") || ($.resultado = "tempo") || ($.resultado = "tls") || ($.resultado = "configuracao") }'
+      MetricTransformations: [{ MetricNamespace: AGROinBLUE/OfSaida, MetricName: FalhasDeSaida, MetricValue: '1', DefaultValue: 0 }]
+  ContaNaoAutorizados:       # alguem batendo no endereco sem a assinatura
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref RegistroDaFuncao
+      FilterPattern: '{ $.resultado = "nao_autorizado" }'
+      MetricTransformations: [{ MetricNamespace: AGROinBLUE/OfSaida, MetricName: NaoAutorizados, MetricValue: '1', DefaultValue: 0 }]
+
+  AlarmeFalhasDeSaida:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: agro-of-saida-falhas
+      AlarmDescription: 3 ou mais falhas de saida (conexao, tempo, TLS, configuracao, interno) em 10 minutos
+      Namespace: AGROinBLUE/OfSaida
+      MetricName: FalhasDeSaida
+      Statistic: Sum
+      Period: 600
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref Avisos]
+  AlarmeErrosDaFuncao:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: agro-of-saida-erros
+      AlarmDescription: a funcao quebrou (erro nao tratado ou tempo esgotado)
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions: [{ Name: FunctionName, Value: !Ref Funcao }]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref Avisos]
+  AlarmeNaoAutorizados:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: agro-of-saida-sem-assinatura
+      AlarmDescription: 20 ou mais pedidos sem assinatura valida em 5 minutos (alguem tentando usar o endereco)
+      Namespace: AGROinBLUE/OfSaida
+      MetricName: NaoAutorizados
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 20
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref Avisos]
+  AlarmeNat:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: agro-of-saida-nat
+      AlarmDescription: a NAT nao conseguiu abrir conexao de saida (o IP fixo pode estar fora do ar)
+      Namespace: AWS/NATGateway
+      MetricName: ErrorPortAllocation
+      Dimensions: [{ Name: NatGatewayId, Value: !Ref Nat }]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref Avisos]
+
+Outputs:
+  IpDeSaida:
+    Description: O IP FIXO de saida (IPv4) - passar ao Bruno (TecnoSpeed) para a allowlist
+    Value: !If [CriaIpNovo, !Ref IpFixo, !Ref EnderecoDoIpExistente]
+  AlocacaoDoIp:
+    Description: O AllocationId do IP em uso - guardar, e o que vai em IpFixoExistente se a pilha for recriada
+    Value: !If [CriaIpNovo, !GetAtt IpFixo.AllocationId, !Ref IpFixoExistente]
+  EnderecoDaFuncao:
+    Description: O endereco da Lambda - vai ao segredo OF_SAIDA_URL do Supabase
+    Value: !GetAtt EnderecoDaFuncao.FunctionUrl
+  SegredoHmac:
+    Description: Onde copiar o HMAC (Secrets Manager > agro-of-saida/hmac > Retrieve secret value) para o segredo OF_SAIDA_HMAC do Supabase
+    Value: !Ref SegredoHmac
+  SegredoDoProvedor:
+    Description: Onde colar o token da TecnoSpeed (Secrets Manager > agro-of-saida/provedor > Retrieve > Edit)
+    Value: !Ref SegredoDoProvedor
+  NomeDaFuncao:
+    Value: !Ref Funcao

@@ -1,0 +1,9 @@
+{
+  "name": "agroinblue-of-saida",
+  "private": true,
+  "type": "module",
+  "description": "OF-IP-FIXO-01 — Lambda (sa-east-1, VPC privada → NAT → Elastic IP fixo, Function URL + HMAC): a saída do Open Finance com IP fixo. Sem dependência: só node:* e o AWS SDK do próprio runtime.",
+  "scripts": {
+    "zip": "../../node_modules/.bin/esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --external:@aws-sdk/* --outfile=dist/index.mjs && cd dist && rm -f ../of-saida.zip && zip -q -X ../of-saida.zip index.mjs"
+  }
+}
