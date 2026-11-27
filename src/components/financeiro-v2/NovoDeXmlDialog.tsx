@@ -194,7 +194,7 @@ export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 're
   });
   /* NOTA-TIPO-ABATE-01 — o PAPEL do titular: NF de entrada do comprador com o titular no destinatário = a VENDA dele; a OC do mesmo comprador
      (±10 dias) diz se a receita já entrou pelo abate/venda. Vão JUNTO com as outras consultas. */
-  const titularesP = documentosDosTitulares(cli);
+  const titularesP = nota.tipoNota === 'entrada' ? documentosDosTitulares(cli) : Promise.resolve({ ok: true as const, valor: new Set<string>() });
   const vendaNaOcP = nota.tipoNota === 'entrada' ? vendaNaOcProxima(cli, nota.emitente.documento, nota.emissao) : Promise.resolve({ ok: true as const, valor: null });
   const [registrada, sugerida, fazendaDoHistorico, fazendasDoTomadorDaNota, jaNaHora, titulares, vendaNaOc] = await Promise.all([
     notaJaRegistrada(cli, nota.chave),
@@ -217,7 +217,7 @@ export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 're
   if (venda && vendaNaOc.ok === true && vendaNaOc.valor) return { ...base, nota, avisos, recusa: fraseDaVendaNaOc(vendaNaOc.valor) };
   let contaSugeridaEhEntrada: boolean | null = null;
   if (venda && sugestaoDosItens.classificacao?.plano_conta_id) {
-    const t = await planoEhDeEntrada(sugestaoDosItens.classificacao.plano_conta_id);
+    const t = await planoEhDeEntrada(cli, sugestaoDosItens.classificacao.plano_conta_id);
     contaSugeridaEhEntrada = t.ok === true ? t.valor : null;
   }
   const proposta = proporLancamento({ nota, avisosDoLeitor: avisos, fazendas: fazendasComIE, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null,

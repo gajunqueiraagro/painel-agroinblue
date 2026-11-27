@@ -7,6 +7,7 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 import { motivoDoErro, type Consulta } from '@/lib/financeiro/nfeConsultas';
+import { loadContasDoPlanoDoCliente } from '@/lib/financeiro/planoContasBuilder';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tabelas fiscais e da OC fora dos tipos gerados
 const db = () => supabase as any;
@@ -55,13 +56,12 @@ export async function vendaNaOcProxima(clienteId: string, compradorDocumento: st
   } catch (e) { return { ok: false, motivo: motivoDoErro(e) }; }
 }
 
-/** a conta é de ENTRADA? (o tipo do plano manda: a sugestão de despesa nunca vale para uma venda) */
-export async function planoEhDeEntrada(planoContaId: string): Promise<Consulta<boolean>> {
+/** a conta é de ENTRADA? (o tipo do plano manda: a sugestão de despesa nunca vale para uma venda). Lê pelo carregador dono do plano. */
+export async function planoEhDeEntrada(clienteId: string, planoContaId: string): Promise<Consulta<boolean>> {
   try {
-    const r = await db().from('financeiro_plano_contas').select('tipo_operacao').eq('id', planoContaId).maybeSingle();
-    if (r.error) return { ok: false, motivo: motivoDoErro(r.error) };
-    const t = r.data ? String(Reflect.get(r.data, 'tipo_operacao') ?? '') : '';
-    return { ok: true, valor: /entrada/i.test(t) };
+    const contas = await loadContasDoPlanoDoCliente(clienteId, { incluirInativos: true });
+    const c = contas.find((x) => x.id === planoContaId);
+    return { ok: true, valor: !!c && /entrada/i.test(c.tipo_operacao) };
   } catch (e) { return { ok: false, motivo: motivoDoErro(e) }; }
 }
 
