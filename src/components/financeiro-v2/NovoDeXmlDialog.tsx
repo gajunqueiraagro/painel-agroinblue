@@ -13,6 +13,7 @@
  * ⚠ O PADRAO DA TABELA E' O A31: cabecalho navy 9,5px, linha de 18px a 10px, uma linha por nota; numero, valor e data nunca
  *   cortam, texto longo corta com o inteiro no `title`.
  */
+import { documentosDosTitulares, ehVendaDoTitular, fraseDaVendaNaOc, planoEhDeEntrada, vendaNaOcProxima } from '@/lib/fiscal/vendaDoTitular';
 import { fraseDeSemCompra } from '@/lib/financeiro/nfe/remessaEntregaFutura';
 import { CardDaReceita } from '@/components/fiscal/CardDaReceita';
 import type { EstadoDaReceita } from '@/lib/fiscal/estadoDaReceita';
@@ -191,20 +192,36 @@ export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 're
     numero: formatNFNumber(nota.numero) || nota.numero, chave: nota.chave, emitenteDocumento: nota.emitente.documento,
     nomes: [nota.emitente.nome, nota.emitente.fantasia],
   });
-  const [registrada, sugerida, fazendaDoHistorico, fazendasDoTomadorDaNota, jaNaHora] = await Promise.all([
+  /* NOTA-TIPO-ABATE-01 — o PAPEL do titular: NF de entrada do comprador com o titular no destinatário = a VENDA dele; a OC do mesmo comprador
+     (±10 dias) diz se a receita já entrou pelo abate/venda. Vão JUNTO com as outras consultas. */
+  const titularesP = documentosDosTitulares(cli);
+  const vendaNaOcP = nota.tipoNota === 'entrada' ? vendaNaOcProxima(cli, nota.emitente.documento, nota.emissao) : Promise.resolve({ ok: true as const, valor: null });
+  const [registrada, sugerida, fazendaDoHistorico, fazendasDoTomadorDaNota, jaNaHora, titulares, vendaNaOc] = await Promise.all([
     notaJaRegistrada(cli, nota.chave),
     sugestaoPelosItens(cli, { emitenteDocumento: nota.emitente.documento, destIe: nota.destinatario.ie ?? null, emissao: nota.emissao || null,
       favorecidoId: resolucao.propostoId, itens: itensDaNota }),
     nota.destinatario.ie ? Promise.resolve(null) : fazendaPeloHistoricoDoFornecedor(cli, nota.emitente.documento),
     nota.destinatario.ie ? Promise.resolve([]) : fazendasDoTomador(cli, nota.destinatario.documento, nota.servico?.competencia || nota.emissao),
     jaLancadaJunto,
+    titularesP,
+    vendaNaOcP,
   ]);
   if (registrada.ok === false) falhas.push(`se a nota já está registrada (${registrada.motivo})`);
   const ocorrencias = registrada.ok === false ? [] : registrada.valor;
   if (sugerida.ok === false) console.error('[sugestaoPelosItens]', sugerida.motivo);
   const sugestaoDosItens = sugestaoParaAProposta(sugerida.ok === false ? { falha: sugerida.motivo } : sugerida.valor, itensDaNota, nota.emissao);
+  /* NOTA-TIPO-ABATE-01 — a venda do titular: com a OC do mesmo comprador, a nota vai PARA a OC (nada lançado de novo); sem ela, entra como RECEITA */
+  if (titulares.ok === false) falhas.push(`quem é o titular na nota (${titulares.motivo})`);
+  const venda = titulares.ok === true && ehVendaDoTitular(nota, titulares.valor);
+  if (venda && vendaNaOc.ok === false) falhas.push(`o abate/venda já lançado na OC (${vendaNaOc.motivo})`);
+  if (venda && vendaNaOc.ok === true && vendaNaOc.valor) return { ...base, nota, avisos, recusa: fraseDaVendaNaOc(vendaNaOc.valor) };
+  let contaSugeridaEhEntrada: boolean | null = null;
+  if (venda && sugestaoDosItens.classificacao?.plano_conta_id) {
+    const t = await planoEhDeEntrada(sugestaoDosItens.classificacao.plano_conta_id);
+    contaSugeridaEhEntrada = t.ok === true ? t.valor : null;
+  }
   const proposta = proporLancamento({ nota, avisosDoLeitor: avisos, fazendas: fazendasComIE, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null,
-    sugestaoDosItens, fazendaDoHistorico, fazendasDoTomador: fazendasDoTomadorDaNota });
+    sugestaoDosItens, fazendaDoHistorico, fazendasDoTomador: fazendasDoTomadorDaNota, vendaDoTitular: venda ? { contaSugeridaEhEntrada } : null });
   if (proposta.ok === false) return { ...base, nota, avisos, recusa: proposta.frase };
   const ehPdf = lido.origem === 'pdf';
   const doXml: DoXml = {
