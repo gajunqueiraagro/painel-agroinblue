@@ -107,7 +107,7 @@ export function fraseDoCard(e: EstadoDaReceita): string {
     case 'sem_certificado': return 'Notas da Receita · sem certificado digital';
     case 'parada': return 'Busca parada · Notas da Receita';
     case 'sem_busca': return 'Notas da Receita · certificado ok · primeira busca ainda não rodou';
-    case 'com_notas': return `${e.notas > 99 ? '99+' : e.notas} ${e.notas === 1 ? 'nota' : 'notas'} da Receita a lançar · última busca ${diaHora(e.ultimaBusca)}`;
+    case 'com_notas': return `${e.notas > 99 ? '99+' : e.notas} ${e.notas === 1 ? 'nota' : 'notas'} da Receita a lançar · busca ${diaHora(e.ultimaBusca)}`;
     case 'sem_novas': return `Nenhuma nota nova da Receita · última busca ${diaHora(e.ultimaBusca)}`;
   }
 }

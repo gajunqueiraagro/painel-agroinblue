@@ -29,7 +29,7 @@ export interface Pecas {
 }
 export interface Pedido { token: string | null; titularId: string | null; senha: string | null; arquivo: Uint8Array | null }
 export type Resposta =
-  | { status: 200; corpo: { ok: true; certificado_id: string; acao: string; certificado: Omit<CertificadoLido, 'validoDe' | 'validoAte'> & { validoDe: string; validoAte: string }; avisos: string[] } }
+  | { status: 200; corpo: { ok: true; certificado_id: string; acao: string; certificado: Omit<CertificadoLido, 'validoDe' | 'validoAte'> & { validoDe: string; validoAte: string }; avisos: string[]; cadeia?: CadeiaConferida } }
   | { status: 400 | 401 | 403 | 404 | 422 | 500; corpo: { ok: false; recusa: string; frase: string } };
 
 const nao = (status: 400 | 401 | 403 | 404 | 422 | 500, recusa: string, frase: string): Resposta => ({ status, corpo: { ok: false, recusa, frase } });
@@ -62,7 +62,7 @@ export async function subirCertificado(p: Pedido, pecas: Pecas): Promise<Respost
   const cadeia = (pecas.conferirCadeia ?? cadeiaDaSubida)(p.arquivo, p.senha, c.impressaoDigital, pecas.agora());
   if (!cadeia || cadeia.ok === false) {
     await pecas.registrarRecusa(titular.id, autor, 'cadeia');
-    return nao(422, 'cadeia', cadeia?.frase ?? 'Não consegui conferir a cadeia do certificado. Nada foi gravado.');
+    return nao(422, 'cadeia', cadeia && cadeia.ok === false ? cadeia.frase : 'Não consegui conferir a cadeia do certificado. Nada foi gravado.');
   }
   const caminho = `${titular.cliente_id}/${titular.id}/${pecas.novoId()}.pfx.enc`;
   await pecas.gravarObjeto(caminho, await pecas.cifrar(p.arquivo));

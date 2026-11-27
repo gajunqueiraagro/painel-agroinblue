@@ -52,7 +52,7 @@ export function CardDaReceita({ estado, podeCadastrar, onAbrir, onCadastrar }: {
       </div>
       {parada && explicacao && (
         <Dialog open={motivoAberto} onOpenChange={setMotivoAberto}>
-          <DialogContent className="w-[min(420px,calc(100vw-24px))] max-w-none gap-0 overflow-hidden p-0" data-testid="card-da-receita-minimodal">
+          <DialogContent className="w-[min(420px,calc(100vw-24px))] max-w-none gap-0 overflow-hidden p-0 [&>button:last-child]:hidden" data-testid="card-da-receita-minimodal">
             <div className="flex h-[30px] items-center bg-primary px-3 pr-10">
               <DialogTitle className="text-[11px] font-semibold leading-none text-primary-foreground">Por que a busca da Receita parou</DialogTitle>
             </div>

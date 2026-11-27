@@ -2394,8 +2394,16 @@ if (tela === 'mesclar') {
       recusada('l-escaneado', LONGO, FRASE_PDF_SEM_TEXTO),
       recusada('l-semchave', '46.995.pdf', FRASE_NOTA_SEM_CHAVE),
     ];
+    /* NOTAS-RECEITA-CARD-SEMPRE-01 — `&receita=<estado>` põe o card da Receita na faixa (os 5 estados do mock; dados sintéticos) */
+    const estadoPedido = new URLSearchParams(location.search).get('receita');
+    const estados: Record<string, import('@/lib/fiscal/estadoDaReceita').EstadoDaReceita> = {
+      sem_certificado: { tipo: 'sem_certificado' }, sem_busca: { tipo: 'sem_busca' },
+      sem_novas: { tipo: 'sem_novas', ultimaBusca: '2026-11-27T10:23:00Z' }, com_notas: { tipo: 'com_notas', notas: 128, ultimaBusca: '2026-11-27T10:23:00Z' },
+      parada: { tipo: 'parada', motivo: 'cadeia', desde: '2026-11-27T10:35:00Z', voltaEm: null, validoAte: null },
+    };
     montar(<NovoDeXmlDialog open onClose={() => {}} clienteId="cli" fazendas={[{ id: 'f-pur', nome: 'Faz. Sintetica' }]} fornecedores={[forn]}
-      onAbrirLancamento={() => {}} onAbrirNota={() => {}} lancadas={new Set()} linhasIniciais={linhas} avisoInicial={`${fraseJaNaLista(LONGO)} ${fraseJaNaLista('46.995.pdf')}`} />);
+      onAbrirLancamento={() => {}} onAbrirNota={() => {}} lancadas={new Set()} linhasIniciais={linhas} avisoInicial={`${fraseJaNaLista(LONGO)} ${fraseJaNaLista('46.995.pdf')}`}
+      estadoReceita={estadoPedido ? estados[estadoPedido] : undefined} podeCadastrarCertificado onCadastrarCertificado={() => {}} onNotasDaReceita={() => {}} />);
   };
   void montarNovoDaNota();
 } else if (tela === 'regra-fazenda') {

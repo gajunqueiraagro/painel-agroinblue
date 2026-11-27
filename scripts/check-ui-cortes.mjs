@@ -2003,6 +2003,11 @@ const CENARIOS = [
   /* P95 — "Novo a partir da nota": a nota lida, a da chave digitada, as recusadas com o campo da chave (nome comprido) e o aviso do repetido */
   /* P101 — em TODOS os tamanhos: abaixo de 1000px a tabela perde a coluna CNPJ (no `title` do Emitente) e estreita (antes vazava 155px a 750) */
   { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* NOTAS-RECEITA-CARD-SEMPRE-01 — o card da Receita nos 5 estados (mock aprovado 27/11): nunca some, nada corta, a faixa não pula */
+  ...['sem_certificado', 'sem_busca', 'sem_novas', 'com_notas', 'parada'].map((e) => ({ nome: `novo-da-nota-receita-${e}`, url: `tela=novo-da-nota&receita=${e}`,
+    regiao: '[data-testid="card-da-receita"]', tamanhos: [[1126, 579], [1280, 720]] })),
+  { nome: 'novo-da-nota-receita-motivo', url: 'tela=novo-da-nota&receita=parada', regiao: '[data-testid="card-da-receita-minimodal"]',
+    tamanhos: [[1126, 579], [1280, 720]], antes: clicar('[data-testid="card-da-receita-motivo"]') },
   /* NOTA-NOVA-MODAL-REAL (Gabriel 30/10) — a nota que NÃO está no sistema abre DIRETO o Novo lançamento: o PDF (4 duplicatas), só a chave
      digitada (valor e data para o operador) e o cartão em 10× (D2: Parcelada 10× no Pagamento, a 1ª fatura sugerida); Geral, Pagamento e
      Documentos (o anexo clicável) nos sete tamanhos. Substitui a tela intermediária (`nota-pdf` da nota nova, `nota-pdf-aba-*`, `nota-pdf-cartao*`). */

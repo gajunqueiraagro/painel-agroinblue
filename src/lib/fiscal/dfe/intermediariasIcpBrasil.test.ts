@@ -27,7 +27,7 @@ describe('INTERMEDIARIAS_ICP_BRASIL', () => {
       const bc: unknown = c.getExtension('basicConstraints');
       expect(bc && typeof bc === 'object' && Reflect.get(bc, 'cA')).toBe(true);
       const r = conferirCadeia(c, [], AGORA, raizes, pacote);
-      expect(r.ok, `${i.nome}: ${r.ok ? '' : r.motivo}`).toBe(true);
+      expect(r.ok, `${i.nome}: ${r.ok === false ? r.motivo : ''}`).toBe(true);
       expect(r.ok && r.raiz).toBe(i.raiz);
     });
   }, 120_000);
