@@ -815,6 +815,37 @@ describe('A — dividir pelos itens no NOVO lançamento', () => {
     expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1);
   });
 
+  /* NOTA-ITENS-SUGESTAO — caso NJ (Gabriel 12:18, NF 1.119): a conta sugerida chega só com o id e o subcentro; Atividade, Macro/Grupo/Centro e
+     "Compõe DRE" vêm do plano, como na escolha manual — com o plano já carregado E com o plano chegando DEPOIS de abrir (o app) */
+  it('a conta sugerida herda atividade, macro/grupo/centro e Compõe DRE do plano (plano já carregado e plano que chega depois)', async () => {
+    const PLANO: ClassificacaoItem[] = [{ id: 'pl-maq', subcentro: 'Manutenção Máquinas Pecuária', centro_custo: 'Máquinas', grupo_custo: 'Máquinas', macro_custo: 'Custeio Produção',
+      tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria', compoe_dre: true }];
+    const d = notaComItens({ duplicatas: null });
+    d.proposta = { ...d.proposta, classificacao: { plano_conta_id: 'pl-maq', subcentro: 'Manutenção Máquinas Pecuária', macro_custo: null, grupo_custo: null, centro_custo: null, escopo_negocio: null, data: '2026-09-30' },
+      origens: { ...d.proposta.origens, subcentro: 'último deste fornecedor' },
+      sugestaoDosItens: { itens: [], varias: false, porque: '', frase: 'Classificação sugerida: Manutenção Máquinas Pecuária · último deste fornecedor (28/09/26) · nenhum item conhecido' } };
+    const prefill = { ...comConta(d), data_vencimento: '2026-10-30' };
+    const confere = async () => {
+      const bloco = await screen.findByTestId('bloco-classificacao');
+      await waitFor(() => expect(bloco.textContent).toContain('Centro: Máquinas'));
+      expect(bloco.textContent).toContain('Macro: Custeio Produção');
+      expect(within(bloco).getByRole('button', { name: 'Pecuária' }).className).toMatch(/bg-primary|bg-\[#1d3a5d\]|navy/);
+      expect(bloco.textContent).toMatch(/Compõe DRE:\s*✔ Sim/);
+    };
+    const um = montarModal({ prefill, classificacoes: PLANO });
+    await screen.findByDisplayValue('16.238,00');
+    await confere();
+    um.unmount();
+    /* o plano chega depois (o hook carrega) */
+    const dois = montarModal({ prefill, classificacoes: [] });
+    await screen.findByDisplayValue('16.238,00');
+    dois.rerender(<QueryClientProvider client={new QueryClient()}><MemoryRouter>
+      <LancamentoV2Dialog open onClose={dois.onClose} onSave={dois.onSave} lancamento={null} documentosAntesDeSalvar onLancamentoCriado={dois.onLancamentoCriado}
+        fazendas={FAZENDAS} contas={CONTAS} classificacoes={PLANO} fornecedores={[AGRO]} safras={[]} onCriarFornecedor={dois.onCriarFornecedor} prefill={prefill} />
+    </MemoryRouter></QueryClientProvider>);
+    await confere();
+  });
+
   /* NOTA-ITENS-SUGESTAO (Gabriel 27/11, mock aprovado 10:47) — a sugestão da escada única na proposta: o aviso pequeno na faixa, "ver por item"
      abre Itens › Contas com a pergunta obra × manutenção; respondida, "Usar divisão" e o Salvar dividem; a escolha vira regra do item (Q3) */
   it('NOTA-ITENS-SUGESTAO: aviso "N itens em X classificações · ver por item" → Contas com a pergunta → Usar divisão → Salvar divide e lembra a escolha', async () => {

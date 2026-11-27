@@ -2747,14 +2747,25 @@ export function LancamentoV2Dialog({
       centro_custo: c.centro_custo, escopo_negocio: c.escopo_negocio || '', atividade: atividadeValida(c.escopo_negocio),
       safra_id: escopo === 'administrativo' || escopo !== (atual.escopo_negocio || '').trim() ? '' : atual.safra_id }));
   };
-  /* NOTA-ITENS-SUGESTAO — a conta sugerida pelos itens chega só com o id e o subcentro: no NOVO que nasce da nota, o resto da linha do
-     plano (macro, grupo, centro, atividade) vem do plano carregado — a mesma regra do "Usar divisão". Só no novo da nota: nunca mexe no
-     que um lançamento salvo já tem. */
-  const contaSemHierarquia = !lancamento && !!xml && !!classificacao.plano_conta_id && !classificacao.macro_custo ? classificacao.plano_conta_id : null;
+  /* NOTA-ITENS-SUGESTAO (caso NJ, Gabriel 27/11 12:18 — NF 1.119: Atividade, Centro e "Compõe DRE" em branco) — o subcentro que chega
+     PREENCHIDO por qualquer origem (a sugestão da nota, a prévia da Receita/Ler a NF, o duplicar, a planilha) e sem o resto da linha do plano
+     herda atividade, macro, grupo e centro do PLANO, como a escolha manual: pela chave; sem ela, pelo nome + tipo. Só no NOVO: nunca mexe no
+     que um lançamento salvo já tem. A chave do efeito leva os campos: se a hidratação os zerar de novo, ele refaz. */
+  const linhaIncompleta = !isEdit && (!!classificacao.plano_conta_id || !!classificacao.subcentro)
+    && (!classificacao.macro_custo || !classificacao.centro_custo || !classificacao.escopo_negocio || !classificacao.atividade);
+  const chaveDaLinhaIncompleta = linhaIncompleta
+    ? [classificacao.plano_conta_id ?? '', classificacao.subcentro, classificacao.macro_custo, classificacao.centro_custo, classificacao.escopo_negocio, classificacao.atividade ?? ''].join('|')
+    : null;
   useEffect(() => {
-    if (contaSemHierarquia) porNaContaDoLancamento(contaSemHierarquia);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- so' quando a conta sem a linha do plano aparece (ou o plano chega)
-  }, [contaSemHierarquia, classificacoesDoModal]);
+    if (!chaveDaLinhaIncompleta) return;
+    const nome = (classificacao.subcentro || '').trim().toLowerCase();
+    const c = (classificacao.plano_conta_id ? classificacoesDoModal.find((x) => x.id === classificacao.plano_conta_id) : undefined)
+      ?? classificacoesDoModal.find((x) => (x.subcentro || '').trim().toLowerCase() === nome && x.tipo_operacao === tipoOperacao && !!x.macro_custo);
+    if (!c || !c.macro_custo || !c.escopo_negocio) return;
+    setClassificacao((atual) => ({ ...atual, plano_conta_id: atual.plano_conta_id ?? c.id ?? null, subcentro: c.subcentro, macro_custo: c.macro_custo,
+      grupo_custo: c.grupo_custo || '', centro_custo: c.centro_custo, escopo_negocio: c.escopo_negocio || '', atividade: atividadeValida(c.escopo_negocio) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a chave diz quando a linha está incompleta; o plano chegando refaz
+  }, [chaveDaLinhaIncompleta, classificacoesDoModal]);
   /** NOTA-ITENS-SUGESTAO — "Juntar tudo numa conta": sem divisão; a conta escolhida vira a do lançamento. */
   const juntarNaCriacao = (planoContaId: string) => {
     setErroAntesDeSalvar(null);
