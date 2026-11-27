@@ -83,9 +83,11 @@ export const FRASE_NAO_E_DARF = 'Não é um DARF que eu conheça.';
 export function tipoNoDarf(denominacao: string): TipoNoDarf {
   const t = semAcento(denominacao);
   if (/^irrf\b/.test(t)) return 'irrf';
-  if (/^cp\b.*\bterceiros\b/.test(t)) return 'terceiros';
-  if (/^cp\b.*\bsegurado/.test(t) || /^contr prev desconta segurado/.test(t)) return 'inss_segurados';
-  if (/^cp\b.*\bpatronal\b/.test(t)) return 'inss_patronal';
+  /* "CP TERCEIROS - …" ou "CONTRIBUIÇÃO TERCEIROS - …" (o DARF de nov/2026 escreve por extenso) */
+  const cp = /^(cp|contr|contribuicao)\b/.test(t);
+  if (cp && /\bterceiros\b/.test(t)) return 'terceiros';
+  if (cp && /\bsegurado/.test(t)) return 'inss_segurados';
+  if (cp && /\bpatronal\b/.test(t)) return 'inss_patronal';
   return 'outro';
 }
 

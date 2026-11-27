@@ -15,9 +15,10 @@
  *     "TOTAL F.G.T.S........ | v".
  * CONFERE = cada pessoa fecha (proventos − descontos = líquido; a soma das rubricas = proventos + descontos) E a soma das pessoas é o resumo
  * geral (funcionários, proventos, descontos, líquido e FGTS, ao centavo). O que não fecha vai em `naoConfere` (a frase); quem decide é o operador.
- * Só a folha MENSAL ("<MÊS> <AAAA>" no título): outro título (13º, férias, rescisão) devolve 'não sei' — nunca chuta tipo nem competência.
+ * A folha MENSAL ("<MÊS> <AAAA>") e a 1ª/2ª parcela do 13º ("1 PARCELA 13 SALARIO <AAAA>", nov/2026); outro título (férias, rescisão)
+ * devolve 'não sei' — nunca chuta tipo nem competência.
  */
-import { valorDoRecibo } from './lerFolha';
+import { valorDoRecibo, type TipoDaFolha } from './lerFolha';
 
 export interface RubricaDaAnalitica { codigo: string; descricao: string; ref: string | null; valor: number }
 export interface PessoaDaAnalitica {
@@ -44,8 +45,10 @@ export interface TotaisDaAnalitica { funcionarios: number; proventos: number; de
 export interface FolhaAnaliticaLida {
   /** a 1ª linha do cabeçalho ("FULANO DE TAL FAZENDA X") — é por ela que o banco acha empregador e fazenda */
   empresa: string;
-  /** 'AAAA-MM' */
+  /** 'AAAA-MM' (o 13º: a 1ª parcela é novembro, a 2ª dezembro) */
   competencia: string;
+  /** a folha mensal ou a 1ª/2ª parcela do 13º (o MESMO layout, outro título) */
+  tipo: TipoDaFolha;
   /** 'AAAA-MM-DD' */
   emissao: string | null;
   pessoas: PessoaDaAnalitica[];
@@ -70,11 +73,14 @@ const ehData = (s: string) => /^\d{2}\/\d{2}\/\d{4}$/.test(s);
 const isoDe = (s: string) => `${s.slice(6, 10)}-${s.slice(3, 5)}-${s.slice(0, 2)}`;
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** "FEVEREIRO 2025" → '2025-02' */
-function competenciaDoTitulo(s: string): string | null {
-  const m = semAcento(s).trim().match(/^([a-z]+)\s+(\d{4})$/);
+/** "FEVEREIRO 2025" → mensal '2025-02'; "1 PARCELA 13 SALARIO 2026" → 13º 1ª '2026-11'; "2 PARCELA 13 SALARIO 2026" → 13º 2ª '2026-12' */
+function competenciaDoTitulo(s: string): { competencia: string; tipo: TipoDaFolha } | null {
+  const t = semAcento(s).trim().replace(/\s+/g, ' ');
+  const d = t.match(/^([12])a? parcela (?:do )?13o? salario (\d{4})$/);
+  if (d) return d[1] === '1' ? { competencia: `${d[2]}-11`, tipo: '13_1' } : { competencia: `${d[2]}-12`, tipo: '13_2' };
+  const m = t.match(/^([a-z]+) (\d{4})$/);
   const i = m ? MESES.indexOf(m[1]) : -1;
-  return m && i >= 0 ? `${m[2]}-${String(i + 1).padStart(2, '0')}` : null;
+  return m && i >= 0 ? { competencia: `${m[2]}-${String(i + 1).padStart(2, '0')}`, tipo: 'mensal' } : null;
 }
 const ehTitulo = (c: string[]) => /^relatorio da folha analitico\.?$/.test(semAcento(c[0] ?? ''));
 /** as linhas fixas do cabeçalho de toda página (a da empresa é a anterior à "Folha | de Pagamento") */
@@ -124,7 +130,7 @@ function pessoaDaLinha(c: string[], centro: string | null, pagina: number): Pess
 }
 
 const ehInss = (d: string) => /(^|[^a-z])i\.?n\.?s\.?s(?![a-z])/.test(semAcento(d));
-const ehIrrf = (d: string) => /imposto de renda|\birrf\b/.test(semAcento(d));
+const ehIrrf = (d: string) => /imposto de renda|(^|[^a-z])i\.?r\.?r\.?f(?![a-z])/.test(semAcento(d));
 
 function fecharPessoa(p: PessoaDaAnalitica): PessoaDaAnalitica {
   const soma = p.rubricas.reduce((s, r) => s + centavos(r.valor), 0);
@@ -144,6 +150,7 @@ const resumoCompleto = (r: ResumoParcial): TotaisDaAnalitica | null =>
 export function lerFolhaAnalitica(paginas: string[][]): LeituraDaAnalitica {
   let empresa: string | null = null;
   let competencia: string | null = null;
+  let tipo: TipoDaFolha | null = null;
   let emissao: string | null = null;
   let centro: string | null = null;
   let pessoa: PessoaDaAnalitica | null = null;
@@ -172,8 +179,9 @@ export function lerFolhaAnalitica(paginas: string[][]): LeituraDaAnalitica {
       }
       if (ehTitulo(c)) {
         const comp = competenciaDoTitulo(c[1] ?? '');
-        if (!comp || (competencia && competencia !== comp)) return { ok: false, frase: FRASE_NAO_E_ANALITICA };
-        competencia = comp;
+        if (!comp || (competencia && competencia !== comp.competencia) || (tipo && tipo !== comp.tipo)) return { ok: false, frase: FRASE_NAO_E_ANALITICA };
+        competencia = comp.competencia;
+        tipo = comp.tipo;
         continue;
       }
       if (c[0] === 'Emissão') { if (ehData(c[1] ?? '')) emissao = isoDe(c[1]); continue; }
@@ -222,7 +230,7 @@ export function lerFolhaAnalitica(paginas: string[][]): LeituraDaAnalitica {
   }
   fechar();
   guardarResumo();
-  if (!empresa || !competencia || !pessoas.length) return { ok: false, frase: FRASE_NAO_E_ANALITICA };
+  if (!empresa || !competencia || !tipo || !pessoas.length) return { ok: false, frase: FRASE_NAO_E_ANALITICA };
 
   const somaC = (f: (x: PessoaDaAnalitica) => number | null) => pessoas.reduce((s, x) => s + centavos(f(x) ?? 0), 0);
   const soma = {
@@ -244,5 +252,5 @@ export function lerFolhaAnalitica(paginas: string[][]): LeituraDaAnalitica {
       if (k !== 'funcionarios' && centavos(geral[k]) !== centavos(soma[k])) naoConfere.push(`${rotulo}: o resumo geral diz ${brl(geral[k])}; a soma dos funcionários dá ${brl(soma[k])}.`);
     }
   }
-  return { ok: true, folha: { empresa, competencia, emissao, pessoas, soma, resumo: geral, confere: naoConfere.length === 0, naoConfere } };
+  return { ok: true, folha: { empresa, competencia, tipo, emissao, pessoas, soma, resumo: geral, confere: naoConfere.length === 0, naoConfere } };
 }

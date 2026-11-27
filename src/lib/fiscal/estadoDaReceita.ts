@@ -23,7 +23,8 @@ export type MotivoDaParada = 'vencido' | 'bloqueio' | 'sem_resposta' | 'cadeia' 
 export type EstadoDaReceita =
   | { tipo: 'carregando' }
   | { tipo: 'sem_certificado' }
-  | { tipo: 'parada'; motivo: MotivoDaParada; desde: string | null; voltaEm: string | null; validoAte: string | null }
+  /* BLOQUEIO-01 (Gabriel 27/11): a parada NÃO tira a lista — as notas já baixadas seguem abríveis (`notas` = as que pedem ação) */
+  | { tipo: 'parada'; motivo: MotivoDaParada; desde: string | null; voltaEm: string | null; validoAte: string | null; notas?: number }
   | { tipo: 'sem_busca' }
   | { tipo: 'com_notas'; notas: number; ultimaBusca: string | null }
   | { tipo: 'sem_novas'; ultimaBusca: string | null };
@@ -65,21 +66,21 @@ export function decidirEstado(e: {
   const ativos = e.certificados.filter((c) => c.situacao === 'ativo');
   if (ativos.length === 0) return { tipo: 'sem_certificado' };
   const validoAte = ultimo(ativos.map((c) => c.validoAte));
-  if (validoAte && Date.parse(validoAte) < agora) return { tipo: 'parada', motivo: 'vencido', desde: validoAte, voltaEm: null, validoAte };
+  if (validoAte && Date.parse(validoAte) < agora) return { tipo: 'parada', motivo: 'vencido', desde: validoAte, voltaEm: null, validoAte, notas: e.notasALancar };
   const pausa = (e.pausas ?? []).find((p) => !p.ate || Date.parse(p.ate) > agora);
-  if (pausa) return { tipo: 'parada', motivo: motivoDaPausa(pausa.motivo), desde: pausa.desde, voltaEm: pausa.ate, validoAte };
+  if (pausa) return { tipo: 'parada', motivo: motivoDaPausa(pausa.motivo), desde: pausa.desde, voltaEm: pausa.ate, validoAte, notas: e.notasALancar };
   const naoAntes = ultimo(e.controle.map((c) => c.naoAntesDe));
   const motivo = e.ultimaBusca ? motivoDaBusca(e.ultimaBusca) : null;
   if (e.ultimaBusca && motivo) {
-    return { tipo: 'parada', motivo, desde: e.ultimaBusca.em, voltaEm: motivo === 'bloqueio' && naoAntes && Date.parse(naoAntes) > agora ? naoAntes : null, validoAte };
+    return { tipo: 'parada', motivo, desde: e.ultimaBusca.em, voltaEm: motivo === 'bloqueio' && naoAntes && Date.parse(naoAntes) > agora ? naoAntes : null, validoAte, notas: e.notasALancar };
   }
   const ultimaBusca = ultimo(e.controle.map((c) => c.ultimaBuscaEm));
   if (!ultimaBusca) {
     const enviado = ultimo(ativos.map((c) => c.enviadoEm));
     if (enviado && agora - Date.parse(enviado) <= PRIMEIRA_BUSCA_MS) return { tipo: 'sem_busca' };
-    return { tipo: 'parada', motivo: 'nunca_buscou', desde: enviado, voltaEm: null, validoAte };
+    return { tipo: 'parada', motivo: 'nunca_buscou', desde: enviado, voltaEm: null, validoAte, notas: e.notasALancar };
   }
-  if (agora - Date.parse(ultimaBusca) > ATRASADA_MS) return { tipo: 'parada', motivo: 'atrasada', desde: ultimaBusca, voltaEm: null, validoAte };
+  if (agora - Date.parse(ultimaBusca) > ATRASADA_MS) return { tipo: 'parada', motivo: 'atrasada', desde: ultimaBusca, voltaEm: null, validoAte, notas: e.notasALancar };
   if (e.notasALancar > 0) return { tipo: 'com_notas', notas: e.notasALancar, ultimaBusca };
   return { tipo: 'sem_novas', ultimaBusca };
 }
@@ -100,12 +101,22 @@ const diaMesAno = (iso: string | null) => {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 };
 
+/** BLOQUEIO-01 — o 656 (1 h) e a ponte (6 h) voltam sozinhos: é PAUSA (âmbar), não parada (vermelho) */
+export const pausada = (e: EstadoDaReceita): e is Extract<EstadoDaReceita, { tipo: 'parada' }> & { voltaEm: string } =>
+  e.tipo === 'parada' && !!e.voltaEm && (e.motivo === 'bloqueio' || e.motivo === 'ponte');
+
 /** a linha do card (uma só) */
 export function fraseDoCard(e: EstadoDaReceita): string {
   switch (e.tipo) {
     case 'carregando': return 'Notas da Receita · lendo…';
     case 'sem_certificado': return 'Notas da Receita · sem certificado digital';
-    case 'parada': return 'Busca parada · Notas da Receita';
+    case 'parada': {
+      const n = e.notas ?? 0;
+      const lista = n > 0 ? `${n > 99 ? '99+' : n} da Receita a lançar` : 'Notas da Receita';
+      /* o bloqueio de 1 h é PAUSA (volta sozinho), não parada: âmbar, com a hora */
+      /* com dois links ao lado (Abrir · ver motivo), a frase pausada fica sem o "da Receita" (o card já é o da Receita): cabe com 99+ */
+      return pausada(e) ? `${n > 0 ? `${n > 99 ? '99+' : n} a lançar` : 'Notas da Receita'} · busca pausada até ${diaHora(e.voltaEm).slice(6)}` : `Busca parada · ${lista}`;
+    }
     case 'sem_busca': return 'Notas da Receita · certificado ok · primeira busca ainda não rodou';
     case 'com_notas': return `${e.notas > 99 ? '99+' : e.notas} ${e.notas === 1 ? 'nota' : 'notas'} da Receita a lançar · busca ${diaHora(e.ultimaBusca)}`;
     case 'sem_novas': return `Nenhuma nota nova da Receita · última busca ${diaHora(e.ultimaBusca)}`;
@@ -117,7 +128,7 @@ export function fraseDoMenu(e: EstadoDaReceita): { texto: string; tom: 'azul' | 
   switch (e.tipo) {
     case 'carregando': return null;
     case 'sem_certificado': return { texto: 'sem certificado', tom: 'apagado' };
-    case 'parada': return { texto: 'busca da Receita parada', tom: 'vermelho' };
+    case 'parada': return pausada(e) ? { texto: `busca pausada até ${diaHora(e.voltaEm).slice(6)}`, tom: 'apagado' } : { texto: 'busca da Receita parada', tom: 'vermelho' };
     case 'sem_busca': return { texto: 'primeira busca ainda não rodou', tom: 'apagado' };
     case 'com_notas': return { texto: `${e.notas > 99 ? '99+' : e.notas} chegaram da Receita`, tom: 'azul' };
     case 'sem_novas': return { texto: 'nenhuma nova da Receita', tom: 'apagado' };

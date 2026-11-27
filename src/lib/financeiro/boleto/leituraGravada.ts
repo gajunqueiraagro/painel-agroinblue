@@ -15,7 +15,7 @@ import type { BoletoNormalizado } from '@/lib/financeiro/linhaDigitavel';
 import type { ParteDoBoleto } from './lerBoleto';
 import type { ResumoDaNota } from './caixaPorEmail';
 
-export const LEITOR_VERSAO = 'caixa-1';
+export const LEITOR_VERSAO = 'caixa-2';
 /** O teto do que se guarda por arquivo (o banco confere o mesmo). Um PDF com dezenas de boletos cabe com folga. */
 export const LEITURA_MAX_BYTES = 32768;
 
@@ -43,6 +43,11 @@ export function paraGravar(l: LeituraDaCaixa): LeituraGravada | null {
     case 'resumo': return { v, k: 'resumo' };
     /* FOLHA-VERA-PACOTE-01: o analítico da folha tem pessoa e salário e o banco não conhece o tipo: não se guarda (a caixa lê no navegador) */
     case 'analitica': return null;
+    /* CONTAS-CONSUMO-01 / CAIXA-OCR-01 / CAIXA-FOLHA-VERA: a fatura (titular, endereço), a posição do banco (saldo) e a GFD (o PIX) o banco não
+       conhece como tipo: não se guardam — a caixa lê no navegador, como o analítico */
+    case 'fatura': return null;
+    case 'posicao': return null;
+    case 'gfd': return null;
     case 'nada': return { v, k: 'nada', frase: l.frase };
     case 'senha': return { v, k: 'senha' };
     case 'erro': return null;

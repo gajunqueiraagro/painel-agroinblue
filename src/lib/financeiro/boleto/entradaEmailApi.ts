@@ -33,7 +33,7 @@ export interface EntradaDoEmail {
   /** BOLETO D3d (118180) — o motivo de ignorar ("dispensado" = ignorado), o detalhe, quando; e o que a linha virou ao resolver. */
   ignoradoMotivo: MotivoDeIgnorar | 'anterior_a_regra' | null; ignoradoDetalhe: string | null; ignoradoEm: string | null;
   boletoId: string | null; lancamentoId: string | null; resolvidoEm: string | null;
-  /** 118610: 'arrastado' = o arquivo solto na Caixa e registrado no gesto (sem remetente; quem arrastou vem de `resolvidos`) */
+  /** 118610: 'arrastado' = o arquivo solto na Caixa (CAIXA-FOLHA-VERA: registrado NA HORA, não mais no gesto; sem remetente; quem arrastou vem de `resolvidos`) */
   origem?: 'email' | 'arrastado';
   /** ENTRADA-CENTRAL-01 F1 (118880): a leitura guardada, crua do banco (quem usa confere: `daGravada`); null = ainda não lida */
   leitura?: unknown;

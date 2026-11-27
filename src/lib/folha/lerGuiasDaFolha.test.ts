@@ -57,8 +57,9 @@ describe('o DARF', () => {
     expect(r.darf.vencimento).toBeNull();
   });
   it('o tipo pela denominação da Receita', () => {
-    expect(['CP PATRONAL - EMPREGADOS', 'CP SEGURADOS - CONTRIBUINTE INDIVIDUAL', 'CP TERCEIROS - SENAR', 'IRRF - ALUGUÉIS', 'COFINS']
-      .map(tipoNoDarf)).toEqual(['inss_patronal', 'inss_segurados', 'terceiros', 'irrf', 'outro']);
+    expect(['CP PATRONAL - EMPREGADOS', 'CP SEGURADOS - CONTRIBUINTE INDIVIDUAL', 'CP TERCEIROS - SENAR', 'IRRF - ALUGUÉIS', 'COFINS',
+      'CONTRIBUIÇÃO TERCEIROS - INCRA', 'CONTR PREV DESCONTA SEGURADO-EMPREGADO/AVULSO', 'TERCEIROS SEM O CP']
+      .map(tipoNoDarf)).toEqual(['inss_patronal', 'inss_segurados', 'terceiros', 'irrf', 'outro', 'terceiros', 'inss_segurados', 'outro']);
   });
   it('não é DARF: sem o título, sem o cabeçalho do período ou sem o valor total', () => {
     const nao = { ok: false, frase: FRASE_NAO_E_DARF };

@@ -2009,7 +2009,7 @@ const CENARIOS = [
   /* P101 — em TODOS os tamanhos: abaixo de 1000px a tabela perde a coluna CNPJ (no `title` do Emitente) e estreita (antes vazava 155px a 750) */
   { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* NOTAS-RECEITA-CARD-SEMPRE-01 — o card da Receita nos 5 estados (mock aprovado 27/11): nunca some, nada corta, a faixa não pula */
-  ...['sem_certificado', 'sem_busca', 'sem_novas', 'com_notas', 'parada'].map((e) => ({ nome: `novo-da-nota-receita-${e}`, url: `tela=novo-da-nota&receita=${e}`,
+  ...['sem_certificado', 'sem_busca', 'sem_novas', 'com_notas', 'parada', 'pausada'].map((e) => ({ nome: `novo-da-nota-receita-${e}`, url: `tela=novo-da-nota&receita=${e}`,
     regiao: '[data-testid="card-da-receita"]', tamanhos: [[1126, 579], [1280, 720]] })),
   { nome: 'novo-da-nota-receita-motivo', url: 'tela=novo-da-nota&receita=parada', regiao: '[data-testid="card-da-receita-minimodal"]',
     tamanhos: [[1126, 579], [1280, 720]], antes: clicar('[data-testid="card-da-receita-motivo"]') },
@@ -2323,6 +2323,9 @@ const CENARIOS = [
   { nome: 'danfe-guardadas-simulado', url: 'tela=danfe-guardadas', tamanhos: TAMANHOS_DO_CONSORCIO, antes: async (p) => {
     await p.locator('[data-testid="danfe-guardadas-simular"]').click(); await p.getByText('19 geram o PDF').waitFor({ timeout: 8000 }); } },
   { nome: 'danfe-guardadas-curta', url: 'tela=danfe-guardadas&v=curta', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* BLOQUEIO-01 — o botão "próxima às HH:MM" (na espera da Receita): cabe na coluna da ação, nada corta */
+  { nome: 'danfe-guardadas-proxima', url: 'tela=danfe-guardadas&prox=1', tamanhos: TAMANHOS_DO_CONSORCIO, antes: async (p) => {
+    await p.locator('[data-testid="danfe-guardadas-simular"]').click(); await p.getByText('19 geram o PDF').waitFor({ timeout: 8000 }); } },
   /* NOTA-RECEITA-DANFE-ANEXO-01 — a nota de 2 itens: a tabela encolhe ao conteúdo (o modal segue no tamanho padrão) */
   { nome: 'itens-nota-dois', url: 'tela=itens-nota&v=dois', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'itens-nota-guardadas-simulado', url: 'tela=itens-nota&v=guardadas', tamanhos: TAMANHOS_DO_CONSORCIO,

@@ -51,7 +51,7 @@ describe('o leitor do relatório analítico da folha', () => {
     const r = lerFolhaAnalitica(PAGINAS);
     if (r.ok === false) throw new Error(r.frase);
     const f = r.folha;
-    expect(f).toMatchObject({ empresa: EMPRESA, competencia: '2026-03', emissao: '2026-03-28', confere: true, naoConfere: [] });
+    expect(f).toMatchObject({ empresa: EMPRESA, competencia: '2026-03', tipo: 'mensal', emissao: '2026-03-28', confere: true, naoConfere: [] });
     expect(f.pessoas.map((p) => [p.codigo, p.nome, p.admissao, p.centro, p.proventos, p.descontos, p.fgts, p.liquido, p.inss, p.irrf, p.confere, p.pagina])).toEqual([
       ['00011', 'PESSOA UM', '2015-03-10', '00002-RURAL', 2050, 170, 160, 1880, 150, 20, true, 1],
       ['00012', 'PESSOA DOIS', '2020-01-05', '00002-RURAL', 1500, 112.5, 120, 1387.5, 112.5, 0, true, 1],
@@ -109,6 +109,31 @@ describe('o leitor do relatório analítico da folha', () => {
     if (r.ok === false) throw new Error(r.frase);
     expect(r.folha.pessoas[0].rubricas[3]).toEqual({ codigo: '38', descricao: 'HORAS EXTRAS 100%', ref: null, valor: 50 });
     expect(r.folha.confere).toBe(true);
+  });
+
+  it('o IRRF das férias escrito "I.R.R.F." também é IRRF (e o INSS sobre férias, INSS)', () => {
+    const p = [...cabecalho(1, 'MARÇO 2026'), CENTRO, L('00011', 'PESSOA UM', '10/03/2015', '/', '/', '2.000,00', '44.0', 'X'),
+      L('33 FERIAS NORMAIS', '28,0000', '2.000,00', '76 I.R.R.F.', 'FERIAS', '(', 'RESCISOES )', '28,0000', '50,00', '160,00', '1.800,00'),
+      L('96 I.N.S.S.', 'SOBRE', 'FERIAS', '28,0000', '150,00'), L('2.000,00', '200,00'), ...resumo(false, '1', '1.800,00', '160,00', '2.000,00', '200,00')];
+    const r = lerFolhaAnalitica([p]);
+    if (r.ok === false) throw new Error(r.frase);
+    expect(r.folha.pessoas[0]).toMatchObject({ irrf: 50, inss: 150, confere: true });
+  });
+
+  it('o 13º no MESMO layout: "1 PARCELA 13 SALARIO 2026" = 13º 1ª, novembro; "2 PARCELA …" = 13º 2ª, dezembro; o fecho só com proventos', () => {
+    const p13 = [...cabecalho(1, '1 PARCELA 13 SALARIO 2026'), CENTRO,
+      L('00011', 'PESSOA', 'UM', '10/03/2015', '/', '/', '2.000,00', '44.0', 'TRABALHADOR RURAL'),
+      L('2 13o. SALARIO VARIAVEL', '12,0000', '20,00', '81,60', '1.020,00'), L('7', 'ADIANTAMENTO 50%', '13O.', 'SALARIO', '12,0000', '1.000,00'), '1.020,00',
+      ...resumo(false, '1', '1.020,00', '81,60', '1.020,00', '0,00')];
+    const r = lerFolhaAnalitica([p13]);
+    if (r.ok === false) throw new Error(r.frase);
+    expect(r.folha).toMatchObject({ competencia: '2026-11', tipo: '13_1', confere: true });
+    expect(r.folha.pessoas[0]).toMatchObject({ proventos: 1020, descontos: 0, fgts: 81.6, liquido: 1020, confere: true });
+    const s = lerFolhaAnalitica([p13.map((l) => l.replace('1 PARCELA 13 SALARIO 2026', '2 PARCELA 13 SALARIO 2026'))]);
+    if (s.ok === false) throw new Error(s.frase);
+    expect(s.folha).toMatchObject({ competencia: '2026-12', tipo: '13_2' });
+    /* mensal e 13º no mesmo arquivo: não sei */
+    expect(lerFolhaAnalitica([[...cabecalho(1, 'NOVEMBRO 2026'), CENTRO, ...UM], [...cabecalho(2, '1 PARCELA 13 SALARIO 2026'), ...TRES]]).ok).toBe(false);
   });
 
   it('não é o analítico mensal: outro título, sem título, empresas diferentes, nenhuma pessoa → não sei', () => {

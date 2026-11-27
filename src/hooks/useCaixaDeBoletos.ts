@@ -215,7 +215,7 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     const doEmail = entradas ? gruposDosEmails(entradas, lidos, notas, boletos, hoje, podeLancar, feitos) : [];
     const arrastados: FonteParaMontar[] = locais.map((l) => ({ chave: l.chave, nome: l.arquivo.name, tipoDoArquivo: tipoDoNome(l.arquivo.name), lido: lidos[l.chave] ?? { k: 'lendo' } }));
     const gLocal: GrupoDaCaixa[] = arrastados.length ? [{
-      chave: 'locais', tipo: 'local', titulo: 'Arrastados por você', assunto: 'os arquivos que você soltou aqui (nada gravado até o gesto)',
+      chave: 'locais', tipo: 'local', titulo: 'Arrastados por você', assunto: 'guardando na Caixa… (o que não guardar fica só nesta tela)',
       linhas: linhasDasFontes(arrastados, notas, boletos, hoje, podeLancar, feitos), fontesAntigas: [],
     }] : [];
     const gGuardados = lista ? grupoDosGuardados(lista.itens, boletos, hoje, feitos) : null;
@@ -228,13 +228,43 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   const descartados = useMemo(() => (lista?.itens ?? []).filter((i) => i.boleto.situacao === 'descartado'), [lista]);
 
   /* ── arrastar ── */
+  /** CAIXA-FOLHA-VERA (Gabriel 15:10: os 3 arquivos arrastados SUMIRAM ao fechar e reabrir) — o arquivo ARRASTADO é GUARDADO NA HORA, como o do
+   *  e-mail: registra (`fn_entrada_registrar_arrastado`: o mesmo arquivo = a mesma linha), sobe para o storage do cliente e entra em
+   *  "A resolver" (grupo "Arrastados para a Caixa"); o que espera o gesto é só lançar, vincular ou aplicar. A leitura sai do arquivo que já
+   *  está na memória (não baixa de novo). Falhou = fica só nesta tela, como antes, e a frase diz por quê. Sem a API (bancada antiga): como antes. */
+  const guardarArrastados = useCallback(async (novos: readonly Local[]) => {
+    if (!clienteId || !entradaApi.registrarArrastado) return;
+    const registrar = entradaApi.registrarArrastado;
+    let algum = false;
+    for (const n of novos) {
+      const bytes = await n.arquivo.arrayBuffer();
+      const tipo = tipoDoNome(n.arquivo.name);
+      const reg = await registrar(clienteId, { nome: n.arquivo.name, tipo, tamanho: bytes.byteLength, md5: md5(bytes) });
+      if (!vivo.current) return;
+      if (reg.ok === false) { setErro(`"${n.arquivo.name}" não ficou guardado na Caixa (fica só nesta tela): ${reg.erro}`); continue; }
+      if (!reg.dados.jaExistia) {
+        const up = await api.subirArquivo(reg.dados.storagePath, n.arquivo);
+        if (!vivo.current) return;
+        if (up.ok === false) { setErro(`"${n.arquivo.name}" não subiu para a Caixa (fica só nesta tela): ${up.erro}`); continue; }
+      }
+      /* já resolvido ou ignorado antes: a linha de lá vale; aqui fica só a desta sessão */
+      if (reg.dados.estado !== 'a_ler' && reg.dados.estado !== 'nao_reconhecido') continue;
+      pedidos.current.add(`ler:${reg.dados.id}`);
+      void lerFonte(reg.dados.id, async () => ({ bytes, nome: n.arquivo.name }), tipo, undefined, reg.dados.id);
+      setLocais((xs) => xs.filter((x) => x.chave !== n.chave));
+      algum = true;
+    }
+    if (algum) await recarregar();
+  }, [api, clienteId, entradaApi, lerFonte, recarregar]);
+
   const receber = useCallback((arquivos: readonly File[]) => {
     const novos = arquivos.map((arquivo) => { sequencia += 1; return { chave: `local:${sequencia}`, arquivo }; });
     setLocais((xs) => [...xs, ...novos]);
     for (const n of novos) {
       void lerFonte(n.chave, async () => ({ bytes: await n.arquivo.arrayBuffer(), nome: n.arquivo.name }), tipoDoNome(n.arquivo.name));
     }
-  }, [lerFonte]);
+    void guardarArrastados(novos);
+  }, [lerFonte, guardarArrastados]);
 
   /* ── o arquivo de uma fonte (ver, lançar) ── */
   const arquivoDe = useCallback(async (fonte: string): Promise<File | null> => {

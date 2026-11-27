@@ -13,6 +13,9 @@ import { lerFolha, pareceFolha, type FolhaLida } from '@/lib/folha/lerFolha';
 import { acharChaveNFe } from '@/lib/oc/leitura/chaveNFe';
 import { lerResumoDoContador, type ResumoLido } from '@/lib/folha/lerResumoDoContador';
 import { lerFolhaAnalitica, type FolhaAnaliticaLida } from '@/lib/folha/lerFolhaAnalitica';
+import { lerFaturaConsumo, type FaturaLida } from '@/lib/financeiro/consumo/lerFaturaConsumo';
+import { lerPosicaoOperacoes, type PosicaoLida } from '@/lib/financeiro/consumo/lerPosicaoOperacoes';
+import { lerDarf, lerGfd, type GfdLida } from '@/lib/folha/lerGuiasDaFolha';
 
 /** A leitura de UM arquivo pela caixa (injetável: a bancada e os testes passam a sua). */
 export type LeituraDaCaixa =
@@ -21,6 +24,9 @@ export type LeituraDaCaixa =
   | { k: 'folha'; folha: FolhaLida }
   | { k: 'resumo'; resumo: ResumoLido }
   | { k: 'analitica'; analitica: FolhaAnaliticaLida }
+  | { k: 'fatura'; fatura: FaturaLida }
+  | { k: 'posicao'; posicao: PosicaoLida }
+  | { k: 'gfd'; gfd: GfdLida }
   | { k: 'nada'; frase: string }
   | { k: 'senha'; errada: boolean }
   | { k: 'erro'; frase: string };
@@ -58,11 +64,21 @@ export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (
     }
     return { k: 'erro', frase: b.frase };
   }
-  if (b.leitura.boletos.length) return { k: 'boletos', ...b.leitura };
+  /* CONTAS-CONSUMO-01 C1: a fatura de energia (NF3e) ANTES do boleto — a linha digitável dela fica dentro da fatura */
+  const paginas = await linhasDasPaginas(bytes, senha, pdfjs);
+  const fatura = paginas ? lerFaturaConsumo(paginas) : null;
+  if (fatura && fatura.ok === true) return { k: 'fatura', fatura: fatura.fatura };
+  if (b.leitura.boletos.length) {
+    /* CAIXA-FOLHA-VERA (Gabriel 15:10): o DARF não tem "Beneficiário" impresso — o beneficiário é a Receita Federal (o nome; o "confira"
+       fica), e a sugestão por nome acha o previsto "Receita Federal" de mesmo valor (antes: "sem lançamento, nenhum parecido") */
+    const darf = paginas ? lerDarf(paginas) : null;
+    const semBeneficiario = !b.leitura.beneficiario.documento && !b.leitura.beneficiario.nome;
+    const beneficiario = darf && darf.ok === true && semBeneficiario ? { documento: null, nome: 'Receita Federal', confira: true } : b.leitura.beneficiario;
+    return { k: 'boletos', ...b.leitura, beneficiario };
+  }
   const n = await lerNota(bytes.slice(0), { pdfjs });
   if (n.ok && n.nota.chave) return { k: 'nota', nota: resumoDaNota(n.nota) };
   /* FOLHA-NA-CAIXA-01: o recibo do contador (3º tipo); o que só PARECE folha (layout que o lerFolha não lê) avisa */
-  const paginas = await linhasDasPaginas(bytes, senha, pdfjs);
   const f = paginas ? lerFolha(paginas) : null;
   if (f && f.ok === true) return { k: 'folha', folha: f.folha };
   if (f && f.ok === false && f.motivo === 'nao_fecha') return { k: 'nada', frase: `Folha que não fecha: ${f.frase} Fale com o consultor.` };
@@ -72,6 +88,12 @@ export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (
   /* FOLHA-VERA-PACOTE-01 F1: o relatório analítico da folha (o espelho; antes caía no "Folha ainda não é lida aqui") */
   const analitica = paginas ? lerFolhaAnalitica(paginas) : null;
   if (analitica && analitica.ok === true) return { k: 'analitica', analitica: analitica.folha };
+  /* CAIXA-OCR-01 O4: a posição de operações do banco */
+  const posicao = paginas ? lerPosicaoOperacoes(paginas) : null;
+  if (posicao && posicao.ok === true) return { k: 'posicao', posicao: posicao.posicao };
+  /* CAIXA-FOLHA-VERA: a guia do FGTS Digital (GFD) — só PIX, sem linha digitável (antes: "Não sei · sem linha digitável nem chave") */
+  const gfd = paginas ? lerGfd(paginas) : null;
+  if (gfd && gfd.ok === true) return { k: 'gfd', gfd: gfd.gfd };
   const pelaChave = notaPelaChave(paginas ? paginas.flat().join('\n') : null, nomeDoArquivo);
   if (pelaChave) return { k: 'nota', nota: pelaChave };
   return { k: 'nada', frase: paginas && pareceFolha(paginas) ? FRASE_FOLHA_AINDA_NAO : FRASE_NEM_BOLETO_NEM_NOTA };

@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { QUADRO_REGUA, TD_REGUA, TD_REGUA_NUM, TD_REGUA_TEXTO, TH_REGUA } from '@/components/ui/regua-tabela';
-import { buscarNaReceitaPelaChave, candidatasDoDanfe, danfeDaCandidata, FRASE_SEM_XML, titularesComCertificado, type CandidataDoDanfe, type ResultadoDoDanfe } from '@/lib/fiscal/danfeDasNotasGuardadas';
+import { buscarNaReceitaPelaChave, horaCurta, proximaBuscaDoTitular, candidatasDoDanfe, danfeDaCandidata, FRASE_SEM_XML, titularesComCertificado, type CandidataDoDanfe, type ResultadoDoDanfe } from '@/lib/fiscal/danfeDasNotasGuardadas';
 import { numeroDaNota } from '@/lib/financeiro/nfe/formatos';
 import { dataBR } from '@/lib/datas/dataBR';
 import { cn } from '@/lib/utils';
@@ -21,7 +21,7 @@ const colgroup = <colgroup>{COLUNAS.map((w, i) => <col key={i} style={w ? { widt
 const kb = (b: number) => `${Math.max(1, Math.round(b / 1024)).toLocaleString('pt-BR')} KB`;
 
 export function DanfeDasNotasGuardadasDialog({ clienteId, onClose, ler = candidatasDoDanfe, gerar = danfeDaCandidata,
-  titulares = titularesComCertificado, buscar = buscarNaReceitaPelaChave }: {
+  titulares = titularesComCertificado, buscar = buscarNaReceitaPelaChave, proxima = proximaBuscaDoTitular }: {
   clienteId: string;
   onClose: () => void;
   /** a bancada e os testes injetam */
@@ -30,6 +30,8 @@ export function DanfeDasNotasGuardadasDialog({ clienteId, onClose, ler = candida
   /** quem pode consultar a nota pela chave (produtor com certificado ativo) e a consulta — a bancada e os testes injetam */
   titulares?: (clienteId: string) => Promise<string[]>;
   buscar?: (titularId: string, chave: string) => Promise<{ ok: boolean; frase: string }>;
+  /** BLOQUEIO-01 — quando o produtor pode pedir de novo (null = já pode) */
+  proxima?: (titularId: string) => Promise<string | null>;
 }) {
   const [linhas, setLinhas] = useState<Linha[] | null>(null);
   const [fase, setFase] = useState<'lendo' | 'pronto' | 'simulando' | 'gravando'>('lendo');
@@ -37,6 +39,10 @@ export function DanfeDasNotasGuardadasDialog({ clienteId, onClose, ler = candida
   const [frase, setFrase] = useState<string | null>(null);
   const [comCertificado, setComCertificado] = useState<string | null>(null);
   const [buscando, setBuscando] = useState<string | null>(null);
+  /* BLOQUEIO-01: antes da hora liberada pela Receita, o botão diz "próxima às HH:MM" e não chama */
+  const [proximaEm, setProximaEm] = useState<string | null>(null);
+  useEffect(() => { let vivo = true; if (comCertificado) void proxima(comCertificado).then((p) => { if (vivo) setProximaEm(p); }); return () => { vivo = false; }; },
+    [comCertificado, proxima, buscando]);
   useEffect(() => { let vivo = true; void titulares(clienteId).then((t) => { if (vivo) setComCertificado(t[0] ?? null); }); return () => { vivo = false; }; },
     [clienteId, titulares]);
   /* "Buscar na Receita" (a nota sem XML guardado): a consulta pela chave traz o XML para a caixa da Receita; depois, a linha gera de novo (simulação) */
@@ -118,9 +124,9 @@ export function DanfeDasNotasGuardadasDialog({ clienteId, onClose, ler = candida
                       <td className={TD_REGUA}>
                         {l.r?.ok === false && l.r.frase === FRASE_SEM_XML && (
                           <button type="button" className="h-[16px] w-[104px] whitespace-nowrap rounded-[3px] border border-primary/40 bg-card px-1 text-[9.5px] font-semibold text-primary hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={!comCertificado || buscando !== null || fase !== 'pronto'} data-testid="danfe-buscar-receita" onClick={() => { void buscarNaReceita(i); }}
+                            disabled={!comCertificado || buscando !== null || fase !== 'pronto' || !!proximaEm} data-testid="danfe-buscar-receita" onClick={() => { void buscarNaReceita(i); }}
                             title={comCertificado ? 'Consulta a nota pela chave na Receita (o XML completo). A próxima busca automática deste produtor espera 1 h.' : 'Sem certificado A1 ativo: cadastre o certificado do produtor para buscar pela chave.'}>
-                            {buscando === l.c.chave ? 'Buscando…' : 'Buscar na Receita'}
+                            {buscando === l.c.chave ? 'Buscando…' : proximaEm ? `próxima às ${horaCurta(proximaEm)}` : 'Buscar na Receita'}
                           </button>
                         )}
                       </td>
