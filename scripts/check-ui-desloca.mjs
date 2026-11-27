@@ -300,6 +300,15 @@ const CENARIOS = [
     ['o terceiro', botao(/Terceiro Exemplo/)], ['a PJ', botao(/Agropecuária Exemplo/)], ['o inativo', botao(/Produtor Antigo Exemplo/)],
     ['de volta à produtora', botao(/Produtora Sintética/)],
   ] },
+  /* REBANHO-ORGAO-01 F3 — a "Declaração ao órgão": trocar de fazenda (uma com o comprovante lido, outra sem) e soltar o PDF não movem o
+     cabeçalho, as abas, os passos, a área de soltar, a tabela nem o lado direito (colunas em px, cards de altura fixa, o chip com largura
+     reservada) */
+  { nome: 'declaracao-orgao', url: 'tela=declaracao-orgao', regiao: '[data-testid="declaracao-orgao"]', antes: (p) => espera(p, 1200), estados: [
+    ['a outra fazenda', botao(/^Fazenda Sintética Dois/)], ['soltar o comprovante', async (p) => {
+      await p.locator('[data-testid="input-pdf-orgao"]').setInputFiles([{ name: 'saldo.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF saldo') }]);
+      await espera(p, 1200); }],
+    ['de volta à primeira', botao(/^Fazenda Sintética Um/)],
+  ] },
   /* BOLETO D3d — a caixa por e-mail v2: trocar a aba (A resolver · Resolvidos · Ignorados), soltar arquivos, abrir a senha e clicar numa
      linha não movem a faixa das abas, a área de soltar, o cabeçalho nem o rodapé (o quadro da tabela é `data-desloca-livre`; os contadores
      das abas têm lugar reservado; o painel do arquivo ao lado tem largura fixa) */

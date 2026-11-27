@@ -1425,6 +1425,20 @@ const CENARIOS = [
     } }];
   })(),
   ...(() => {
+    /* REBANHO-ORGAO-01 F3 — a "Declaração ao órgão" (dado SINTÉTICO, `dados/declaracaoOrgao.ts`): com o comprovante lido (a célula editada,
+       o bloco que o sistema não separa, a divergência), a outra fazenda (nome comprido, sem PDF) e a vazia */
+    const T = [[1126, 579], [1280, 720], [1366, 768], [1440, 800], [1920, 1080]];
+    const pronto = async (p) => { await p.locator('[data-testid="tabela-evolucao"]').waitFor({ timeout: 20000 }); await p.waitForTimeout(700); };
+    const R = '[data-testid="declaracao-orgao"]';
+    return [
+      { nome: 'declaracao-orgao', url: 'tela=declaracao-orgao', tamanhos: T, regiao: R, antes: pronto },
+      { nome: 'declaracao-orgao-outra-fazenda', url: 'tela=declaracao-orgao', tamanhos: T, regiao: R, antes: async (p) => {
+        await pronto(p); await p.locator('[data-testid="declaracao-orgao"] button', { hasText: /^Fazenda Sintética Dois/ }).first().click(); await p.waitForTimeout(500);
+      } },
+      { nome: 'declaracao-orgao-vazia', url: 'tela=declaracao-orgao&v=vazia', tamanhos: T, regiao: R, antes: pronto },
+    ];
+  })(),
+  ...(() => {
     /* BOLETO D3d — a caixa por e-mail v2 (dado SINTÉTICO, `dados/caixaBoletos.ts`): "A resolver" com 6 e-mails (nota XML+DANFE, o pior caso
        com o valor no teto, os antigos com o PDF de 2 boletos, senha/escaneado/por nome/já ligado, sem anexo/recusado/Gmail) e os guardados;
        os arrastados; a senha; Resolvidos; Ignorados; o minimodal do Ignorar; a linha clicada (o PDF ao lado ≥1366); sem o "Lançar nota".

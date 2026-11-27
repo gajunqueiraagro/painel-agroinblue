@@ -2248,6 +2248,16 @@ if (tela === 'mesclar') {
       entrada={entrada} hoje={HOJE_DA_BANCADA} aoLancarNota={aoLancarNota} aoFechar={() => {}} />);
   };
   void montarCaixa();
+} else if (tela === 'declaracao-orgao') {
+  /* REBANHO-ORGAO-01 F3 — a "Declaração ao órgão" (a tela REAL) com a API e o leitor do PDF em memória (`dados/declaracaoOrgao.ts`,
+     SINTÉTICO). `&v=vazia` = nenhum PDF lido (IAGRO "—", declarar apagado com o motivo) */
+  const montarDeclaracao = async () => {
+    const { DeclaracaoOrgao } = await import('@/components/rebanho/orgao/DeclaracaoOrgaoTab');
+    const { apiDaDeclaracao, LER_PDF_DA_BANCADA, HOJE_DA_DECLARACAO } = await import('./dados/declaracaoOrgao');
+    montar(<DeclaracaoOrgao clienteId="cli" clienteNome="Cliente Bancada" api={apiDaDeclaracao(q.get('v') === 'vazia')} lerPdf={LER_PDF_DA_BANCADA}
+      hoje={HOJE_DA_DECLARACAO} />);
+  };
+  void montarDeclaracao();
 } else if (tela === 'anexar-boletos-caixa') {
   /* BOLETO D1d — o "Anexar vários boletos" com a coluna "Na caixa" (as parcelas gravadas e a caixa em memória, `dados/anexarBoletosCaixa.ts`) */
   const montarAnexar = async () => {

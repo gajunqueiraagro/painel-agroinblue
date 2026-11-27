@@ -15,6 +15,7 @@ export type V2Section =
   | 'conferencia-lancamentos' | 'conferencia-mensal'
   | 'resumo-pastos' | 'evolucao-categoria' | 'auditoria-tecnica'
   | 'auditoria-zoot' | 'valor-rebanho' | 'indicadores-zoot'
+  | 'declaracao-orgao'   // REBANHO-ORGAO-01 F3 — a declaração do rebanho ao órgão estadual (IAGRO/e-Saniagro)
   // financeiro — visão geral
   | 'financeiro-home' | 'financeiro-dashboard' | 'fluxo-caixa'
   | 'rateio-adm' | 'importacao-extratos' | 'importacao-custeio-txt' | 'recorrencias'
@@ -204,6 +205,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'mapa-geo-pastos',         label: 'Geo pastos',           status: 'ready', liberadaClientes: true },
           /* LOTES-03 F1 (Gabriel 06/11): o cadastro de lotes por assistente + a ficha (mock lotes-03-assistente.html) */
           { id: 'lotes',                   label: 'Lotes',                status: 'ready', liberadaClientes: true },
+          /* REBANHO-ORGAO-01 F3 (mock aprovado 23/11 13:38): maio e novembro, a declaração ao órgão de defesa (MS: IAGRO). Nasce SÓ do
+             admin: abrir ao gestor muda a matriz aprovada de perfil × tela (decisão do Gabriel, pedida no relatório da F3). */
+          { id: 'declaracao-orgao',        label: 'Declaração ao órgão',  status: 'ready' },
           { id: 'chuvas',                  label: 'Chuvas',               status: 'ready', liberadaClientes: true },
         ],
       },
@@ -439,7 +443,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'chuvas-lancamento': 'rebanho',
   'lancamentos-zoot': 'rebanho',
   'mapa-pastos': 'rebanho', 'fechamento': 'rebanho',
-  'mapa-geo-pastos': 'rebanho', 'resumo-pastos': 'rebanho', 'lotes': 'rebanho',
+  'mapa-geo-pastos': 'rebanho', 'resumo-pastos': 'rebanho', 'lotes': 'rebanho', 'declaracao-orgao': 'rebanho',
   'evolucao-categoria': 'rebanho',
   'conferencia-lancamentos': 'rebanho', 'conferencia-mensal': 'rebanho',
 

@@ -54,6 +54,7 @@ import { ChuvasTab } from '@/pages/ChuvasTab';
 import { MapaPastosTab } from '@/pages/MapaPastosTab';
 import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
 import { LotesTab } from '@/pages/LotesTab';
+import { DeclaracaoOrgaoTab } from '@/components/rebanho/orgao/DeclaracaoOrgaoTab';
 import { AuditoriaTecnicaTab } from '@/pages/AuditoriaTecnicaTab';
 import { AuditoriaZootecnicaTab } from '@/pages/AuditoriaZootecnicaTab';
 import { ResumoPastosTab } from '@/pages/ResumoPastosTab';
@@ -1392,6 +1393,8 @@ export default function V2Index() {
     );
     /* LOTES-03 F1 — Produção › Lotes (lista + ficha + assistente) */
     if (section === 'lotes') return <LotesTab />;
+    /* REBANHO-ORGAO-01 F3 — Produção › Declaração ao órgão */
+    if (section === 'declaracao-orgao') return <DeclaracaoOrgaoTab />;
     if (section === 'mapa-pastos') return (
       <MapaPastosTab
         onBack={mapaPastosOriginRef.current ? () => { mapaPastosOriginRef.current = false; setSection('fechamento'); } : undefined}
