@@ -7,8 +7,6 @@ import { fraseDoErroDoFornecedor } from '@/lib/fornecedores/erroDoCadastro';
 import { supabase } from '@/integrations/supabase/client';
 import { lerResolucoesDoBanco } from '@/v2/lib/importLanc/importLancamentosView';
 import { soDigitos } from '@/lib/financeiro/nfe/formatos';
-import type { UltimaClassificacao } from '@/lib/financeiro/nfe/proporLancamento';
-import { classificacaoDoHistorico } from '@/lib/financeiro/nfe/classificacaoDoHistorico';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { validarDocumento } from '@/lib/fornecedores/documentoFiscal';
 import { completarPeloEmitente, type CampoDoEmitente } from '@/lib/fornecedores/cadastroDoFornecedor';
@@ -17,7 +15,7 @@ import { lerJaLancados, type LancamentoJaLancado } from '@/lib/financeiro/nfe/ja
 import type { LiberacaoDireta } from '@/lib/financeiro/nfe/notaXLancamento';
 import type { CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import { lerResultadoCompletar, type ResultadoCompletar } from '@/lib/financeiro/nfe/notaCompletar';
-import { lerItensSugeridos, type ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
+import { lerItensSugeridos, lerSugestaoDoFornecedor, type ItemSugerido, type SugestaoDoFornecedor } from '@/lib/financeiro/nfe/sugestaoDosItens';
 import type { MotivoDaDiferenca } from '@/lib/financeiro/nfe/diferencaDaNota';
 
 /** Onde uma nota ja' esta' registrada — uma linha de `fn_documento_chave_ja_registrada`. */
@@ -99,24 +97,6 @@ export async function fornecedorPeloNome(clienteId: string, nome: string): Promi
   } catch (e) { return falhou(e); }
 }
 
-/** A classificacao que o historico do fornecedor sugere para a NOTA DE COMPRA: so' lancamentos vivos e classificados do MESMO tipo
- *  ("2-Saídas"; NOTA-CONTA-MESMO-TIPO-01 — antes era o ultimo de qualquer tipo e a compra de milho herdava "Venda de Fêmeas"); a conta
- *  mais usada nos 12 meses ate' o ultimo (`classificacaoDoHistorico`). */
-export async function ultimaClassificacaoDoFornecedor(clienteId: string, fornecedorId: string): Promise<UltimaClassificacao | null> {
-  const { data, error } = await supabase
-    .from('financeiro_lancamentos_v2')
-    .select('plano_conta_id, subcentro, macro_custo, grupo_custo, centro_custo, escopo_negocio, data_competencia, safra_id, cultura')
-    .eq('cliente_id', clienteId).eq('favorecido_id', fornecedorId).eq('cancelado', false).eq('tipo_operacao', '2-Saídas')
-    .not('plano_conta_id', 'is', null)
-    .order('data_competencia', { ascending: false }).order('created_at', { ascending: false })
-    .limit(200);
-  const linhas = (error ? [] : data ?? []).flatMap((l) => (l.plano_conta_id && l.subcentro && l.data_competencia ? [{
-    plano_conta_id: l.plano_conta_id, subcentro: l.subcentro, macro_custo: l.macro_custo ?? null, grupo_custo: l.grupo_custo ?? null,
-    centro_custo: l.centro_custo ?? null, escopo_negocio: l.escopo_negocio ?? null, data: l.data_competencia,
-    safra_id: l.safra_id ?? null, cultura: l.cultura ?? null,
-  }] : []));
-  return classificacaoDoHistorico(linhas);
-}
 
 /**
  * NOTA-NFSE-LEITURA-02 (Gabriel 08/11, D2 a) — a fazenda do HISTORICO do fornecedor: os lancamentos vivos dos cadastros com a MESMA RAIZ
@@ -447,6 +427,61 @@ export async function sugestaoDosItensDaNota(clienteId: string, chave: string | 
     if (e2) return falhou(e2);
     return deu(lerItensSugeridos(data));
   } catch (e) { return falhou(e); }
+}
+/**
+ * NOTA-ITENS-SUGESTAO (Gabriel 27/11, lote 114360) — a sugestão POR ITEM da nota que ainda NÃO está gravada (Novo · do XML, Criar pelo
+ * extrato, Lançar nota do Caixa, Notas da Receita, Ler a NF): a MESMA escada da nota gravada (`fn_itens_sugerir_conta`), com os itens lidos
+ * do arquivo. Devolve também o "último deste fornecedor" (o último degrau da escada). P146: falha = `{ ok: false }`.
+ */
+export interface SugestaoDaNota { itens: ItemSugerido[]; fornecedor: SugestaoDoFornecedor | null }
+export async function sugestaoPelosItens(clienteId: string, e: {
+  emitenteDocumento: string; destIe: string | null; emissao: string | null; favorecidoId: string | null;
+  itens: readonly { nItem: number; codigo: string | null; descricao: string; ncm: string | null }[];
+}): Promise<Consulta<SugestaoDaNota>> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_itens_sugerir_conta', {
+      p_cliente_id: clienteId, p_emitente_documento: soDigitos(e.emitenteDocumento) || null, p_dest_ie: e.destIe || null,
+      p_emissao: e.emissao || null, p_favorecido_id: e.favorecidoId || null,
+      p_itens: e.itens.map((i) => ({ n_item: i.nItem, codigo: i.codigo, descricao: i.descricao, ncm: i.ncm })),
+    });
+    if (error) return falhou(error);
+    return deu({ itens: lerItensSugeridos(data), fornecedor: lerSugestaoDoFornecedor(data) });
+  } catch (x) { return falhou(x); }
+}
+
+/**
+ * Q3 (Gabriel 27/11) — a conta que o OPERADOR escolheu para um item (a resposta obra × manutenção, ou a conta trocada na vista Contas)
+ * vira a REGRA do item pelo escritor que já existe (`fn_item_regra_gravar`: este produto deste fornecedor → esta conta, com trilha):
+ * na próxima nota o mesmo produto já vem decidido. Só depois do Salvar (os itens se gravam pela chave). Devolve as frases do que não gravou.
+ */
+export async function lembrarContasDosItens(clienteId: string, chave: string | null, escolhas: ReadonlyMap<number, string>, motivo: string): Promise<string[]> {
+  const digitos = soDigitos(chave ?? '');
+  if (digitos.length !== 44 || !escolhas.size) return [];
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: `nota_fiscal` fora dos tipos gerados
+    const { data: nota, error } = await (supabase as any).from('nota_fiscal').select('id').eq('cliente_id', clienteId).eq('chave_acesso', digitos).limit(1).maybeSingle();
+    if (error) return [String(error.message ?? error)];
+    const notaId: unknown = nota && typeof nota === 'object' ? Reflect.get(nota, 'id') : null;
+    if (typeof notaId !== 'string' || !notaId) return ['a nota ainda não está gravada'];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: `nota_fiscal_itens` fora dos tipos gerados
+    const { data: itens, error: e2 } = await (supabase as any).from('nota_fiscal_itens').select('id, n_item').eq('nota_id', notaId);
+    if (e2) return [String(e2.message ?? e2)];
+    const idDoItem = new Map<number, string>();
+    for (const i of Array.isArray(itens) ? itens : []) {
+      const id: unknown = Reflect.get(i, 'id'); const n = Number(Reflect.get(i, 'n_item'));
+      if (typeof id === 'string' && n > 0) idDoItem.set(n, id);
+    }
+    const falhas: string[] = [];
+    for (const [n, plano] of escolhas) {
+      const id = idDoItem.get(n);
+      if (!id) { falhas.push(`item ${n}: não achei o item gravado`); continue; }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { error: e3 } = await (supabase as any).rpc('fn_item_regra_gravar', { p_item_id: id, p_plano_conta_id: plano, p_motivo: motivo, p_simular: false });
+      if (e3) falhas.push(`item ${n}: ${String(e3.message ?? e3)}`);
+    }
+    return falhas;
+  } catch (x) { return [String(x)]; }
 }
 /** O que nasceu DEPOIS da transação (as parcelas que faltavam, os documentos da nota): fica na operação para o desfazer. */
 export async function registrarNaOperacao(operacao: string, criados: readonly string[], documentos: readonly string[]): Promise<string | null> {

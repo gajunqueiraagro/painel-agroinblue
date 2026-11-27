@@ -19,7 +19,8 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), fro
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: toastErro, info: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => ({
   iePorFazenda: async () => ({}), aliasesDasFazendas: async () => ({}), fornecedorPeloNome: async () => ({ ok: true, valor: null }), notaJaRegistrada: async () => ({ ok: true, valor: [] }),   // P146: Consulta
-  ultimaClassificacaoDoFornecedor: async () => null, gravarDocumentoNoCadastro: async () => null,
+  /* NOTA-ITENS-SUGESTAO — a escada única do banco (nenhuma sugestão) */
+  sugestaoPelosItens: async () => ({ ok: true, valor: { itens: [], fornecedor: null } }), gravarDocumentoNoCadastro: async () => null,
 }));
 
 import { FormDocumento } from '@/components/financeiro-v2/AbaDocumentosLancamento';

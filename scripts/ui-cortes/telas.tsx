@@ -27,6 +27,8 @@ import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialo
 import { lerNFe } from '@/lib/financeiro/nfe/lerNFe';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { proporLancamento } from '@/lib/financeiro/nfe/proporLancamento';
+import { sugestaoParaAProposta } from '@/lib/financeiro/nfe/sugestaoNaProposta';
+import { itensDoXml } from '@/lib/financeiro/nfe/itensDaNota';
 import { arquivoXmlDaNota, prefillDaNota } from '@/lib/financeiro/nfePrefill';
 import { montarNFe, utf8 } from '@/lib/financeiro/nfe/__fixtures__/notas';
 import { TRAVAS_DO_MODO_OC } from '@/lib/oc/lancarPeloModal';
@@ -3812,6 +3814,38 @@ if (v === 'xml') {
   const resolucao = resolverEmitente(lido.nota.emitente, [AGRO], null);
   const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Exemplo', ie: null }], emitente: resolucao,
     favorecidoId: resolucao.propostoId, ultima: { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' } });
+  props.prefill = prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, resolucao,
+    ocorrencias: [{ origem: 'lancamento', documento_id: 'd1', lancamento_id: 'l9', operacao_id: null, operacao_tipo: null, numero: '12345', serie: '1', descricao: 'Compra anterior', data: '2026-09-30', valor: 16238 }],
+    arquivo: arquivoXmlDaNota(bytes, 'NFe-12345.XML') } as any);
+  props.documentosAntesDeSalvar = true;
+}
+/* NOTA-ITENS-SUGESTAO (Gabriel 27/11, mock aprovado 10:47) — a sugestão da escada única na proposta da nota (os 6 itens sintéticos do XML):
+   `xmlsug1` = todos na mesma conta (a faixa "pelos itens (6): …"); `xmlsug3` = 3 contas + o arame que PERGUNTA obra × manutenção (o aviso
+   pequeno "· ver por item"; a aba Itens › Contas com a pergunta, a origem e o total por conta). As contas a mais só nestas cenas. */
+if (v === 'xmlsug1' || v === 'xmlsug3') {
+  CLASSIF.push(
+    { id: 'pl-vac', subcentro: 'Vacinas e Vermífugos', centro_custo: 'Sanidade', grupo_custo: 'Sanidade', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
+    { id: 'pl-bri', subcentro: 'Brincos de Identificação', centro_custo: 'Sanidade', grupo_custo: 'Sanidade', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
+    { id: 'pl-mcer', subcentro: 'Manutenção de Cercas Pecuária', centro_custo: 'Manutenção Fazenda', grupo_custo: 'Manutenção', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
+    { id: 'pl-icer', subcentro: 'Investimento em Cercas Pecuária', centro_custo: 'Infraestrutura', grupo_custo: 'Investimento na Fazenda', macro_custo: 'Investimento na Fazenda', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' });
+  const bytes = utf8(montarNFe({ duplicatas: [['001', '2026-10-30', '8119.00'], ['002', '2026-11-29', '8119.00']] }));
+  const lido: any = lerNFe(bytes);
+  const resolucao = resolverEmitente(lido.nota.emitente, [AGRO], null);
+  const lidos: any = itensDoXml(bytes);
+  const conta = (n: number, plano: string, sub: string, fonte: string, origem: string) =>
+    ({ itemId: null, nItem: n, planoContaId: plano, subcentro: sub, fonte, confianca: 'alta', porque: `${origem} (sintético)`, origem, pergunta: null });
+  const itens = v === 'xmlsug1'
+    ? [conta(1, 'pl-nut', 'Nutrição Engorda', 'mesmo_produto', 'mesmo produto em 14/08'), conta(2, 'pl-nut', 'Nutrição Engorda', 'ncm_cliente', 'NCM 2309 · 8× no cliente'),
+      conta(3, 'pl-nut', 'Nutrição Engorda', 'fornecedor', 'último deste fornecedor'), conta(4, 'pl-nut', 'Nutrição Engorda', 'regra', 'regra sua'),
+      conta(5, 'pl-nut', 'Nutrição Engorda', 'regra', 'regra sua'), conta(6, 'pl-nut', 'Nutrição Engorda', 'regra', 'regra sua')]
+    : [conta(1, 'pl-nut', 'Nutrição Engorda', 'mesmo_produto', 'mesmo produto em 14/08'), conta(2, 'pl-nut', 'Nutrição Engorda', 'ncm_cliente', 'NCM 2309 · 8× no cliente'),
+      conta(3, 'pl-nut', 'Nutrição Engorda', 'fornecedor', 'último deste fornecedor'), conta(4, 'pl-vac', 'Vacinas e Vermífugos', 'familia', 'família sanidade animal'),
+      { itemId: null, nItem: 5, planoContaId: null, subcentro: null, fonte: 'familia_pergunta', confianca: null, porque: 'Material de cerca (sintético)', origem: 'cerca · obra ou manutenção?',
+        pergunta: { manutencao: { planoContaId: 'pl-mcer', subcentro: 'Manutenção de Cercas Pecuária' }, obra: { planoContaId: 'pl-icer', subcentro: 'Investimento em Cercas Pecuária' } } },
+      conta(6, 'pl-bri', 'Brincos de Identificação', 'mesmo_produto', 'mesmo produto em 02/06')];
+  const sugestaoDosItens = sugestaoParaAProposta({ itens, fornecedor: { planoContaId: 'pl-nut', subcentro: 'Nutrição Engorda', ultimo: '2026-08-14' } }, lidos.itens, lido.nota.emissao);
+  const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Exemplo', ie: null }], emitente: resolucao,
+    favorecidoId: resolucao.propostoId, ultima: null, sugestaoDosItens });
   props.prefill = prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, resolucao,
     ocorrencias: [{ origem: 'lancamento', documento_id: 'd1', lancamento_id: 'l9', operacao_id: null, operacao_tipo: null, numero: '12345', serie: '1', descricao: 'Compra anterior', data: '2026-09-30', valor: 16238 }],
     arquivo: arquivoXmlDaNota(bytes, 'NFe-12345.XML') } as any);

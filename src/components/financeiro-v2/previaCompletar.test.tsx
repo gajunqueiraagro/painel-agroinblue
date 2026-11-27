@@ -189,8 +189,8 @@ describe('P163 v4 — uma linha por parcela, na ordem da casa', () => {
 
 /* DA-NOTA-CLASSIF-01 (Gabriel 24/11 09:17) — a sugestão pelos itens (PLANO-SUGESTAO-01 B2) na etapa 2: só sugere; o "usar" põe no "Aplicar a todas" */
 describe('DA-NOTA-CLASSIF-01 — a sugestão da conta pelos itens', () => {
-  const item = (n: number, plano: string, subcentro: string): ItemSugerido => ({ itemId: `i${n}`, nItem: n, planoContaId: plano, subcentro, fonte: 'a',
-    confianca: 'alta', porque: 'Já usado 4× neste cliente.' });
+  const item = (n: number, plano: string, subcentro: string): ItemSugerido => ({ itemId: `i${n}`, nItem: n, planoContaId: plano, subcentro, fonte: 'mesmo_produto',
+    confianca: 'alta', porque: 'Já usado 4× neste cliente.', origem: 'mesmo produto em 14/08', pergunta: null });
   it('sem a nota gravada: diz "depois de gravar a nota" (nunca vazio calado)', async () => {
     abrir();
     expect(await screen.findByTestId('previa-sugestao-sem-nota')).toBeTruthy();

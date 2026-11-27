@@ -41,7 +41,10 @@ const consultas = vi.hoisted(() => ({
   /* P146 — as consultas que decidem devolvem `Consulta` ({ ok, valor } | { ok: false, motivo }) */
   fornecedorPeloNome: vi.fn(async (): Promise<Consulta<string | null>> => ({ ok: true, valor: null })),
   notaJaRegistrada: vi.fn(async (_c: string, _k: string): Promise<Consulta<unknown[]>> => ({ ok: true, valor: [] })),
-  ultimaClassificacaoDoFornecedor: vi.fn(async () => null as unknown),
+  /* NOTA-ITENS-SUGESTAO — a escada única do banco (nenhuma sugestão, por padrao) */
+  sugestaoDosItensDaNota: vi.fn(async (_c: string, _k: string | null): Promise<Consulta<unknown[] | null>> => ({ ok: true, valor: null })),
+  lembrarContasDosItens: vi.fn(async (..._a: unknown[]): Promise<string[]> => []),
+  sugestaoPelosItens: vi.fn(async (_c: string, _e: unknown): Promise<Consulta<{ itens: unknown[]; fornecedor: unknown }>> => ({ ok: true, valor: { itens: [], fornecedor: null } })),
   gravarDocumentoNoCadastro: vi.fn(async () => null as string | null),
   /* NOTA-FORNECEDOR-COMPARAR-01 — o cadastro so' muda pela comparacao (o mesmo modal da previa) */
   completarCadastroPeloXml: vi.fn(async () => null as string | null),
@@ -72,6 +75,7 @@ import { lerNFe } from '@/lib/financeiro/nfe/lerNFe';
 import { proporLancamento, FRASE_SEM_DUPLICATAS, type UltimaClassificacao } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente, type ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { arquivoXmlDaNota, danfeDaNota, pendenteDaNota, prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
+import type { ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
 import { documentoFormatado } from '@/lib/financeiro/nfe/formatos';
 import { CTE, EMITENTE_CNPJ, chaveDe, montarNFe, utf8, type OpcoesNota } from '@/lib/financeiro/nfe/__fixtures__/notas';
 import type { Consulta, OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
@@ -112,7 +116,7 @@ beforeEach(() => {
   for (const f of Object.values(consultas)) f.mockClear();
   consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: true, valor: [] }));
   consultas.fornecedorPeloNome.mockImplementation(async () => ({ ok: true, valor: null }));
-  consultas.ultimaClassificacaoDoFornecedor.mockImplementation(async () => null);
+  consultas.sugestaoPelosItens.mockImplementation(async () => ({ ok: true, valor: { itens: [], fornecedor: null } }));
   consultas.notaJaLancada.mockImplementation(async () => ({ ok: true, valor: [] }));
 });
 
@@ -236,7 +240,7 @@ describe('tela A — a lista de notas', () => {
     soltar([arquivo('a.xml', montarNFe())]);
     await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
     expect(consultas.fornecedorPeloNome).not.toHaveBeenCalled();
-    expect(consultas.ultimaClassificacaoDoFornecedor).toHaveBeenCalledWith('cli', 'agro');
+    expect(consultas.sugestaoPelosItens).toHaveBeenCalledWith('cli', expect.objectContaining({ favorecidoId: 'agro' }));
   });
   it('fornecedor achado pelo nome: o pacote leva "pelo nome" e o cadastro sem documento', async () => {
     consultas.fornecedorPeloNome.mockImplementation(async () => ({ ok: true, valor: 'agro' }));
@@ -809,6 +813,42 @@ describe('A — dividir pelos itens no NOVO lançamento', () => {
     expect(pedido.p_mapa).toEqual(['pl-san', 'pl-nut', 'pl-nut', 'pl-nut', 'pl-nut', 'pl-nut'].map((plano_conta_id, k) => ({ n_item: k + 1, plano_conta_id })));
     expect(chamadas('fn_cancelar_lancamento_auditoria')).toHaveLength(0);
     expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1);
+  });
+
+  /* NOTA-ITENS-SUGESTAO (Gabriel 27/11, mock aprovado 10:47) — a sugestão da escada única na proposta: o aviso pequeno na faixa, "ver por item"
+     abre Itens › Contas com a pergunta obra × manutenção; respondida, "Usar divisão" e o Salvar dividem; a escolha vira regra do item (Q3) */
+  it('NOTA-ITENS-SUGESTAO: aviso "N itens em X classificações · ver por item" → Contas com a pergunta → Usar divisão → Salvar divide e lembra a escolha', async () => {
+    bancoQueAceita();
+    const CLASSIF3: ClassificacaoItem[] = [...CLASSIF,
+      { id: 'pl-man', subcentro: 'Manutenção de Instalações Pecuária', centro_custo: 'Manutenção', grupo_custo: 'Manutenção', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
+      { id: 'pl-inv', subcentro: 'Investimento em Instalações Pecuária', centro_custo: 'Infraestrutura', grupo_custo: 'Investimentos', macro_custo: 'Investimento na Fazenda', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' }];
+    const d = notaComItens({ duplicatas: null });
+    const item = (n: number): ItemSugerido => n === 1
+      ? { itemId: null, nItem: 1, planoContaId: null, subcentro: null, fonte: 'familia_pergunta', confianca: null, porque: 'Material de construção', origem: 'construção · obra ou manutenção?',
+          pergunta: { manutencao: { planoContaId: 'pl-man', subcentro: 'Manutenção de Instalações Pecuária' }, obra: { planoContaId: 'pl-inv', subcentro: 'Investimento em Instalações Pecuária' } } }
+      : { itemId: null, nItem: n, planoContaId: 'pl-nut', subcentro: 'Nutrição Engorda', fonte: 'mesmo_produto', confianca: 'alta', porque: '', origem: 'mesmo produto em 14/08', pergunta: null };
+    d.proposta = { ...d.proposta, classificacao: { ...ULTIMA, macro_custo: null, grupo_custo: null, centro_custo: null, escopo_negocio: null }, origens: { ...d.proposta.origens, subcentro: 'pelos itens' },
+      sugestaoDosItens: { itens: [1, 2, 3, 4, 5, 6].map(item), varias: true, porque: 'cada item', frase: 'A nota tem 6 itens em 1 classificação (1 a decidir: obra ou manutenção)' } };
+    const m = montarModal({ prefill: { ...comConta(d), data_vencimento: '2026-10-30' }, classificacoes: CLASSIF3 });
+    await screen.findByDisplayValue('16.238,00');
+    /* a conta chegou só com o id: o resto da linha do plano vem do plano carregado */
+    await waitFor(() => expect(combo('Nutrição Engorda')).toBe(true));
+    const faixa = await screen.findByTestId('origem-xml-subcentro');
+    expect(faixa.textContent).toBe('A nota tem 6 itens em 1 classificação (1 a decidir: obra ou manutenção)ver por item');
+    await waitFor(() => expect(screen.getAllByRole('tab').some((t) => /Itens da nota/.test(t.textContent ?? ''))).toBe(true));
+    fireEvent.click(screen.getByTestId('ver-por-item'));
+    expect((await screen.findByTestId('contas-frase')).textContent).toBe('6 itens em 1 conta · 1 espera obra ou manutenção (item 1)');
+    expect(screen.getByTestId('origem-do-item-2').textContent).toBe('mesmo produto em 14/08');
+    fireEvent.click(screen.getByTestId('pergunta-1-manutencao'));
+    const usar = screen.getByTestId('contas-dividir');
+    expect(usar.textContent).toBe('Usar divisão (2 contas)');
+    fireEvent.click(usar);
+    await aba(/Geral/);
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(m.onClose).toHaveBeenCalled());
+    const mapa = argsDe('fn_lancamento_dividir_pelos_itens').p_mapa;
+    expect(Array.isArray(mapa) ? [...mapa].sort((x, y) => Number(Reflect.get(x, 'n_item')) - Number(Reflect.get(y, 'n_item'))) : mapa).toEqual(['pl-man', 'pl-nut', 'pl-nut', 'pl-nut', 'pl-nut', 'pl-nut'].map((plano_conta_id, k) => ({ n_item: k + 1, plano_conta_id })));
+    expect(consultas.lembrarContasDosItens).toHaveBeenCalledWith('cli', d.proposta.documento.chaveAcesso, new Map([[1, 'pl-man']]), 'Escolhido no lançamento da NF 000.012.345');
   });
 
   it('a vista, a divisao RECUSADA: o recem-criado e\' cancelado, a frase fica ao lado do botao e o modal continua aberto', async () => {

@@ -48,7 +48,8 @@ const consultas = vi.hoisted(() => ({
   desfazerIeDaFazenda: vi.fn(async (): Promise<string | null> => null),
   fornecedorPeloNome: vi.fn(async (): Promise<Consulta<string | null>> => ({ ok: true, valor: null })),
   notaJaRegistrada: vi.fn(async (): Promise<Consulta<unknown[]>> => ({ ok: true, valor: [] })),
-  ultimaClassificacaoDoFornecedor: vi.fn(async (): Promise<unknown> => null),
+  /* NOTA-ITENS-SUGESTAO — a escada única do banco (nenhuma sugestão) */
+  sugestaoPelosItens: vi.fn(async (): Promise<unknown> => ({ ok: true, valor: { itens: [], fornecedor: null } })),
   fornecedorPeloDocumento: vi.fn(async (_c: string, _d: string): Promise<Consulta<{ id: string; nome: string; ativo: boolean } | null>> => ({ ok: true, valor: null })),
   usoDoFornecedor: vi.fn(async (_f: string): Promise<{ lancamentos: number; ultimo: string | null } | null> => ({ lancamentos: 3, ultimo: '2026-09-01' })),
   /* P128b — completar com a nota: a prévia é a própria função com `simular`; por padrão aceita tudo e devolve as linhas do pedido */
