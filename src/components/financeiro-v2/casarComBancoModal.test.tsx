@@ -66,6 +66,9 @@ vi.mock('@/components/financeiro-v2/EspelhoConciliacaoTab', () => ({ MOTIVO_CASA
 
 import { CasarComBancoModal, CasarN1Modal, CasarBlocoModal, sentidoDaDiferenca, valorAbsorvendo, fraseDaRecusa, ONDE_DESFAZER_BLOCO } from './CasarComBancoModal';
 
+/* gate 26/11: a tabela dos levados só tem as colunas extras (Fornecedor · NF · Faz. · Ativ. · Plano) de 1100px; o jsdom abre a 1024 */
+Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 });
+
 const EXTRATO = { extrato_id: 'e-vivo', data: '2026-09-01', historico: 'Vivo Celular - VIVO MOVEL - MS', valor: -506.51 };
 const VIVO: LevadoInicial = { lancamento_id: 'l-vivo', descricao: 'Vivo Casa', fornecedor: 'Telefonica Brasil S.A.', valor_assinado: -506.84 };
 
@@ -170,11 +173,12 @@ describe('o modal não corta nada (a estrutura que a medida da tela exigiu)', ()
     expect(dialogo.className).toContain('w-[1200px]');
     const linha = screen.getByTestId('levado-linha');
     const celulas = [...linha.querySelectorAll('td')].map((td) => td.textContent);
-    expect(celulas.slice(0, 3)).toEqual(['08/09/2026', LONGO.descricao, LONGO.fornecedor]);
-    expect(celulas[7]).toBe('Programado');
-    expect(linha.querySelectorAll('td')[1].getAttribute('title')).toBe(LONGO.descricao);
-    expect(linha.querySelectorAll('td')[2].getAttribute('title')).toBe(LONGO.fornecedor);
-    expect(linha.className).toContain('h-[19px]');
+    /* CONC-SUGESTOES-V2 C: Venc. · Pgto. (a data do banco) · Δ dias logo no começo; a linha a 26px (a régua) */
+    expect(celulas.slice(0, 5)).toEqual(['08/09/2026', '01/09/2026', '−7', LONGO.descricao, LONGO.fornecedor]);
+    expect(celulas[9]).toBe('Programado');
+    expect(linha.querySelectorAll('td')[3].getAttribute('title')).toBe(LONGO.descricao);
+    expect(linha.querySelectorAll('td')[4].getAttribute('title')).toBe(LONGO.fornecedor);
+    expect(linha.className).toContain('h-[26px]');
     expect(screen.getByTestId('usar-valor-banco').className).toContain('h-[17px]');
     const cab = within(dialogo).getAllByText('Banco do Brasil · 01/09').find((e) => e.className.includes('opacity-90'))!;
     expect(cab.className).not.toContain('truncate');
@@ -186,7 +190,8 @@ describe('o levado sem vencimento nem status mostra "—" (dado ausente), nunca 
     montar([VIVO]);
     await frase();
     const c = [...screen.getByTestId('levado-linha').querySelectorAll('td')].map((td) => td.textContent);
-    expect([c[0], c[1], c[2], c[4], c[5], c[6], c[7]]).toEqual(['—', 'Vivo Casa', 'Telefonica Brasil S.A.', '—', '—', '—', '—']);
+    /* CONC-SUGESTOES-V2 C: Venc. · Pgto. · Δ dias · Descrição · Fornecedor · NF · Faz. · Ativ. · Plano · Status */
+    expect([c[0], c[2], c[3], c[4], c[6], c[7], c[8], c[9]]).toEqual(['—', '—', 'Vivo Casa', 'Telefonica Brasil S.A.', '—', '—', '—', '—']);
   });
 });
 

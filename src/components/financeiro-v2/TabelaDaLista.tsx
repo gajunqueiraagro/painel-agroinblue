@@ -68,9 +68,11 @@ export function ThDaLista({ recuo, ordenar, fixa, semTexto = false, separador = 
 /** A linha: clicável (abre) ou não, e marcada pela caixinha. `testid`/`dadoAcao`: só as listas da Conciliação (o Financeiro não os passa). */
 /** `zebra` (LANC-FILTROS-02a, só a lista de Lançamentos): a linha ÍMPAR da lista — pelo índice no dado, nunca `nth-child` (a lista é virtual)
  *  — ganha o fundo suave em TODAS as células, inclusive as congeladas (que têm fundo próprio). Marcada, vale a marca. */
-export function LinhaDaLista({ marcada, abrir, testid, dadoAcao, zebra = false, children }: { marcada: boolean; abrir?: () => void; testid?: string; dadoAcao?: string; zebra?: boolean; children: ReactNode }) {
+export function LinhaDaLista({ marcada, abrir, testid, dadoAcao, zebra = false, classe, children }: { marcada: boolean; abrir?: () => void; testid?: string; dadoAcao?: string; zebra?: boolean;
+  /** CONC-SUGESTOES-V2: o destaque da linha (a exata das Sugestões) — classes a mais no `tr` */
+  classe?: string; children: ReactNode }) {
   return (
-    <tr className={`linha-da-lista border-b hover:bg-muted/50 transition-colors${abrir ? ' cursor-pointer' : ''} ${marcada ? 'bg-primary/5' : ''}${zebra && !marcada ? ' [&>td]:bg-[#fafbfd]' : ''}`}
+    <tr className={`linha-da-lista border-b hover:bg-muted/50 transition-colors${abrir ? ' cursor-pointer' : ''} ${marcada ? 'bg-primary/5' : ''}${zebra && !marcada ? ' [&>td]:bg-[#fafbfd]' : ''}${classe ? ` ${classe}` : ''}`}
       onClick={abrir} data-testid={testid} data-acao={dadoAcao}>
       {children}
     </tr>
@@ -83,7 +85,8 @@ export function CelulaCaixinha({ marcada, alternar, desabilitada, solta = false 
   return (
     <td className={solta ? 'px-1 py-1 align-middle text-center bg-background' : 'px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background'}
       onClick={(e) => e.stopPropagation()}>
-      <Checkbox checked={marcada} onCheckedChange={alternar} disabled={desabilitada} className="h-3 w-3" />
+      {/* gate 26/11 (desloca): marcada, a caixa de 12px desenhava o ✓ de 16px e a linha crescia ~2px — nas listas da Conciliação (`solta`) o ✓ cabe na caixa */}
+      <Checkbox checked={marcada} onCheckedChange={alternar} disabled={desabilitada} className={solta ? 'h-3 w-3 [&_svg]:h-2.5 [&_svg]:w-2.5' : 'h-3 w-3'} />
     </td>
   );
 }

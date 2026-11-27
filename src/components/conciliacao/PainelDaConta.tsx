@@ -28,7 +28,7 @@ import {
 import { useConciliacaoDoMes, type MovimentoConciliacao } from '@/hooks/useConciliacaoDoMes';
 import { buscarSugestoesDoMes, type RespostaDoMotor } from '@/lib/conciliacao/loteDeSugestoes';
 import { PreviaDaFatura } from '@/components/conciliacao/PreviaDaFatura';
-import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
+import { SugestoesDoMovimento } from '@/components/conciliacao/SugestoesDoMovimento';
 import {
   MAX_CARTOES_NA_FAIXA, arquivosDoMes, formatoDoArquivo, ordenarArquivos, periodoCurto, resumoDosArquivos, sobreposicoesDePeriodo,
   type ArquivoDoMes, type ColunaDosArquivos, type ComprovanteDoMes, type FormatoDoArquivo,
@@ -545,7 +545,7 @@ function CasarDoPainel({ clienteId, contaId, anoMes, linha, aoConferencia, aoAbr
                   <td className={cn(TD, 'text-right', l.valor < 0 ? 'text-[#c0392b]' : 'text-[#1e8449]')}>{moeda(l.valor)}</td>
                   <td className={cn(TD, COR_DO_TOM[l.tom])} title={`${MARCA_DO_TOM[l.tom]}${l.titulo}`} data-testid="painel-casar-sugestao">{MARCA_DO_TOM[l.tom]}{l.sugestao}</td>
                   <td className={TD}><button type="button" className="text-[10px] text-[#1f5fbf] hover:underline" data-testid="painel-casar-acao"
-                    title={l.acao === 'casar' ? 'abre a estação com a sugestão (a prévia antes de gravar)' : 'procurar no histórico ou criar o lançamento (na estação)'}
+                    title={l.acao === 'casar' ? 'abre as Sugestões para casar (a prévia antes de gravar)' : 'procurar no histórico ou criar o lançamento (nas Sugestões para casar)'}
                     onClick={() => setEstacao(semPar.find((m) => m.id === l.id) ?? null)}>{l.acao}</button></td>
                 </tr>
               ))}</tbody>
@@ -553,8 +553,9 @@ function CasarDoPainel({ clienteId, contaId, anoMes, linha, aoConferencia, aoAbr
             {soSistema > 0 && <p className="mt-1.5 text-[10px] text-[#6b7a8f]">E {soSistema} {soSistema === 1 ? 'lançamento do sistema está' : 'lançamentos do sistema estão'} sem extrato: a "Conferência lado a lado" mostra os dois lados.</p>}
           </div>
         )}
-      {estacao && <EstacaoConciliar movimento={estacao} contaBancariaId={contaId} aoFechar={() => setEstacao(null)}
-        aoMudar={async () => { await recarregar(); }} />}
+      {/* CONC-SUGESTOES-V2 MODAL ÚNICO (Gabriel 06:56): o mesmo "Sugestões para casar" da Conferência — a estação como 3º modal saiu */}
+      {estacao && clienteId && <SugestoesDoMovimento movimento={{ id: estacao.id, data: estacao.data_movimento, historico: estacao.descricao, valor: estacao.valor }}
+        clienteId={clienteId} contaId={contaId} aoFechar={() => setEstacao(null)} aoMudar={async () => { setEstacao(null); await recarregar(); }} />}
     </Trabalho>
   );
 }

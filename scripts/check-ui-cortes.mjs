@@ -1875,7 +1875,9 @@ const CENARIOS = [
   { nome: 'contas-lista-longo', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO },
   /* CONTAS-OF-LINHA-01 — a coluna "Open Finance" com o link do titular vivo, e o modal do "Conectar" da linha (altura fixa) */
   { nome: 'contas-of-link', url: 'tela=contas&barra=32&n=longo&of=link', tamanhos: TAMANHOS_DO_CONTRATO },
-  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-conectar-linha"]',
+  /* CONTAS-BANCARIAS-LISTA-01: abaixo de ~900 px a coluna Open Finance sai da lista (o Nome nunca abaixo de 160 px) — o "Conectar" da linha
+     só existe de 1000 px para cima */
+  { nome: 'contas-of-conectar', url: 'tela=contas&barra=32&of=conectar', tamanhos: TAMANHOS_DO_CONTRATO.filter(([w]) => w >= 1000), regiao: '[data-testid="openfinance-conectar-linha"]',
     antes: async (p) => { await p.locator('[data-testid="openfinance-termo-aceito"]').waitFor(); await p.waitForTimeout(300); } },
   /* OPENFINANCE-PRONTO-NJ-01 (1)+(7) — "Bancos conectados" como a Pluggy vê: nome, Empresa, os 4 estados e a frase inteira das que não completaram */
   { nome: 'contas-of-lista', url: 'tela=contas&barra=32&of=lista', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="openfinance-desconectar-dialogo"]',
@@ -1887,6 +1889,16 @@ const CENARIOS = [
   /* CARTAO-LANCAMENTO-01 — o cadastro do cartão: Dia de fechamento e Dia de vencimento no lugar de Agência e Conta, e a explicação embaixo */
   { nome: 'contas-editar-cartao', url: 'tela=contas&barra=32&n=longo&v=editar&aba=dados&cartao=1', tamanhos: [...TAMANHOS_DO_CONTRATO, [1366, 768]],
     regiao: '[data-testid="modal-conta-bancaria"]' },
+  /* CONTA-INATIVAR-DATA-01 — "Inativa desde" na aba Dados: desmarcar "Ativa", escolher a data; a recusa da prévia (o campo vermelho e o
+     rodapé "Falta: … mova-os antes de inativar") e a conferência que passa, nos tamanhos do contrato */
+  ...[['contas-editar-inativar-recusa', 'recusa'], ['contas-editar-inativar-ok', 'ok']].map(([nome, v]) => ({ nome,
+    url: `tela=contas&barra=32&v=editar&aba=dados&inativar=${v}`, tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]',
+    antes: async (p) => {
+      await p.locator('[data-testid="campo-situacao"]').click();
+      const c = p.locator('[data-testid="campo-inativa-desde-bloco"] input'); await c.fill('15/02/2026'); await c.blur();
+      await p.locator('[data-testid="campo-inativa-desde-frase"]', { hasText: v === 'ok' ? 'Confere' : 'mova-os' }).waitFor({ state: 'attached' });
+      await p.waitForTimeout(300);
+    } })),
   ...['dados', 'saldo', 'importacao'].map((aba) => ({ nome: `contas-nova-${aba}`, url: `tela=contas&barra=32&v=nova&aba=${aba}`,
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="modal-conta-bancaria"]' })),
   /* UI-SIDEBAR-ESTREITA-01 — a barra lateral de verdade (V2Sidebar, `LARGURA_DA_LATERAL`) com o grupo Financeiro aberto. Com nomes que
@@ -2421,6 +2433,14 @@ const CENARIOS = [
       if (x === '-taxa') await p.locator('[data-testid="destino-taxa"]').click();
       await p.waitForTimeout(400);
     } })),
+  /* CONC-SUGESTOES-V2 (mock aprovado 25/11) — os 3 casos (sintéticos): a exata + outro banco + vencimento estimado (T R Santana), as possíveis do
+     mesmo CNPJ + nota sem lançamento (Prudentão), "nenhuma · achado pelo CNPJ" (Matão); o Procurar já preenchido e procurado (abertos · pagos) */
+  ...['trsantana', 'prudentao', 'matao'].map((x) => ({ nome: `casar-sugestoes-v2-${x}`, url: `tela=sugestoes-casar&v=${x}`, tamanhos: [...TAMANHOS_DO_P92, [1280, 720]],
+    regiao: '[data-testid="sugestoes-casar"]',
+    antes: async (p) => { await p.locator('[data-testid="linha-do-banco"]').waitFor(); await p.locator('[data-testid="procurar-historico-contagem"]', { hasText: /achado/ }).waitFor({ timeout: 15000 });
+      await p.waitForTimeout(300); } })),
+  { nome: 'casar-1x1-v2-trsantana', url: 'tela=casar-1x1&v=trsantana', tamanhos: [...TAMANHOS_DO_CONSORCIO, [1280, 720]],
+    antes: async (p) => { await p.locator('[data-testid="levados-extrato"]').waitFor(); await p.locator('[data-testid="casar-faixa-pagamento"][data-estimado]').waitFor({ timeout: 15000 }); } },
   { nome: 'casar-sugestoes-edson', url: 'tela=sugestoes-casar&v=edson', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]' },
   /* D3 (homologação Edson 11:40): a tabela ordenada pela NF (a seta no cabeçalho; todas as colunas ordenam) */
   { nome: 'casar-sugestoes-edson-por-nf', url: 'tela=sugestoes-casar&v=edson', tamanhos: TAMANHOS_DO_P92, regiao: '[data-testid="sugestoes-casar"]',
@@ -2628,10 +2648,12 @@ const CENARIOS = [
     tamanhos: TAMANHOS_DA_CONCILIACAO, antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p);
       await clicarRotulo(/^Casar lançamentos$/)(p); await p.locator('[data-testid="extrato-saldo-final"]').waitFor(); await p.waitForTimeout(500); } })),
   /* BAIXA-DESCONTO-BANCO-01: `conferencia-desconto` = a NF paga com desconto (dia 03) com a sub-linha cinza "↳ desconto · não sai do banco" */
+  /* CONC-SUGESTOES-V2 B: `conferencia-v2` = cada sem par diz o que tem (exata · possíveis · nenhuma) e o contador "✓ Exatas" no cabeçalho */
   ...[['conferencia', null], ['conferencia-vencidos', 'chip-vencidos'], ['conferencia-sem-par', 'chip-sem_par'], ['conferencia-poucos', null],
-    ['conferencia-desconto', null]].map(([nome, chip]) => ({
-    nome, url: nome === 'conferencia-poucos' ? 'tela=conciliacao&v=poucos' : nome === 'conferencia-desconto' ? 'tela=conciliacao&v=desconto-depois' : 'tela=conciliacao',
-    tamanhos: [...TAMANHOS_DO_P92, [1366, 768]],
+    ['conferencia-desconto', null], ['conferencia-v2', 'chip-sem_par']].map(([nome, chip]) => ({
+    nome, url: nome === 'conferencia-poucos' ? 'tela=conciliacao&v=poucos' : nome === 'conferencia-desconto' ? 'tela=conciliacao&v=desconto-depois'
+      : nome === 'conferencia-v2' ? 'tela=conciliacao&v=sugv2' : 'tela=conciliacao',
+    tamanhos: nome === 'conferencia-v2' ? [...TAMANHOS_DO_P92, [1280, 720], [1366, 768]] : [...TAMANHOS_DO_P92, [1366, 768]],
     regiao: '[data-testid="modal-conferencia"]',
     /* P159e (Gabriel 29/10): o nome do extrato INTEIRO de 1366px para cima; abaixo, "…" + o title (a regra de corte de sempre) */
     inteiroDe: { sel: '[data-testid="modal-conferencia"] [data-testid="conf-historico"]', de: 1366 },

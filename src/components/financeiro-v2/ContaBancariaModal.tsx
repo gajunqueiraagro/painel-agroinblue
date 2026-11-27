@@ -34,8 +34,8 @@ import { diasDoCartao } from '@/lib/financeiro/diasDoCartao';
 import { diaDoVencimentoDoCartao, explicacaoDaFatura } from '@/lib/financeiro/pagamentoNoCartao';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import {
-  brl, codigoDeDoisDigitos, diaDoCampo, faltasDoFormulario, formularioDaConta, mudancas, mudaOSaldoInicial, nomeDaConta, proximoCodigoLivre,
-  subtituloDaConta, tipoContaDoFormulario,
+  brl, codigoDeDoisDigitos, diaDoCampo, faltasDoFormulario, formularioDaConta, fraseDaPreviaInativar, inativaDesdeValida, lerPreviaInativar,
+  listaDaPreviaInativar, mudancas, mudaOSaldoInicial, nomeDaConta, primeiroDoMes, proximoCodigoLivre, subtituloDaConta, tipoContaDoFormulario,
   type BancoReferencia, type ContaBancariaCadastro, type FormatoNaTela, type FormularioConta, type TipoNaTela,
 } from '@/lib/financeiro/contasBancarias';
 
@@ -118,7 +118,30 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
   const sugestaoCodigo = proximoCodigoLivre(contas, tipoContaDoFormulario(form, conta), conta?.id ?? null);
   const codigoMudou = nova || form.codigo.trim() !== (original?.codigo ?? '').trim();
   const codigoRuim = codigoMudou && !codigoDeDoisDigitos(form.codigo);
-  const faltas = faltasDoFormulario(form, nova, { original: original?.codigo ?? '', sugestao: sugestaoCodigo });
+  const faltasDoCadastro = faltasDoFormulario(form, nova, { original: original?.codigo ?? '', sugestao: sugestaoCodigo });
+  /* CONTA-INATIVAR-DATA-01 — inativar (ou mudar a data): a PRÉVIA do banco (`fn_conta_inativar_previa`: saldo zero no fim do mês anterior,
+     nenhum lançamento nem extrato a partir da data) antes de gravar; recusa = o campo vermelho e o Salvar travado com a frase (mostra, não esconde) */
+  const inativando = !nova && !form.ativa && inativaDesdeValida(form.inativaDesde)
+    && (!!conta?.ativa || form.inativaDesde !== (original?.inativaDesde ?? ''));
+  const previaInativar = useQuery({
+    queryKey: ['conta-inativar-previa', conta?.id, form.inativaDesde],
+    enabled: aberto && inativando,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { data, error } = await (supabase as any).rpc('fn_conta_inativar_previa', { p_cliente_id: clienteId, p_conta_id: conta!.id, p_desde: form.inativaDesde });
+      if (error) throw error;
+      return lerPreviaInativar(data);
+    },
+  });
+  const pendenciaDaInativacao = !inativando ? null
+    : previaInativar.isLoading ? 'a conferência da inativação (lendo…)'
+    : !previaInativar.data ? 'a conferência da inativação (não consegui conferir; tente de novo)'
+    : !previaInativar.data.pode ? fraseDaPreviaInativar(previaInativar.data) : null;
+  const faltas = pendenciaDaInativacao ? [...faltasDoCadastro, pendenciaDaInativacao] : faltasDoCadastro;
+  const campoInativaRuim = !form.ativa && !nova && (!inativaDesdeValida(form.inativaDesde) || (!!previaInativar.data && !previaInativar.data.pode));
+  const tituloInativa = form.ativa ? 'A conta está ativa.' : nova ? 'A conta nova nasce ativa.'
+    : previaInativar.data ? listaDaPreviaInativar(previaInativar.data)
+    : 'A partir deste dia (1º do mês) a conta não recebe lançamento novo e sai dos seletores; antes dele, tudo igual.';
   /* trocar o tipo na conta nova troca a sugestão, se o código ainda é a sugestão do tipo de antes */
   const escolherTipo = (v: TipoNaTela) => setForm(f => {
     const antes = proximoCodigoLivre(contas, tipoContaDoFormulario(f, conta), conta?.id ?? null);
@@ -286,17 +309,28 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
                 <div className="min-w-0">
                   <Rotulo texto="Situação" />
                   <div className="flex h-7 items-center gap-1.5 text-[11px]">
-                    <Switch checked={form.ativa} onCheckedChange={v => muda('ativa', v)} data-testid="campo-situacao" />{form.ativa ? 'Ativa' : 'Inativa'}
+                    <Switch checked={form.ativa} onCheckedChange={v => muda('ativa', v)} data-testid="campo-situacao" disabled={nova}
+                      title={nova ? 'A conta nova nasce ativa; inative depois de criada.' : undefined} />{form.ativa ? 'Ativa' : 'Inativa'}
                   </div>
                 </div>
                 <div className="col-span-2 min-w-0">
                   <Rotulo texto="Tipo" obrig />
                   <Segmentado altura={28} valor={form.tipo} onEscolher={escolherTipo} opcoes={TIPOS} />
                 </div>
-                <div className="col-span-2 min-w-0">
+                <div className="min-w-0">
                   <Rotulo texto="Fazenda" obrig />
                   <SearchableSelect value={form.fazendaId} onValueChange={v => muda('fazendaId', v)} options={opcoesFazenda}
                     semTodos allValue="" allLabel="Selecione" placeholder="Selecione" dense triggerClassName={REGUA_CAMPO} />
+                </div>
+                {/* CONTA-INATIVAR-DATA-01 — "Inativa desde" (o dia 1º do mês escolhido): sempre no lugar (nada se desloca), desabilitado com a conta
+                    ativa; a conferência do banco no `title` (a lista dos lançamentos a partir da data) e o vermelho quando recusa */}
+                <div className="min-w-0" title={tituloInativa} data-testid="campo-inativa-desde-bloco">
+                  <Rotulo texto="Inativa desde" obrig={!form.ativa && !nova} />
+                  <DatePicker value={form.ativa ? '' : form.inativaDesde} onChange={v => muda('inativaDesde', primeiroDoMes(v))}
+                    disabled={form.ativa || nova} placeholder={form.ativa || nova ? '—' : 'dd/mm/aaaa'}
+                    className={cn(REGUA_CAMPO, campoInativaRuim && 'border-destructive')} />
+                  <span className="sr-only" data-testid="campo-inativa-desde-frase">
+                    {previaInativar.data ? fraseDaPreviaInativar(previaInativar.data) : ''}</span>
                 </div>
               </div>
             </BlocoFormulario>

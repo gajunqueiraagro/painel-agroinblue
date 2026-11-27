@@ -39,6 +39,8 @@ vi.mock('@/integrations/supabase/client', () => {
       rpc: (fn: string, args: unknown) => {
         fixture.chamadas.push({ fn, args });
         if (fn === 'fn_conciliacao_resumo_mes') return Promise.resolve({ data: fixture.resumo, error: null });
+        /* CONC-SUGESTOES-V2: o motor ampliado e os vencimentos declarados respondem "nada" (lista vazia, não falha) */
+        if (fn === 'fn_candidatos_conciliacao' || fn === 'fn_vencimentos_declarados') return Promise.resolve({ data: [], error: null });
         return Promise.resolve(fn === 'fn_extratos_espelhados' ? { data: fixture.espelho, error: null } : { data: null, error: null });
       },
       from: (tabela: string) => vazio(tabela),
@@ -337,7 +339,9 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
     expect(semPar.className).toContain('bg-background');
     expect(semPar.className).toContain('[&>td:first-child]:shadow-[inset_3px_0_0_#d97706]');
     expect(within(semPar).getByTestId('conf-sem-lancamento').className).toContain('text-[#d97706]');
-    expect(within(semPar).getByTestId('conf-sem-lancamento').textContent).toBe('sem lançamento ·SugestõesCriar');
+    /* CONC-SUGESTOES-V2 B: a linha diz o que tem — sem candidato no motor nem na lista, "nenhuma" + o motivo + Criar + Procurar */
+    await waitFor(() => expect(within(semPar).getByTestId('estado-sem-par').getAttribute('data-estado')).toBe('nenhuma'));
+    expect(within(semPar).getByTestId('conf-sem-lancamento').textContent).toMatch(/^nenhuma.+CriarProcurar$/);
     /* P159f: abre sempre (com 0, o modal oferece o "Procurar no histórico") */
     expect(within(semPar).getByTestId('sem-par-sugestoes')).not.toBeDisabled();
     /* nenhum link por extenso sobrou na mesa */
