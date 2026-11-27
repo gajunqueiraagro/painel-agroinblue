@@ -151,6 +151,14 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
   const [escolhas, setEscolhas] = useState<ReadonlyMap<number, string>>(new Map());
   const [outraConta, setOutraConta] = useState(false);
   const indoParaOutra = useRef(false);
+  /* "Escolher outra conta…": o seletor de sempre, já aberto (o clique no gatilho dele ao montar; nada muda no componente compartilhado) */
+  const jaAbriuOutra = useRef(false);
+  const abrirAoMontar = (el: HTMLDivElement | null) => {
+    if (!el || jaAbriuOutra.current) return;
+    jaAbriuOutra.current = true;
+    const g = el.querySelector('[role="combobox"]');
+    if (g instanceof HTMLElement && g.getAttribute('aria-expanded') !== 'true') g.click();
+  };
   /* o ponto de partida mudou DE CONTEUDO (a divisao gravada, a sugestao lida): a vista volta a ele — nunca na montagem, que traz o
      pendente, nem quando so' a identidade dos itens muda num render do modal */
   const chaveDoInicial = [...inicial].map(([n, c]) => `${n}:${c}`).join('|');
@@ -221,8 +229,8 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
   const botaoJuntar = aoSalvar && onJuntar && (
     <div className="flex shrink-0 items-center gap-2">
       {outraConta && (
-        <div className={noModal ? 'w-[300px]' : 'w-[200px]'} data-testid="contas-juntar-outra">
-          <EscolherConta valor="" abertoAoMontar classificacoes={classificacoes} tipoOperacao={tipoOperacao} atividadeSugerida={atividadeSugerida}
+        <div className={noModal ? 'w-[300px]' : 'w-[200px]'} data-testid="contas-juntar-outra" ref={abrirAoMontar}>
+          <EscolherConta valor="" classificacoes={classificacoes} tipoOperacao={tipoOperacao} atividadeSugerida={atividadeSugerida}
             onEscolher={(c) => juntar(c.id)} triggerClassName={R.gatilho} itemClassName="text-[10.5px]" />
         </div>
       )}
@@ -237,7 +245,7 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
             <DropdownMenuItem key={c.planoContaId} onSelect={() => juntar(c.planoContaId)}>{nome(c.planoContaId)} · R$ {reais(c.liquidoCent)}</DropdownMenuItem>
           ))}
           {contasParaJuntar.length > 0 && <DropdownMenuSeparator />}
-          <DropdownMenuItem onSelect={() => { indoParaOutra.current = true; setOutraConta(true); }} data-testid="contas-juntar-outra-conta">Escolher outra conta… (o plano inteiro)</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => { indoParaOutra.current = true; jaAbriuOutra.current = false; setOutraConta(true); }} data-testid="contas-juntar-outra-conta">Escolher outra conta… (o plano inteiro)</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
