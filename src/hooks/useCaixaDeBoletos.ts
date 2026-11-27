@@ -32,6 +32,7 @@ import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { lerDaCaixa, type LerArquivoDaCaixa, type LeituraDaCaixa } from '@/lib/financeiro/boleto/lerDaCaixa';
 import { daGravada, paraGravar } from '@/lib/financeiro/boleto/leituraGravada';
+import { novosEmails, ultimaChegada } from '@/lib/financeiro/boleto/chegadasDaCaixa';
 /* ENTRADA-CENTRAL-01 F1: o leitor mudou para `lerDaCaixa.ts` (puro, o mesmo da Lambda); os chamadores de sempre seguem importando daqui */
 export { FRASE_PDF_IMAGEM, lerDaCaixa, lerDaCaixaCom, notaPelaChave, pdfPareceFolha, type LeituraDaCaixa, type LerArquivoDaCaixa } from '@/lib/financeiro/boleto/lerDaCaixa';
 
@@ -56,6 +57,8 @@ const SEM_PARTE: ParteDoBoleto = { documento: null, nome: null, confira: false }
 
 export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   api?: CaixaApi; parcela?: ParcelaApi; ler?: LerArquivoDaCaixa; entrada?: EntradaEmailApi; hoje?: string; podeLancar?: boolean;
+  /** CAIXA-ATUALIZAR-01: de quanto em quanto a Caixa aberta pergunta se chegou algo (padrão 30 s; o teste passa curto; 0 = não pergunta) */
+  intervaloMs?: number;
 } = {}) {
   const api = opcoes.api ?? caixaApiDoBanco;
   const parcela = opcoes.parcela ?? parcelaApiDoBanco;
@@ -81,6 +84,11 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   const pedidos = useRef(new Set<string>());
   useEffect(() => { vivo.current = true; return () => { vivo.current = false; }; }, []);
 
+  /* CAIXA-ATUALIZAR-01: as linhas da leitura anterior (para contar o que é NOVO) e o aviso "N novo(s) e-mail(s) · agora" */
+  const idsAnteriores = useRef<ReadonlySet<string> | null>(null);
+  const [avisoDeNovo, setAvisoDeNovo] = useState<{ n: number; em: number } | null>(null);
+  const [atualizando, setAtualizando] = useState(false);
+
   /* ── carregar ── */
   const recarregar = useCallback(async () => {
     if (!clienteId) return;
@@ -90,13 +98,47 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     ]);
     if (!vivo.current) return;
     if (l.ok) setLista(l.dados);
-    if (e.ok) setEntradas(e.dados);
+    if (e.ok) {
+      setEntradas(e.dados);
+      const n = idsAnteriores.current ? novosEmails(idsAnteriores.current, e.dados) : 0;
+      idsAnteriores.current = new Set(e.dados.map((x) => x.id));
+      if (n > 0) setAvisoDeNovo({ n, em: Date.now() });
+    }
     setErro(l.ok === false ? l.erro : e.ok === false ? e.erro : null);
     /* 118610: o detalhe de Resolvidos (falhou = a coluna fica sem o detalhe; a lista de sempre continua) */
     const d = entradaApi.resolvidos ? await entradaApi.resolvidos(clienteId).catch(() => null) : null;
     if (vivo.current && d && d.ok) setDetalhes(d.dados);
   }, [api, clienteId, entradaApi]);
   useEffect(() => { void recarregar(); }, [recarregar]);
+
+  /** CAIXA-ATUALIZAR-01: "↻ Atualizar" — relê a lista sem fechar nada (a aba e a seleção são do diálogo e ficam) */
+  const atualizar = useCallback(async () => {
+    setAtualizando(true);
+    try { await recarregar(); } finally { if (vivo.current) setAtualizando(false); }
+  }, [recarregar]);
+  /* a atualização automática enquanto a Caixa está aberta: pergunta só "quando chegou o último?" e relê se mudou (sem a pergunta, relê) */
+  const intervaloMs = opcoes.intervaloMs ?? 30_000;
+  const ultimaVista = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!clienteId || intervaloMs <= 0) return;
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (!entradaApi.ultimaChegada) { void recarregar(); return; }
+      void entradaApi.ultimaChegada(clienteId).then((r) => {
+        if (!vivo.current || r.ok === false) return;
+        const mudou = ultimaVista.current !== undefined && r.dados !== ultimaVista.current;
+        ultimaVista.current = r.dados;
+        if (mudou) void recarregar();
+      });
+    }, intervaloMs);
+    return () => clearInterval(id);
+  }, [clienteId, intervaloMs, entradaApi, recarregar]);
+  /* o aviso some sozinho em 60 s */
+  useEffect(() => {
+    if (!avisoDeNovo) return;
+    const id = setTimeout(() => { if (vivo.current) setAvisoDeNovo(null); }, 60_000);
+    return () => clearTimeout(id);
+  }, [avisoDeNovo]);
   useEffect(() => {
     if (!clienteId) return;
     void api.documentosDosTitulares(clienteId).then((r) => { if (vivo.current && r.ok) setSugestoes(sugestoesDeSenha(r.dados)); });
@@ -564,5 +606,6 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   return {
     lista, entradas, detalhes, erro, grupos, resolvidos, ignorados, descartados, sugestoes, ocupado,
     receber, arquivoDe, nomeDaFonte, tentarSenha, vincularBoleto, guardar, vincularNota, folhaFeita, ignorar, voltar, desfazerGuardado, recarregar,
+    atualizar, atualizando, avisoDeNovo, ultimaChegada: entradas ? ultimaChegada(entradas) : null,
   };
 }

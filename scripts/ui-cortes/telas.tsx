@@ -2573,7 +2573,7 @@ if (tela === 'mesclar') {
     const entrada = q.get('caso') === 'sem_endereco' ? API_ENTRADA_BANCADA_SEM_ENDERECO : API_ENTRADA_BANCADA;
     const aoLancarNota = q.get('caso') === 'sem_lancar' ? undefined : () => {};
     montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} parcela={PARCELA_BANCADA} ler={LER_CAIXA_BANCADA}
-      entrada={entrada} hoje={HOJE_DA_BANCADA} aoLancarNota={aoLancarNota} aoFechar={() => {}} folha={folha} />);
+      entrada={entrada} hoje={HOJE_DA_BANCADA} aoLancarNota={aoLancarNota} aoFechar={() => {}} folha={folha} intervaloMs={0} />);   /* CAIXA-ATUALIZAR-01: a bancada não relê sozinha (a medição é estável) */
   };
   void montarCaixa();
 } else if (tela === 'anexar-boletos-caixa') {
