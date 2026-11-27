@@ -35,7 +35,7 @@ describe('o que se guarda', () => {
     expect(paraGravar({ k: 'erro', frase: 'x' })).toBeNull();
     /* FOLHA-VERA-PACOTE-01: o analítico da folha (pessoa e salário) não se guarda nem como tipo: o banco não o conhece */
     const totais = { funcionarios: 1, proventos: 1000, descontos: 0, liquido: 1000, fgts: 80 };
-    expect(paraGravar({ k: 'analitica', analitica: { empresa: 'FAZENDA SINTETICA', competencia: '2026-10', emissao: null, pessoas: [],
+    expect(paraGravar({ k: 'analitica', analitica: { empresa: 'FAZENDA SINTETICA', competencia: '2026-10', tipo: 'mensal', emissao: null, pessoas: [],
       soma: { ...totais, inss: 0, irrf: 0 }, resumo: totais, confere: true, naoConfere: [] } })).toBeNull();
     expect(paraGravar({ k: 'nada', frase: 'Sem linha digitável.' })).toEqual({ v: LEITOR_VERSAO, k: 'nada', frase: 'Sem linha digitável.' });
   });
@@ -87,7 +87,9 @@ function fechoDoLeitor(): string[] {
 /** A assinatura do leitor de hoje: md5 de "arquivo:md5" de cada arquivo, em ordem. MUDOU O LEITOR? Suba `LEITOR_VERSAO` e troque aqui. */
 /* caixa-1 trocou de md5 ANTES de existir leitura guardada (27/11: o analítico da folha do Code 6 e o vencimento do DARF entraram no leitor
    antes do push da F1; a coluna estava vazia). Depois do 1º push, leitor mudado = versão nova, nunca troca do md5 de uma versão. */
-const ASSINATURA: Record<string, string> = { 'caixa-1': '8591035d6c3d97bd2416cca1cab31c89' };
+/* caixa-2 (Code 6, 27/11): a fatura de energia (NF3e), a posição do banco, a GFD e o DARF com o beneficiário "Receita Federal" entraram no
+   leitor; o título do 13º e o "I.R.R.F." do analítico; o CNPJ impresso com 15 dígitos. As leituras caixa-1 guardadas se releem. */
+const ASSINATURA: Record<string, string> = { 'caixa-1': '8591035d6c3d97bd2416cca1cab31c89', 'caixa-2': '2a52029f6bef4efdb2d5603281974aca' };
 
 describe('a versão do leitor', () => {
   it('o leitor de hoje tem a assinatura desta versão (mudou um arquivo do leitor = suba LEITOR_VERSAO)', () => {

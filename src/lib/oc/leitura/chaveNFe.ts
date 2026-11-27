@@ -29,8 +29,13 @@ export function cnpjOk(d: string): boolean {
 }
 
 export function chaveValida(c: string): boolean {
+  return chaveValidaDoModelo(c, '55');
+}
+
+/** CONTAS-CONSUMO-01: a mesma conferência para outro modelo de documento fiscal (66 = NF3e, a nota de energia elétrica). */
+export function chaveValidaDoModelo(c: string, modelo: string): boolean {
   const mes = Number(c.slice(4, 6));
-  return dvDaChaveOk(c) && UFS.has(c.slice(0, 2)) && mes >= 1 && mes <= 12 && c.slice(20, 22) === '55' && cnpjOk(c.slice(6, 20));
+  return dvDaChaveOk(c) && UFS.has(c.slice(0, 2)) && mes >= 1 && mes <= 12 && c.slice(20, 22) === modelo && cnpjOk(c.slice(6, 20));
 }
 
 /** A primeira chave valida do texto (digitos separados por espaco ou ponto contam como um trecho). */

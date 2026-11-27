@@ -83,7 +83,13 @@ describe('FOLHA-NA-CAIXA-01 — a Caixa com o recibo do contador', () => {
   it('ARRASTADO e aplicado (118610): registra o arquivo, sobe no caminho devolvido, vai para Resolvidos com quem e o que gerou', async () => {
     const md5Do = (await import('@/lib/arquivo/md5')).md5;
     const registrado = { id: 'arr-1', storagePath: 'cli/entrada/x.pdf', jaExistia: false, estado: 'a_ler' };
-    const reg = vi.fn<NonNullable<EntradaEmailApi['registrarArrastado']>>(async () => ({ ok: true, dados: registrado }));
+    /* CAIXA-FOLHA-VERA: o arrastado é GUARDADO NA HORA — depois do registro a lista traz a linha dele ('a_ler', origem arrastado) */
+    const aLer = entradaDaLinha({ id: 'arr-1', mensagem_id: 'arrastado:x', remetente: null, assunto: null, recebido_em: '2026-11-24T17:00:00Z',
+      arquivo_nome: 'Recibos 13 ficticio.pdf', tipo: 'pdf', tamanho_bytes: 12, storage_path: 'cli/entrada/x.pdf', estado: 'a_ler', origem: 'arrastado' });
+    const reg = vi.fn<NonNullable<EntradaEmailApi['registrarArrastado']>>(async () => {
+      entrada.todas.mockResolvedValue({ ok: true, dados: [aLer] });
+      return { ok: true, dados: registrado };
+    });
     const detalheFolha = { quem: 'Pessoa Ficticia', quando: '2026-11-24T17:02:00Z', folha: { tipo: '13_1', competencia: '2026-11', lancamentos: 2, pessoas: 2 }, boleto: null, nota: null };
     const res = vi.fn<NonNullable<EntradaEmailApi['resolvidos']>>(async () => ({ ok: true, dados: { 'arr-1': detalheFolha } }));
     const todasDepois = [entradaDaLinha({ id: 'arr-1', mensagem_id: 'arrastado:x', remetente: null, assunto: null, recebido_em: '2026-11-24T17:00:00Z',
@@ -102,6 +108,7 @@ describe('FOLHA-NA-CAIXA-01 — a Caixa com o recibo do contador', () => {
     await waitFor(() => expect(screen.getByTestId('aprovar-folha')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('aprovar-folha'));
     await waitFor(() => expect(entrada.resolver).toHaveBeenCalledWith('arr-1', 'folha', null, null));
+    expect(reg).toHaveBeenCalledTimes(1);
     expect(reg.mock.calls[0][1]).toEqual({ nome: 'Recibos 13 ficticio.pdf', tipo: 'pdf', tamanho: 12, md5: md5Do(new TextEncoder().encode('%PDF recibos')) });
     expect(api.subirArquivo.mock.calls[0][0]).toBe('cli/entrada/x.pdf');
     /* em Resolvidos: quem arrastou e o que gerou */
@@ -111,6 +118,40 @@ describe('FOLHA-NA-CAIXA-01 — a Caixa com o recibo do contador', () => {
     const c = within(linha).getAllByRole('cell').map((x) => x.textContent);
     expect(c[3]).toBe('arrastado · Pessoa Ficticia');
     expect(c[5]).toMatch(/^13º 1ª parcela · 11\/2026 · 2 lançamentos/);
+  });
+
+  it('CAIXA-FOLHA-VERA: arrastar → GUARDA NA HORA (registra e sobe) → fechar → reabrir → continua lá, em "Arrastados para a Caixa"', async () => {
+    const aLer = entradaDaLinha({ id: 'arr-2', mensagem_id: 'arrastado:y', remetente: null, assunto: null, recebido_em: '2026-11-24T17:00:00Z',
+      arquivo_nome: 'Guia ficticia.pdf', tipo: 'pdf', tamanho_bytes: 12, storage_path: 'cli/entrada/y.pdf', estado: 'a_ler', origem: 'arrastado' });
+    const reg = vi.fn<NonNullable<EntradaEmailApi['registrarArrastado']>>(async () => {
+      entrada.todas.mockResolvedValue({ ok: true, dados: [aLer] });
+      return { ok: true, dados: { id: 'arr-2', storagePath: 'cli/entrada/y.pdf', jaExistia: false, estado: 'a_ler' } };
+    });
+    entrada.todas.mockResolvedValue({ ok: true, dados: [] });
+    api.subirArquivo.mockReset(); api.subirArquivo.mockResolvedValue({ ok: true, dados: true });
+    const props = { clienteId: 'cli', api, parcela, ler, hoje: '2026-11-24', aoFechar: () => {}, folha: { api: folhaApi, dividir } };
+    const primeira = render(<CaixaDeBoletosDialog {...props} entrada={{ ...entrada, registrarArrastado: reg }} />);
+    fireEvent.change(await screen.findByTestId('input-da-caixa'), { target: { files: [new File(['%PDF guia'], 'Guia ficticia.pdf', { type: 'application/pdf' })] } });
+    await waitFor(() => expect(api.subirArquivo).toHaveBeenCalledWith('cli/entrada/y.pdf', expect.anything()));
+    await waitFor(() => expect(screen.getByText('Arrastados para a Caixa')).toBeTruthy());
+    expect(screen.queryByText('Arrastados por você')).toBeNull();
+    primeira.unmount();
+    /* reabrir: o arquivo vem da Caixa (o storage), não da memória */
+    entrada.baixar.mockResolvedValue({ ok: true, dados: new Blob(['%PDF guia'], { type: 'application/pdf' }) });
+    render(<CaixaDeBoletosDialog {...props} entrada={{ ...entrada, registrarArrastado: reg }} />);
+    expect(await screen.findByText('Arrastados para a Caixa')).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByTestId('linha-da-caixa').some((tr) => tr.getAttribute('data-chave')?.endsWith('arr-2'))).toBe(true));
+    expect(reg).toHaveBeenCalledTimes(1);
+  });
+
+  it('CAIXA-FOLHA-VERA: o registro que falha deixa o arquivo só nesta tela e DIZ por quê', async () => {
+    const reg = vi.fn<NonNullable<EntradaEmailApi['registrarArrastado']>>(async () => ({ ok: false, erro: 'sem acesso' }));
+    entrada.todas.mockResolvedValue({ ok: true, dados: [] });
+    render(<CaixaDeBoletosDialog clienteId="cli" api={api} parcela={parcela} ler={ler} entrada={{ ...entrada, registrarArrastado: reg }} hoje="2026-11-24"
+      aoFechar={() => {}} folha={{ api: folhaApi, dividir }} />);
+    fireEvent.change(await screen.findByTestId('input-da-caixa'), { target: { files: [new File(['%PDF z'], 'z.pdf', { type: 'application/pdf' })] } });
+    expect(await screen.findByText(/"z\.pdf" não ficou guardado na Caixa \(fica só nesta tela\): sem acesso/)).toBeTruthy();
+    expect(screen.getByText('Arrastados por você')).toBeTruthy();
   });
 
   it('veio por E-MAIL: a prévia leva a entrada; aplicado, a linha do e-mail vira "folha" (resolvida, sem lançamento)', async () => {

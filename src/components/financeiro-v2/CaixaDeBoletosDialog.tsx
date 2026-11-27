@@ -67,7 +67,7 @@ const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary text-left');
 const TH_NUM = cn(TH, 'text-right');
 const LINHA = 'h-[19px] border-b border-border/40';
 const TIPO: Record<LinhaDaCaixa['tipo'], Selo> = {
-  nota: { texto: 'Nota fiscal', tom: 'azul' }, boleto: { texto: 'Boleto', tom: 'ok' }, folha: { texto: 'Folha', tom: 'azul' }, nada: { texto: 'Não sei', tom: 'cinza' },
+  nota: { texto: 'Nota fiscal', tom: 'azul' }, boleto: { texto: 'Boleto', tom: 'ok' }, folha: { texto: 'Folha', tom: 'azul' }, fatura: { texto: 'Fatura', tom: 'azul' }, posicao: { texto: 'Posição', tom: 'cinza' }, guia: { texto: 'Guia', tom: 'ok' }, nada: { texto: 'Não sei', tom: 'cinza' },
   lendo: { texto: 'lendo…', tom: 'cinza' }, senha: { texto: 'Boleto?', tom: 'ambar' }, erro: { texto: 'Erro', tom: 'vermelho' },
   sem_anexo: { texto: 'Sem anexo', tom: 'cinza' }, recusado: { texto: 'Recusado', tom: 'vermelho' }, gmail: { texto: 'Gmail', tom: 'ambar' },
 };
