@@ -104,7 +104,7 @@ import {
 } from '@/lib/financeiro/valorDoMes';
 import { danfeDaNota, pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import {
-  atualizarCamposDoCadastro, cadastroParaComparar, camposQueOEmitenteCompleta, completarCadastroPeloXml, desfazerCamposDoCadastro, fornecedorPeloDocumento,
+  atualizarCamposDoCadastro, cadastroParaComparar, completarCadastroPeloXml, desfazerCamposDoCadastro, fornecedorPeloDocumento,
   type CadastroComODocumento, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
@@ -118,7 +118,7 @@ import {
 } from '@/lib/financeiro/divisaoDaClassificacao';
 import { contasSugeridasDosItens, type ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
 import { lembrarContasDosItens, sugestaoDosItensDaNota } from '@/lib/financeiro/nfeConsultas';
-import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
+import { dadosNovosDaNota, propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
 import { fraseParcelasComoNaNota, type CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
 import { AvisosDoXml, CAMPO_AMBAR, FaixaDoFornecedor, OrigemDoXml, PilulaDoXml } from './LancamentoDoXml';
@@ -732,7 +732,8 @@ export function LancamentoV2Dialog({
   const [xmlComparar, setXmlComparar] = useState<CadastroParaComparar | null>(null);
   const [xmlAbrindoComparar, setXmlAbrindoComparar] = useState(false);
   const [xmlCadastroAtualizado, setXmlCadastroAtualizado] = useState(false);
-  const [xmlNotaCompleta, setXmlNotaCompleta] = useState(false);
+  /* AVISO-FORNECEDOR-IGUAL-01 — quantos campos a nota mudaria no cadastro (a MESMA comparação do modal); 0 = sem faixa */
+  const [xmlDadosNovos, setXmlDadosNovos] = useState(0);
   const [xmlFornecedorProposto, setXmlFornecedorProposto] = useState<string | null>(null);
   const [xmlCriandoFornecedor, setXmlCriandoFornecedor] = useState(false);
   /* NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ da nota ja' e' de um cadastro (conferido no banco ANTES de criar): a faixa diz de quem e oferece usar */
@@ -1533,10 +1534,11 @@ export function LancamentoV2Dialog({
   useEffect(() => {
     const d = open && !lancamento ? prefill?.doXml ?? null : null;
     const cli = clienteAtual?.id;
-    setXmlNotaCompleta(false);
+    setXmlDadosNovos(0);
     if (!d?.emitente || !cli || !xmlFornecedorProposto || d.resolucao.achadoPor !== 'documento') return;
     let vivo = true;
-    void camposQueOEmitenteCompleta(cli, xmlFornecedorProposto, d.emitente).then((l) => { if (vivo) setXmlNotaCompleta(l.length > 0); }, () => undefined);
+    const emitente = d.emitente;
+    void cadastroParaComparar(cli, xmlFornecedorProposto).then((hoje) => { if (vivo && hoje) setXmlDadosNovos(dadosNovosDaNota(hoje, propostaDoEmitente(emitente))); }, () => undefined);
     return () => { vivo = false; };
   }, [open, lancamento, prefill, clienteAtual?.id, xmlFornecedorProposto]);
 
@@ -3108,7 +3110,7 @@ export function LancamentoV2Dialog({
               <div className="space-y-1" data-testid="xml-faixas">
                 <FaixaDoFornecedor xml={xml} fechada={xmlFaixaFechada}
                   cadastro={xmlFornecedorProposto && favorecidoId === xmlFornecedorProposto && (xml.resolucao.cadastroSemDocumento || xml.resolucao.achadoPor === 'documento')
-                    ? { oferece: xml.resolucao.cadastroSemDocumento || xmlNotaCompleta, atualizado: xmlCadastroAtualizado, abrindo: xmlAbrindoComparar,
+                    ? { oferece: xml.resolucao.cadastroSemDocumento || xmlDadosNovos > 0, dadosNovos: xmlDadosNovos, atualizado: xmlCadastroAtualizado, abrindo: xmlAbrindoComparar,
                         onComparar: () => { void abrirComparacaoDoXml(); } }
                     : null}
                   onTrocar={() => {
@@ -3398,21 +3400,22 @@ export function LancamentoV2Dialog({
 
             </BlocoFormulario>
             <BlocoFormulario titulo="Identificação" testId="bloco-identificacao" className="gap-1">
-            {/* ── LINHA 2 — Produto e Favorecido ── */}
-            <div className="grid grid-cols-12 gap-2">
+            {/* ── LINHA 2 — Produto e Favorecido ── LANC-IDENTIFICACAO-LARGURA-01 (Gabriel 27/11 17:16): larguras FIXAS, nada depende do dado —
+                Produto 40% · Fornecedor 60% (o campo ≈ 50% + o ✎ e o + de 28px, juntos); nome com mais de 45 letras: inteiro na linha de baixo */}
+            <div className="grid grid-cols-10 gap-2">
               {/* Produto — PR-U2c-1A: <ProdutoAutocomplete /> (fonte única) */}
               <ProdutoAutocomplete
                 value={descricao}
                 onChange={setDescricao}
                 clienteId={clienteAtual?.id}
                 label={xmlRotTexto('Produto / descrição *', 'descricao')}
-                className="col-span-7"
+                className="col-span-4"
                 inputClassName={cn(fieldBg, 'h-7 text-[11px]', xmlCls('descricao'))}
                 tabIndex={5}
                 placeholder="Descrição do produto"
               />
               {/* Fornecedor — PR-U2c-1C: <FavorecidoSelect /> (fonte única) */}
-              <div className="col-span-5" id={xml ? 'campo-fornecedor-financeiro' : undefined}>
+              <div className="col-span-6" id={xml ? 'campo-fornecedor-financeiro' : undefined}>
                 <FavorecidoSelect
                   value={favorecidoId}
                   onChange={setFavorecidoId}
@@ -3435,6 +3438,7 @@ export function LancamentoV2Dialog({
                   label={xmlRotTexto('Fornecedor *', 'fornecedor')}
                   triggerClassName={cn(fieldBg, 'h-7 text-[11px]', xmlCls('fornecedor'))}
                   novoButtonClassName="h-7 w-7"
+                  nomeLongoEmbaixo={45}
                   tabIndex={6}
                   /* ⚠ O FORNECEDOR NAO E SOBERANIA DA OC — FIN-FORNECEDOR-OC-EDIT (B-19),
                      decisao do Gabriel. A OC manda em VALOR, CLASSIFICACAO, TIPO e

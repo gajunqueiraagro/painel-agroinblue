@@ -3796,6 +3796,13 @@ if (m === 'editar' && q.get('resumo') === 'longo') {
   props.lancamento = { ...SAL, valor: 1234567.89, subcentro: CLASSIF[0].subcentro, centro_custo: CLASSIF[0].centro_custo,
     descricao: 'Peças de reposição para trator e implementos, conforme pedido de compra 4521 e orçamento aprovado' };
 }
+/* LANC-IDENTIFICACAO-LARGURA-01 / RESUMO-LATERAL-FORMA-01 (Gabriel 27/11) — `&nome=45|91`: o fornecedor com 45 letras (o limite sem corte a 1280) e
+   com 91 (o mais longo da base, medido 27/11; o nome inteiro vai à linha de baixo); `&forma=`: a forma gravada (o Resumo a mostra curta) */
+if (m === 'editar' && (q.get('nome') === '45' || q.get('nome') === '91')) {
+  AGRO.nome = q.get('nome') === '45' ? 'Cooperativa Agropecuaria de Exemplo do Sul Ltd'.slice(0, 45)
+    : 'Cooperativa Agroindustrial dos Produtores Rurais do Vale do Rio Exemplo e Região Centro Lt'.padEnd(91, 'a').slice(0, 91);
+}
+if (m === 'editar' && q.get('forma')) props.lancamento = { ...(props.lancamento ?? SAL), forma_pagamento: q.get('forma') };
 const NOME_LONGO ='COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA FILIAL CAMPO GRANDE';
 if (v === 'xmlnome') {
   const SEM_DOC = { id: 'agro-nd', nome: NOME_LONGO, cpf_cnpj: null, fazenda_id: null, ativo: true, tipo_recebimento: null } as any;

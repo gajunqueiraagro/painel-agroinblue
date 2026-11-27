@@ -301,6 +301,12 @@ const CENARIOS = [
      corta seco, nada rola, e as alturas são as do MESMO lançamento com nomes curtos (`alturasComo`) */
   /* P121b — a NF da compra de 11 dígitos na linha "Nota" do Resumo: o número inteiro, o selo "da compra" cede */
   { nome: 'lancamento-editar-nota-11', url: 'tela=lancamento&m=editar&v=salparcela&nota=11' },
+  /* LANC-IDENTIFICACAO-LARGURA-01 — o Fornecedor até 45 letras sem corte; 91 (o mais longo da base) com o nome inteiro na linha de baixo;
+     RESUMO-LATERAL-FORMA-01 — as formas mais longas (gravadas, inclusive as antigas) curtas no Resumo: 1280/1440/1920, zero corte */
+  ...[['45', 'nome=45'], ['91', 'nome=91'], ['forma-da', 'forma=Débito Automático'], ['forma-pix-ted', 'forma=PIX/Transferência Bancária'],
+    ['forma-cartao', 'forma=Cartão de crédito'], ['forma-dinheiro', 'forma=Dinheiro']].map(([n, p]) => ({
+    nome: `lancamento-identificacao-${n}`, url: `tela=lancamento&m=editar&v=sal&${encodeURI(p)}`,
+    tamanhos: [[1280, 800], [1440, 900], [1920, 1080]] })),
   { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal&resumo=longo', alturasComo: 'tela=lancamento&m=editar&v=sal' },
   /* NOTA-PAGA-POR-TERCEIRO-01 — "Quem paga" na aba Pagamento de uma saída Programada: Nós (o de sempre), Terceiro (o formulário) e já marcado */
   { nome: 'lancamento-terceiro-nos', url: 'tela=lancamento&m=editar&v=sal', antes: clicarTexto('Pagamento') },

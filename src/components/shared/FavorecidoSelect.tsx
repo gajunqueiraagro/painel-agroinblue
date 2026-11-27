@@ -102,6 +102,9 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
   /** FORN-CAMPO-01 (Gabriel 30/10, mock v4) — a linha sob o campo em 8,5px numa faixa de 10px, 1px abaixo do campo (11px no total): a
    *  da barra de filtros de Lançamentos, EXCEÇÃO DECLARADA do piso de 9,5px. Sem ela, a linha de sempre (14px, 9,5px). */
   linhaCompacta?: boolean;
+  /** LANC-IDENTIFICACAO-LARGURA-01 (Gabriel 27/11 17:16) — o nome com MAIS que N letras (o que pode cortar no campo) aparece INTEIRO na linha
+   *  de baixo, antes do "CNPJ · Cidade/UF" (8,5px, a exceção declarada da linha). Opt-in: sem a prop, a linha de sempre. */
+  nomeLongoEmbaixo?: number;
   /** FORN-SELETOR-PADRAO-01 (D7) — cadastros "[META]" entram na lista (só modal de meta). */
   incluirMeta?: boolean;
   /**
@@ -181,7 +184,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   value, onChange, onSelected, fornecedores, clienteId,
   search: buscaDoHospedeiro, onSearchChange: aoBuscarNoHospedeiro, onCriarNovo, novoButtonClassName,
   label, triggerClassName, size = 'default', tabIndex, disabled, showCpfCnpj = false,
-  limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, linhaCompacta = false, incluirMeta = false, acaoFinal,
+  limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, linhaCompacta = false, nomeLongoEmbaixo, incluirMeta = false, acaoFinal,
   novoDesabilitado = false, novoRotulo, rotuloDoVazio = '— nenhum —', situacao = 'ativos', nomeInteiro = false, mostrarUso = false, unidadeDoUso = 'lanç.',
   mostrarIguais = true, valorInexistente = false, marcarInativo = false,
 }: FavorecidoSelectProps<F>) {
@@ -453,7 +456,14 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
               <button type="button" className="shrink-0 underline text-destructive" onClick={lidos.tentarDeNovo}>Tentar de novo</button>
             </>
           ) : (
-            <span className="whitespace-nowrap tabular-nums" data-testid="favorecido-linha-texto" title={textoDaLinhaDoDocumento(escolhido) || documentoDoEscolhido || undefined}>{linhaDoCampo(escolhido)}</span>
+            nomeLongoEmbaixo && escolhido && escolhido.nome.length > nomeLongoEmbaixo ? (
+              <span className="whitespace-nowrap text-[8.5px] tabular-nums" data-testid="favorecido-linha-texto"
+                title={[escolhido.nome, textoDaLinhaDoDocumento(escolhido) || documentoDoEscolhido].filter(Boolean).join(' · ')}>
+                <span className="text-foreground/80" data-testid="favorecido-nome-inteiro">{escolhido.nome}</span> · {linhaDoCampo(escolhido)}
+              </span>
+            ) : (
+              <span className="whitespace-nowrap tabular-nums" data-testid="favorecido-linha-texto" title={textoDaLinhaDoDocumento(escolhido) || documentoDoEscolhido || undefined}>{linhaDoCampo(escolhido)}</span>
+            )
           )}
         </div>
       )}
