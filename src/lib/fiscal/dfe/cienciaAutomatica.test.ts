@@ -1,7 +1,7 @@
 /**
  * NOTAS-RECEITA · CIÊNCIA AUTOMÁTICA (210210) — a ordem do envio no fim da busca (regra do produto 18/11). Sem rede, sem Receita, sem banco.
  *   A1 desligada (o parâmetro do produto) = nada enviado · A2 o limite por busca · A3 a recusa de UMA nota segue; a mesma recusa 2× seguidas
- *   para · A4 a recusa do LOTE para · A5 certificado e conexão param · A6 o orçamento de tempo · A7 as pendentes que não se leem = nada enviado
+ *   para (a do sistema; a 596 é da nota, A8) · A4 a recusa do LOTE para · A5 certificado e conexão param · A6 o orçamento de tempo · A7 as pendentes que não se leem = nada enviado
  */
 import { describe, expect, it } from 'vitest';
 import { cienciaAutomatica, type PendentesDaCiencia, type RespostaDaCiencia } from '../../../../supabase/functions/_shared/dfe/cienciaAutomatica';
@@ -37,8 +37,9 @@ describe('cienciaAutomatica — o fim da busca', () => {
     expect(x.enviadas).toEqual([ch(1), ch(2)]);
     expect(c).toMatchObject({ pendentes: 3, enviadas: 2, aceitas: 2, recusadas: 0, parou: null, cstats: ['135', '135'] });
   });
+  /* CONSERTO 27/11: o exemplo era a 596 (fora do prazo), que agora é da NOTA e não para (A8); a repetida do SISTEMA é a 296 (certificado/LCR) */
   it('A3 a recusa de UMA nota segue para a próxima; a MESMA recusa 2× seguidas para', async () => {
-    const x = pecas({ ligada: true, limite: 10, chaves: [ch(1), ch(2), ch(3), ch(4), ch(5)] }, [recusa('596'), aceita, recusa('596'), recusa('596'), aceita]);
+    const x = pecas({ ligada: true, limite: 10, chaves: [ch(1), ch(2), ch(3), ch(4), ch(5)] }, [recusa('296'), aceita, recusa('296'), recusa('296'), aceita]);
     const c = await cienciaAutomatica(0, x.pecas);
     expect(x.enviadas).toEqual([ch(1), ch(2), ch(3), ch(4)]);
     expect(c).toMatchObject({ enviadas: 4, aceitas: 1, recusadas: 3, parou: 'recusa_repetida' });
@@ -70,5 +71,14 @@ describe('cienciaAutomatica — o fim da busca', () => {
     const c = await cienciaAutomatica(0, x.pecas);
     expect(x.enviadas).toEqual([]);
     expect(c).toMatchObject({ enviadas: 0, parou: 'interno', motivo: 'pendentes' });
+  });
+
+  it('A8 CONSERTO 27/11: a 596 (fora do prazo) é da NOTA — segue para as próximas e nunca para a rodada; a repetida do sistema ainda para', async () => {
+    const x = pecas({ ligada: true, limite: 10, chaves: [ch(1), ch(2), ch(3), ch(4)] }, [recusa('596'), recusa('596'), recusa('596'), aceita]);
+    const r = await cienciaAutomatica(0, x.pecas);
+    expect(x.enviadas).toEqual([ch(1), ch(2), ch(3), ch(4)]);
+    expect(r).toMatchObject({ enviadas: 4, aceitas: 1, recusadas: 3, parou: null });
+    const y = pecas({ ligada: true, limite: 10, chaves: [ch(1), ch(2), ch(3)] }, [recusa('296'), recusa('296'), aceita]);
+    expect((await cienciaAutomatica(0, y.pecas)).parou).toBe('recusa_repetida');
   });
 });

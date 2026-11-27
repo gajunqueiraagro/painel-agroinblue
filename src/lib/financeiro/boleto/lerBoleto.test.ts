@@ -189,3 +189,53 @@ describe('a página de cada boleto', () => {
     expect(lerBoletos([[it_(LINHA, 200, 700), it_(LINHA_2, 200, 300)]]).paginaDeCada).toEqual([1, 1]);
   });
 });
+
+describe('o vencimento IMPRESSO da arrecadação (FOLHA-VERA-PACOTE-01: o DARF entrava sem vencimento)', () => {
+  /* a arrecadação sintética do linhaDigitavelDv.test (DV certo); o código dela não tem vencimento */
+  const ARR = '81660000001-1 23450001111-4 22223333444-0 45555666677-0';
+  const darf = (extra: ItemDoDanfe[] = []) => [
+    it_('Período de Apuração', 40, 760), it_('Data de Vencimento', 200, 760), it_('Número do Documento', 360, 760),
+    it_('Pagar este documento até', 520, 770), it_('Março/2026', 40, 748), it_('20/04/2026', 200, 748), it_('07.00.00000.0000000-0', 360, 748),
+    it_('20/04/2026', 520, 755), it_('PA:03/2026', 40, 500), it_('Vencimento:20/04/2026', 120, 500), it_(ARR, 40, 300),
+    it_('Pagar até:', 40, 200), it_('20/04/2026', 120, 200), ...extra,
+  ];
+
+  it('DARF: "Data de Vencimento" (embaixo), "Pagar este documento até", "Vencimento:" no item e "Pagar até:" ao lado — a mesma data', () => {
+    const l = lerBoleto([darf()]);
+    expect(l.boleto).toMatchObject({ tipo: 'arrecadacao', vencimento: '2026-04-20' });
+    expect(lerBoletos([darf()]).boletos.map((b) => b.vencimento)).toEqual(['2026-04-20']);
+  });
+
+  it('DAS: só "Pagar este documento até" com a data embaixo', () => {
+    expect(lerBoleto([[it_('Pagar este documento até', 40, 400), it_('31/03/2026', 40, 388), it_(ARR, 40, 300)]]).boleto?.vencimento).toBe('2026-03-31');
+  });
+
+  it('duas datas diferentes nos rótulos = null (nunca chutar); data que não existe também; sem rótulo, null', () => {
+    expect(lerBoleto([darf([it_('Vencimento: 21/04/2026', 40, 100)])]).boleto?.vencimento).toBeNull();
+    expect(lerBoleto([[it_('Vencimento', 40, 400), it_('31/02/2026', 40, 390), it_(ARR, 40, 300)]]).boleto?.vencimento).toBeNull();
+    expect(lerBoleto([[it_('Emitido em 20/04/2026', 40, 400), it_(ARR, 40, 300)]]).boleto?.vencimento).toBeNull();
+  });
+
+  it('a data longe do rótulo (mais de ~3 linhas abaixo) não é dele', () => {
+    expect(lerBoleto([[it_('Vencimento', 40, 400), it_('20/04/2026', 40, 300), it_(ARR, 40, 200)]]).boleto?.vencimento).toBeNull();
+  });
+
+  it('no PDF de várias páginas, vale a página do boleto (a capa com outra data não conta)', () => {
+    const capa = [it_('Vencimento', 40, 400), it_('10/01/2026', 40, 390)];
+    expect(lerBoletos([capa, darf()]).boletos.map((b) => b.vencimento)).toEqual(['2026-04-20']);
+  });
+
+  it('o bancário não muda: o vencimento é o do fator, nunca o impresso', () => {
+    const l = lerBoleto([[it_('Vencimento', 40, 400), it_('01/01/2030', 40, 390), it_(LINHA, 200, 300)]]);
+    expect(l.boleto?.tipo).toBe('bancario');
+    expect(l.boleto?.vencimento).not.toBe('2030-01-01');
+  });
+
+  it('o p_leitura leva o vencimento impresso da arrecadação (o banco só o usa quando o código não tem)', () => {
+    const l = lerBoleto([darf()]);
+    if (!l.boleto) throw new Error('sem boleto');
+    expect(paraEntrada({ ...l, boleto: l.boleto }, 'email', 'darf.pdf')).toMatchObject({ vencimento: '2026-04-20' });
+    const sem = { ...l, boleto: { ...l.boleto, vencimento: null } };
+    expect(paraEntrada(sem, 'email', 'darf.pdf')).not.toHaveProperty('vencimento');
+  });
+});

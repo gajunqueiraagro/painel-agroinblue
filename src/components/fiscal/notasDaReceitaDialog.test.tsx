@@ -5,7 +5,7 @@
  *   C1–C4 NOTA-RECEITA-CASAR-01: "Pode estar lançada"; "Lançar" com candidatos abre o quadro; 1 do mesmo CNPJ pré-marcado e "Vincular" manda
  *   o id certo; vários = nenhum marcado; "lançar nova" segue o caminho de hoje; frase da porta 2 aparece no quadro
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, afterAll, beforeAll } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { NotasDaReceitaDialog } from './NotasDaReceitaDialog';
 import { montarLista, type CandidatoDaNota, type LinhaRecebida } from '@/lib/fiscal/notasDaReceita';
@@ -28,6 +28,10 @@ const abrir = (o: { aoLancar?: (f: File) => void; aoVincular?: (f: File, id: str
     aoLancar={o.aoLancar ?? (() => {})} aoVincular={o.aoVincular ?? (async () => null)} lerXml={o.lerXml ?? (async () => '<nfeProc/>')}
     abrirDanfe={o.abrirDanfe ?? (() => null)} mostrarNaAba={o.mostrarNaAba ?? (async () => {})} />);
 const linhaDe = (n: number) => screen.getAllByTestId('receita-linha').find((tr) => tr.textContent?.includes(`Emitente Exemplo ${n}`)) as HTMLElement;
+
+/* CONSERTO DA CIÊNCIA (27/11): a nota só-resumo com mais de 10 dias fica "Fora do prazo"; as datas dos exemplos (14/11) valem num dia fixo */
+beforeAll(() => { vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-15T12:00:00') }); });
+afterAll(() => { vi.useRealTimers(); });
 
 describe('NOTAS-RECEITA F3.4 — a tela', () => {
   it('T1 lista as 4, situações certas, rodapé sem a cancelada', () => {

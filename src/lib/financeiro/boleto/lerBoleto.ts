@@ -138,6 +138,33 @@ function decidir(a: Achado, doOutro: string[]): ParteDoBoleto {
   };
 }
 
+/**
+ * FOLHA-VERA-PACOTE-01 (achado do DARF, Gabriel 27/11: "conserto vale para todos") — a ARRECADAÇÃO (DARF, DAS, GPS, guia municipal, conta de
+ * consumo) não tem o vencimento no código de barras; ele está IMPRESSO ("Pagar este documento até", "Data de Vencimento", "Vencimento:",
+ * "Pagar até:"). Pela posição (o `pertoDe` dos rótulos do beneficiário): a data no próprio rótulo, à direita ou logo abaixo dele. Todas as
+ * ocorrências têm de dizer a MESMA data; duas datas diferentes = null (nunca chutar). Só para a arrecadação: o bancário tem o fator.
+ */
+const ROTULO_VENCIMENTO = /^(?:pagar\s+(?:este\s+documento\s+)?at[eé]|data\s+de\s+vencimento|vencimento)(?![a-z])\s*:?/i;
+const DATA_IMPRESSA = /(?<!\d)(\d{2})\/(\d{2})\/(\d{4})(?!\d)/;
+function dataDoItem(s: string): string | null {
+  const m = s.match(DATA_IMPRESSA);
+  if (!m) return null;
+  const [dia, mes, ano] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const d = new Date(Date.UTC(ano, mes - 1, dia));
+  return d.getUTCFullYear() === ano && d.getUTCMonth() === mes - 1 && d.getUTCDate() === dia ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+function vencimentoImpresso(itens: ItemNaPagina[]): string | null {
+  const datas = new Set<string>();
+  for (const r of itens.filter((t) => ROTULO_VENCIMENTO.test(t.str.trim()))) {
+    const data = [r, ...pertoDe(r, itens).filter((t) => t !== r)].map((t) => dataDoItem(t.str)).find((d) => d !== null);
+    if (data) datas.add(data);
+  }
+  return datas.size === 1 ? [...datas][0] : null;
+}
+/** A arrecadação sem vencimento ganha o impresso (os itens da página dela); o resto fica como o código diz. */
+const comVencimentoImpresso = (b: BoletoNormalizado, itens: ItemNaPagina[]): BoletoNormalizado =>
+  b.tipo === 'arrecadacao' && b.vencimento === null ? { ...b, vencimento: vencimentoImpresso(itens) } : b;
+
 export interface LeituraDoBoleto {
   /** A linha conferida (DV certo), ou null. */
   boleto: BoletoNormalizado | null;
@@ -151,8 +178,9 @@ export function lerBoleto(paginas: ItemDoDanfe[][]): LeituraDoBoleto {
   const texto = paginas.map((p) => p.map((t) => t.str).join(' ')).join('\n');
   const b = acharParte(itens, ROTULO_BENEFICIARIO);
   const p = acharParte(itens, ROTULO_PAGADOR);
+  const boleto = acharBoletoNoTexto(texto);
   return {
-    boleto: acharBoletoNoTexto(texto),
+    boleto: boleto ? comVencimentoImpresso(boleto, itens) : null,
     beneficiario: decidir(b, p.documentos),
     pagador: decidir(p, b.documentos),
   };
@@ -170,13 +198,14 @@ export interface LeituraDosBoletos {
 export function lerBoletos(paginas: ItemDoDanfe[][]): LeituraDosBoletos {
   const um = lerBoleto(paginas);
   const textos = paginas.map((p) => p.map((t) => t.str).join(' '));
-  const boletos = acharBoletosNoTexto(textos.join('\n'));
+  const lidos = acharBoletosNoTexto(textos.join('\n'));
   const porPagina = textos.map((t) => acharBoletosNoTexto(t).map((b) => b.codigo_barras));
   /* a linha que só se forma juntando duas páginas (nunca visto) fica na última página: o arquivo dela leva o resto, nunca menos */
-  const paginaDeCada = boletos.map((b) => {
+  const paginaDeCada = lidos.map((b) => {
     const i = porPagina.findIndex((cs) => cs.includes(b.codigo_barras));
     return i < 0 ? paginas.length : i + 1;
   });
+  const boletos = lidos.map((b, i) => comVencimentoImpresso(b, (paginas[paginaDeCada[i] - 1] ?? []).map((t) => ({ ...t, pagina: paginaDeCada[i] }))));
   return { boletos, beneficiario: um.beneficiario, pagador: um.pagador, paginaDeCada, totalDePaginas: paginas.length };
 }
 
@@ -186,6 +215,8 @@ export function paraEntrada(l: LeituraDoBoleto & { boleto: BoletoNormalizado }, 
   return {
     linha: l.boleto.linha,
     origem,
+    /* a arrecadação: o vencimento impresso (o banco só o usa quando o código não tem) */
+    ...(l.boleto.tipo === 'arrecadacao' && l.boleto.vencimento ? { vencimento: l.boleto.vencimento } : {}),
     arquivo_nome: arquivoNome,
     arquivo_extensao: ext.toLowerCase(),
     ...(l.beneficiario.nome ? { beneficiario_nome: l.beneficiario.nome } : {}),

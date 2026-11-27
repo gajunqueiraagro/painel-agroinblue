@@ -270,7 +270,8 @@ export function ParcelarEsteLancamento({ clienteId, lancamento, situacao, vencim
           <GradeDeParcelas modo={modo} onModo={trocarModo} parcelas={grade} onParcelas={setLivres} compraCent={lancamento.valorCent}
             oQue={{ frase: 'o lançamento', rotulo: 'Valor', passaAValer: 'O lançamento vale' }} base={base} rotuloVoltar="Desfazer edições"
             recado={grade.length && grade.every((x) => x.valorCent === grade[0].valorCent) ? `${grade.length} × ${brCentavos(grade[0].valorCent)} = R$ ${brCentavos(lancamento.valorCent)}` : null}
-            altura={190} compacta extras={[{ titulo: 'Situação', largura: 96, celula: (k) => (k === 1 ? 'este lançamento' : <span className="text-violet-700">nova</span>) }]} />
+            /* segue a JANELA (máx. 190): na baixa (750×483), os 32 px da linha "Quem paga" de lugar fixo (conserto 27/11) saem daqui, e só a lista rola */
+            altura="clamp(120px, calc(100vh - 337px), 190px)" compacta extras={[{ titulo: 'Situação', largura: 96, celula: (k) => (k === 1 ? 'este lançamento' : <span className="text-violet-700">nova</span>) }]} />
         </div>
       )}
 
