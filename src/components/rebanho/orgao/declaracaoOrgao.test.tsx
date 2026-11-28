@@ -93,7 +93,7 @@ describe('REBANHO-ORGAO-01 F3 v3 — a tela da declaração', () => {
     await waitFor(() => expect(celulas(linha('F', 0))[2]).toBe('—'));   // a conta do sistema aparece; o órgão é "—" (nunca 0)
     expect(screen.getByTestId('chip-divergencias').textContent).toBe('sem comprovante lido');
     expect(screen.getByTestId('marcar-declarado')).toBeDisabled();
-    expect(screen.getByText('1 fazenda(s) fora (UF)')).toBeTruthy();
+    expect(screen.getByText('1 fora da UF')).toBeTruthy();
   });
 
   it('soltar o Comprovante: grava as LINHAS e o arquivo; o sistema é o de 23/11 (o nascido em 27/11 não entra) e a tela avisa', async () => {
@@ -106,7 +106,7 @@ describe('REBANHO-ORGAO-01 F3 v3 — a tela da declaração', () => {
     expect(screen.getByTestId('passo-saldo').textContent).toMatch(/Comprovante 23\/11\/2026 11:37 · lido/);
     expect(screen.getByTestId('sistema-F-0').textContent).toBe('21');                      // 25 no fim do mês − 4 nascidos em 27/11
     expect(screen.getByTestId('sistema-F-1').getAttribute('rowspan')).toBe('3');          // o bloco que o sistema não separa
-    expect(screen.getByTestId('tabela-evolucao').textContent).toMatch(/1 lançamento\(s\) depois de 23\/11 · órgão em 23\/11 × sistema em 23\/11/);
+    expect(screen.getByTestId('tabela-evolucao').textContent).toMatch(/1 lançamento\(s\) depois de 23\/11\/2026 · órgão em 23\/11\/2026 × sistema em 23\/11\/2026/);
   });
 
   it('o PDF que não é do órgão: a frase e NADA grava (nem sobe)', async () => {

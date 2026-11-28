@@ -42,7 +42,7 @@ const comSinal = (v: number) => (v > 0 ? `+${v.toLocaleString('pt-BR')}` : v.toL
 const NOME: Record<Sexo, string> = { F: 'Fêmea', M: 'Macho' };
 const GRUPO: Record<Sexo, string> = { F: 'Fêmeas', M: 'Machos' };
 /* as colunas do mock v3 (somam 756px) */
-const COLS = [48, 100, 66, 78, 84, 84, 56, 72, 84, 84];
+const COLS = [44, 112, 52, 72, 72, 72, 46, 56, 56, 50];
 const LARGURA = COLS.reduce((a, c) => a + c, 0);
 const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary text-right');
 const COR_DO_STATUS: Record<StatusDaFazenda, string> = {
@@ -119,15 +119,16 @@ export function DeclaracaoOrgao(props: { clienteId: string | null; clienteNome: 
           <div className="min-w-0 flex-1">
             <SearchableSelect value={atual?.fazenda.id ?? ''} onValueChange={(v) => { setEscolhida(v); setFrase(null); }} semTodos placeholder="Fazenda"
               options={d.porFazenda.map((f) => ({ value: f.fazenda.id, label: f.fazenda.nome, hint: ROTULO_DO_STATUS[f.status] }))}
-              triggerClassName="h-[26px] text-[10.5px] font-semibold" />
+              triggerClassName="h-[26px] text-[10.5px] font-semibold" nomeInteiro />
           </div>
-          {atual && <span className={cn('shrink-0 rounded-full px-1.5 py-px text-[9.5px] font-semibold', COR_DO_STATUS[atual.status])}
+          {atual && <span className={cn('w-[66px] shrink-0 rounded-full py-px text-center text-[9.5px] font-semibold', COR_DO_STATUS[atual.status])}
             data-testid="status-da-fazenda">{ROTULO_DO_STATUS[atual.status]}</span>}
         </div>
         {atual && <ChipDivergencias f={atual} />}
-        <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title={d.foraDaUf.length ? `fora desta UF: ${d.foraDaUf.map((f) => `${f.nome} (${f.uf ?? 'sem UF — cadastre'})`).join(', ')}` : undefined}>
-          {d.foraDaUf.length > 0 ? `${d.foraDaUf.length} fazenda(s) fora (UF)` : ''}
+        <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground" data-testid="fora-da-uf" title={d.foraDaUf.length ? `fora desta UF: ${d.foraDaUf.map((f) => `${f.nome} (${f.uf ?? 'sem UF — cadastre'})`).join(', ')}` : undefined}>
+          {d.foraDaUf.length > 0 ? `${d.foraDaUf.length} fora da UF` : ''}
         </span>
+        <span className="min-w-0 flex-1" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="h-[26px] shrink-0 text-[10.5px]" disabled={!d.porFazenda.some((f) => f.proposta)} data-testid="exportar">Exportar ▾</Button>
@@ -167,7 +168,7 @@ export function DeclaracaoOrgao(props: { clienteId: string | null; clienteNome: 
           <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px] gap-3">
             <Quadro f={atual} encerrada={d.encerrada} ocupado={!!d.ocupado} aoEditar={(c, v) => agir(d.editar(atual.fazenda.id, c, v))}
               aoCausa={(s, g) => setCausa({ s, g })} />
-            <div className="flex min-h-0 min-w-0 flex-col gap-2.5 overflow-hidden">
+            <div className="flex min-h-0 min-w-0 flex-col gap-2.5 overflow-y-auto">
               <Sugestao f={atual} ocupado={!!d.ocupado} aoDeclarar={(arq) => agir(d.declarar(atual.fazenda.id, arq))}
                 aoDesfazer={(m) => agir(d.desfazer(atual.fazenda.id, m))} />
               <Diferencas f={atual} aoCausa={(s, g) => setCausa({ s, g })} />
@@ -262,7 +263,7 @@ function Quadro({ f, encerrada, ocupado, aoEditar, aoCausa }: {
 }) {
   const p = f.proposta;
   const editavel = !!p && !ocupado && !f.soLeitura && !!f.comprovante;
-  const dataCurta = dataBR(f.dataDosNumeros).slice(0, f.soLeitura ? 10 : 5);
+  const dataCurta = dataBR(f.dataDosNumeros);
   const total = (sel: (l: LinhaDaProposta) => number | null) => {
     if (!p) return null;
     const xs = (['F', 'M'] as const).flatMap((s) => p.linhas[s].map(sel));
@@ -300,14 +301,14 @@ function Quadro({ f, encerrada, ocupado, aoEditar, aoCausa }: {
             {colgroup}
             <thead><tr>
               <th className={cn(TH, 'text-left')}>Sexo</th><th className={cn(TH, 'text-left')}>Faixa (órgão)</th>
-              <th className={TH} title="o comprovante do órgão">Órgão {dataCurta}</th>
-              <th className={TH} title="lançados no sistema desde a última declaração · editável">Nascimentos</th>
-              <th className={TH} title="editável">Mortes/consumo</th>
-              <th className={TH} title="sobe 1 faixa · editável">Passa p/ próxima</th>
+              <th className={TH} title={`o comprovante do órgão em ${dataBR(f.dataDosNumeros)}`}>Órgão</th>
+              <th className={TH} title="Nascimentos: lançados no sistema desde a última declaração · editável">Nasc.</th>
+              <th className={TH} title="Mortes/consumo · editável">Mortes</th>
+              <th className={TH} title="Passa p/ próxima faixa (sobe 1 faixa) · editável">Passa</th>
               <th className={TH} title="da faixa anterior">Entra</th>
               <th className={TH}>Sugerido</th>
-              <th className={TH} title="último fechamento + movimentos até a data do saldo">Sistema {dataCurta}</th>
-              <th className={TH}>Diferença</th>
+              <th className={TH} title={`Sistema em ${dataBR(f.dataDosNumeros)}: último fechamento + movimentos até a data do saldo`}>Sistema</th>
+              <th className={TH} title="Diferença = sistema − sugerido">Dif.</th>
             </tr></thead>
             <tbody>
               {(['F', 'M'] as const).map((s) => (
@@ -416,7 +417,12 @@ function Sugestao({ f, ocupado, aoDeclarar, aoDesfazer }: { f: DaFazenda; ocupad
       <Linha rotulo="Nascimentos" valor={n0(p ? total([nasc('F'), nasc('M')]) : null)} />
       <Linha rotulo="fêmeas" valor={n0(nasc('F'))} recuo /><Linha rotulo="machos" valor={n0(nasc('M'))} recuo />
       <Linha rotulo="Mortes e consumo" valor={n0(p ? mcs.reduce((a, x) => a + x.l.mortesConsumo, 0) : null)} />
-      {mcs.slice(0, 3).map(({ s, l }) => <Linha key={`${s}${l.faixa}`} recuo rotulo={`${NOME[s].toLowerCase()} ${ROTULO_DA_FAIXA[l.faixa]}`} valor={n0(l.mortesConsumo)} />)}
+      {/* 3 lugares fixos (nada se desloca: o que vem abaixo fica no lugar com 0, 1, 2 ou 3 faixas com mortes) */}
+      {[0, 1, 2].map((i) => {
+        const x = mcs[i];
+        return x ? <Linha key={`${x.s}${x.l.faixa}`} recuo rotulo={`${NOME[x.s].toLowerCase()} ${ROTULO_DA_FAIXA[x.l.faixa]}`} valor={n0(x.l.mortesConsumo)} />
+          : <div key={`vazio${i}`} className="h-[20px]" aria-hidden />;
+      })}
       {declarada ? <Linha rotulo="Troca de faixa" valor={n0(troca)} /> : <Linha rotulo="Troca de faixa a preencher" valor={n0(aPreencher)} />}
       {!f.soLeitura && (
         <div className="mt-1.5 flex h-[22px] items-center gap-1.5 text-[10px] text-muted-foreground">
@@ -460,19 +466,25 @@ function Diferencas({ f, aoCausa }: { f: DaFazenda; aoCausa: (s: Sexo, g: GrupoD
   return (
     <Card titulo="Diferenças" testid="diferencas"
       selo={ds.length && !f.soLeitura ? <span className="shrink-0 rounded-full bg-red-100 px-1.5 text-[9.5px] font-semibold text-red-700">conferir antes</span> : undefined}>
+      {/* altura fixa de 4 linhas de 24 px (rola se houver mais): o card de baixo nunca se desloca; as linhas mudam de propósito com o comprovante */}
+      <div className="h-[96px] overflow-y-auto" data-desloca-livre data-testid="diferencas-linhas">
       {!f.proposta ? <p className="text-[10px] text-muted-foreground">{f.status === 'sem_rebanho' ? 'Nada a conferir nesta etapa.' : '—'}</p>
         : ds.length === 0 ? <p className="text-[10px] text-emerald-700">Órgão e sistema batem em todas as faixas.</p>
         : ds.map(({ s, g }) => {
           const causas = causasDe(f, s);
-          const rotulo = `${NOME[s]} ${g.de === g.ate ? ROTULO_DA_FAIXA[g.de] : `${ROTULO_DA_FAIXA[g.de].replace(' meses', '')} a 36+ meses`} · ${causas.length ? CLASSE[causas[0].classe] : 'sem causa'}`;
+          const faixa = `${NOME[s]} ${g.de === g.ate ? ROTULO_DA_FAIXA[g.de] : g.ate === 3 ? `${['0', '13', '25', '37'][g.de]} meses ou mais` : faixaDoGrupo(g)}`;
+          const causa = causas.length ? CLASSE[causas[0].classe] : 'sem causa';
           return (
-            <div key={`${s}${g.de}`} className="flex h-[20px] items-center gap-1 text-[10px]" data-testid={`diferenca-${s}-${g.de}`}>
-              <span className="min-w-0 flex-1 truncate" title={rotulo}>{rotulo}</span>
+            <div key={`${s}${g.de}`} className="flex h-[24px] items-center gap-1 text-[10px]" data-testid={`diferenca-${s}-${g.de}`}>
+              <span className="flex min-w-0 flex-1 flex-col leading-[11px]" title={`${faixa} · ${causa}`}>
+                <span className="whitespace-nowrap">{faixa}</span><span className="whitespace-nowrap text-[9.5px] text-muted-foreground">{causa}</span>
+              </span>
               <span className={cn('w-[36px] shrink-0 text-right font-semibold tabular-nums', causas.length === 0 && 'text-red-600')}>{comSinal(g.dif ?? 0)}</span>
               <Info aoClicar={() => aoCausa(s, g)} titulo="ver a causa" testid={`ver-causa-${s}-${g.de}`} />
             </div>
           );
         })}
+      </div>
       {f.proposta && <p className="mt-1 text-[9.5px] leading-snug text-muted-foreground">Nada é declarado pelo sistema: o relatório leva a sugestão, o que você editou e cada diferença com a causa.</p>}
     </Card>
   );
