@@ -56,7 +56,7 @@ const PLANEJAMENTO_GESTOR: V2Section[] = ['lancamentos-meta-fin', 'planejamento-
 const EXECUTIVO_GESTOR: V2Section[] = ['painel-consultor', 'fechamento-periodo', 'indicadores-zoot', 'valor-rebanho', 'dre'];
 const CADASTROS_GESTOR: V2Section[] = ['config-fazendas', 'contas-bancarias', 'fornecedores', 'patrimonio', 'produtores', 'safras', 'locais-estoque', 'dividendos'];
 const ROTULOS_PRODUCAO_GESTOR = ['Pecuária', 'Agricultura', 'Fechamento área', 'Visão geral', 'Lançamentos', 'Operações comerciais', 'Evolução no ano',
-  'Mapa de pastos', 'Geo pastos', 'Lotes', 'Chuvas', 'Estoque de grãos', 'Barter'];
+  'Mapa de pastos', 'Geo pastos', 'Lotes', 'Declaração ao órgão', 'Chuvas', 'Estoque de grãos', 'Barter'];   // + REBANHO-ORGAO-01 F3 v3 (D3)
 /* a limpeza (esconder antes de apagar): os dois itens sem dado ou repetidos */
 const ESCONDIDOS: V2Section[] = ['financeiro-dashboard', 'rateio-adm'];
 const semObraNemEscondido = (g: (typeof NAV_GRUPOS)[number]) =>
@@ -429,7 +429,7 @@ describe('PERFIL-GESTOR-01 — gestor × tela e os escondidos', () => {
   it('a lista do dono é a da matriz aprovada (escrita à mão)', () => {
     expect([...TELAS_DO_GESTOR]).toEqual(['home', 'rebanho-home', 'mapa-pastos', 'mapa-geo-pastos', 'lotes', 'chuvas', 'chuvas-lancamento',
       'lancamentos-agricultura', 'painel-periodo', 'planejamento-home', 'lancamentos-meta-fin', 'fechamento-periodo', 'indicadores-zoot',
-      'config-fazendas', 'produtores', 'safras', 'locais-estoque', 'dividendos']);
+      'config-fazendas', 'produtores', 'safras', 'locais-estoque', 'dividendos', 'declaracao-orgao']);   // + REBANHO-ORGAO-01 F3 v3 (D3, Gabriel 27/11)
   });
   it('célula por célula: o gestor vê e edita; financeiro, campo e leitura NÃO abrem; admin edita; perfil nulo ou desconhecido, não', () => {
     for (const t of TELAS_DO_GESTOR) expect(`${t}:${PERFIS.map((p) => nivelDaTela(p, false, t)).join(',')}`).toBe(`${t}:editar,nao,nao,nao`);

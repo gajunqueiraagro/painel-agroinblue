@@ -5,7 +5,7 @@
  * ⚠ Mortes e consumo numa coluna só (a tela as edita juntas); "Transf. Era" = o que entra da faixa de baixo − o que passa para a de cima.
  * ⚠ "Saldo Real na fazenda" é o SISTEMA: a faixa que o sistema não separa sai no bloco (célula mesclada), como na tela; sem número = vazio.
  * ⚠ Sem número (comprovante não lido, troca de faixa sem nascimento lançado) = célula VAZIA; o zero é zero (valor real).
- * Pura: devolve as linhas e as mesclas; quem baixa monta o arquivo (`baixarPlanilhaDaDeclaracao`).
+ * Pura: devolve as linhas e as mesclas; quem baixa monta o arquivo (`baixarRelatorioExcel`).
  */
 import { FAIXAS, type Faixa } from './tipos';
 import type { PropostaDaFazenda } from './propostaDaDeclaracao';
@@ -45,14 +45,4 @@ export function linhasDaPlanilha(fazendaNome: string, dataBR: string, p: Propost
   linhas.push([null, null, 'Total', col(0), col(1), col(2), col(3), col(4), null, null, col(5), col(6)]);
   return { linhas, mesclas };
 }
-
-/** Baixa o .xlsx (o pacote `xlsx` da casa, carregado só no gesto). */
-export async function baixarPlanilhaDaDeclaracao(nomeDoArquivo: string, fazendaNome: string, dataBR: string, p: PropostaDaFazenda): Promise<void> {
-  const XLSX = await import('xlsx');
-  const { linhas, mesclas } = linhasDaPlanilha(fazendaNome, dataBR, p);
-  const ws = XLSX.utils.aoa_to_sheet(linhas);
-  ws['!merges'] = mesclas.map((m) => ({ s: { r: m.linha, c: m.coluna }, e: { r: m.linha + m.linhas - 1, c: m.coluna } }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Planilha1');
-  XLSX.writeFile(wb, nomeDoArquivo);
-}
+/* O arquivo (.xlsx, uma aba por fazenda + as diferenças) se monta em `relatorioDaDeclaracao.ts` (F3 v3), pelo `importarDoApp`. */

@@ -1,12 +1,14 @@
-/* REBANHO-ORGAO-01 F3 — a bancada da "Declaração ao órgão": a API em memória e o leitor do PDF falso (dado SINTÉTICO; o comprovante é o
-   fixture fictício). `vazia` = nenhum PDF lido ainda (IAGRO "—", declarar apagado); senão a fazenda 1 já tem o comprovante lido e uma célula
-   editada (amarelo + ↺), e o sistema tem novilhas/vacas (o bloco que não se separa) e uma divergência. */
+/* REBANHO-ORGAO-01 F3 v3 — a bancada da "Declaração ao órgão": a API em memória e o leitor do PDF falso (dado SINTÉTICO; o comprovante é o
+   fixture fictício). `vazia` = nenhum PDF lido ainda (órgão "—", marcar apagado); senão a fazenda 1 já tem o comprovante lido e uma célula
+   editada (amarelo + ↺), e o sistema tem novilhas/vacas (o bloco que não se separa) e uma divergência com causa (o ajuste de contagem).
+   v3: a fazenda sem gado (o "sem rebanho"), a etapa de maio já encerrada (só leitura) e o comprovante que abre. */
 import { COMPROVANTE_FICTICIO } from '@/lib/rebanho/orgao/__fixtures__/iagroFicticio';
 import { declaracaoDaLinha, type DeclaracaoApi } from '@/lib/rebanho/orgao/declaracaoApi';
 import type { LerLinhasDoPdf } from '@/hooks/useDeclaracaoOrgao';
 
 export const HOJE_DA_DECLARACAO = '2026-11-24';
 const ETAPAS = [
+  { id: 'et-mai', uf: 'MS', orgao: 'IAGRO', tipo: 'declaracao', inicio: '2026-05-01', fim: '2026-05-31', prorrogado_ate: '2026-06-02', ativo: true },
   { id: 'et-nov', uf: 'MS', orgao: 'IAGRO', tipo: 'declaracao', inicio: '2026-11-01', fim: '2026-11-30', prorrogado_ate: null, ativo: true },
   { id: 'et-bru', uf: 'MS', orgao: 'IAGRO', tipo: 'brucelose', inicio: '2026-07-01', fim: '2026-12-31', prorrogado_ate: null, ativo: true },
 ];
@@ -34,8 +36,9 @@ export function apiDaDeclaracao(vazia: boolean): DeclaracaoApi {
   }];
   return {
     etapas: async () => ({ ok: true, dados: ETAPAS }),
-    fazendas: async () => ({ ok: true, dados: [{ id: 'fz1', nome: 'Fazenda Sintética Um', uf: 'MS' },
-      { id: 'fz2', nome: 'Fazenda Sintética Dois com Nome Comprido', uf: 'MS' }, { id: 'fz3', nome: 'Fazenda Sem UF', uf: null }] }),
+    fazendas: async () => ({ ok: true, dados: [{ id: 'fz1', nome: 'Fazenda Sintética Um', uf: 'MS', temPecuaria: true },
+      { id: 'fz2', nome: 'Fazenda Sintética Dois com Nome Comprido', uf: 'MS', temPecuaria: true }, { id: 'fz3', nome: 'Fazenda Sem UF', uf: null, temPecuaria: true },
+      { id: 'fz4', nome: 'Fazenda Sem Gado', uf: 'MS', temPecuaria: false }] }),
     declaracoes: async () => ({ ok: true, dados: { desta: linhas.flatMap((l) => { const d = declaracaoDaLinha(l); return d ? [d] : []; }), ultimaDeclarada: '2026-05-04' } }),
     fatos: async () => ({ ok: true, dados: FATOS }),
     gravar: async (fazendaId, etapaId, campos) => {
@@ -44,14 +47,15 @@ export function apiDaDeclaracao(vazia: boolean): DeclaracaoApi {
       Object.assign(l, campos, { versao: Number(l.versao) + 1 });
       return { ok: true, dados: { id: String(l.id), versao: Number(l.versao) } };
     },
-    declarar: async (id, proposta) => {
+    declarar: async (id, proposta, comprovante) => {
       const l = linhas.find((x) => x.id === id);
-      if (l) Object.assign(l, { status: 'declarada', proposta, declarada_em: '2026-11-24T12:00:00Z', versao: Number(l.versao) + 1 });
+      if (l) Object.assign(l, { status: 'declarada', proposta, comprovante_arquivo: comprovante, declarada_em: '2026-11-24T12:00:00Z', versao: Number(l.versao) + 1 });
       return { ok: true, dados: { versao: Number(l?.versao ?? 0) } };
     },
     desfazer: async () => ({ ok: true, dados: true }),
     egtas: async () => ({ ok: true, dados: { grava: 0, jaEstava: 0, recusa: [] } }),
     subirPdf: async () => ({ ok: true, dados: true }),
+    urlDoArquivo: async () => ({ ok: true, dados: 'about:blank' }),
   };
 }
 export const LER_PDF_DA_BANCADA: LerLinhasDoPdf = async () => [...COMPROVANTE_FICTICIO];

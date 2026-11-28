@@ -1491,15 +1491,31 @@ const CENARIOS = [
     } }];
   })(),
   ...(() => {
-    /* REBANHO-ORGAO-01 F3 — a "Declaração ao órgão" (dado SINTÉTICO, `dados/declaracaoOrgao.ts`): com o comprovante lido (a célula editada,
-       o bloco que o sistema não separa, a divergência), a outra fazenda (nome comprido, sem PDF) e a vazia */
+    /* REBANHO-ORGAO-01 F3 v3 (mock v3 aprovado 27/11) — a "Declaração ao órgão" (dado SINTÉTICO, `dados/declaracaoOrgao.ts`): com o comprovante
+       lido (a célula editada, o bloco que o sistema não separa, a diferença com causa), a outra fazenda (nome comprido, sem PDF), a sem
+       rebanho (o vazio DENTRO do quadro), a etapa encerrada (maio: só leitura), a declarada (marcada pelo modal: só leitura, os números
+       congelados), o modal da causa e a vazia */
     const T = [[1126, 579], [1280, 720], [1366, 768], [1440, 800], [1920, 1080]];
     const pronto = async (p) => { await p.locator('[data-testid="tabela-evolucao"]').waitFor({ timeout: 20000 }); await p.waitForTimeout(700); };
+    const fazenda = (re) => async (p) => {
+      await pronto(p); await p.locator('[data-testid="seletor-fazenda"] button').first().click(); await p.waitForTimeout(300);
+      await p.getByText(re).last().click(); await p.waitForTimeout(600);
+    };
     const R = '[data-testid="declaracao-orgao"]';
     return [
       { nome: 'declaracao-orgao', url: 'tela=declaracao-orgao', tamanhos: T, regiao: R, antes: pronto },
-      { nome: 'declaracao-orgao-outra-fazenda', url: 'tela=declaracao-orgao', tamanhos: T, regiao: R, antes: async (p) => {
-        await pronto(p); await p.locator('[data-testid="declaracao-orgao"] button', { hasText: /^Fazenda Sintética Dois/ }).first().click(); await p.waitForTimeout(500);
+      { nome: 'declaracao-orgao-outra-fazenda', url: 'tela=declaracao-orgao', tamanhos: T, regiao: R, antes: fazenda(/^Fazenda Sintética Dois/) },
+      { nome: 'declaracao-orgao-sem-rebanho', url: 'tela=declaracao-orgao', tamanhos: T, regiao: R, antes: fazenda(/^Fazenda Sem Gado$/) },
+      { nome: 'declaracao-orgao-encerrada', url: 'tela=declaracao-orgao', tamanhos: T, regiao: R, antes: async (p) => {
+        await pronto(p); await p.locator('[data-testid="declaracao-orgao"] button', { hasText: /^maio$/ }).first().click(); await p.waitForTimeout(700);
+      } },
+      { nome: 'declaracao-orgao-declarada', url: 'tela=declaracao-orgao', tamanhos: T, regiao: R, antes: async (p) => {
+        await pronto(p); await p.locator('[data-testid="marcar-declarado"]').click(); await p.locator('[data-testid="confirmar-declarado"]').click();
+        await p.locator('[data-testid="faixa-so-leitura"]').waitFor({ timeout: 10000 }); await p.waitForTimeout(600);
+      } },
+      { nome: 'declaracao-orgao-causa', url: 'tela=declaracao-orgao', tamanhos: T, regiao: '[data-testid="modal-causa"]', antes: async (p) => {
+        await pronto(p); await p.locator('[data-testid^="causa-"]').first().click(); await p.locator('[data-testid="modal-causa"]').waitFor({ timeout: 10000 });
+        await p.waitForTimeout(500);
       } },
       { nome: 'declaracao-orgao-vazia', url: 'tela=declaracao-orgao&v=vazia', tamanhos: T, regiao: R, antes: pronto },
     ];

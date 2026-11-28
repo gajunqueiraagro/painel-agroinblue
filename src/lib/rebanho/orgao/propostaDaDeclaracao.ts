@@ -74,7 +74,11 @@ export interface PropostaDaFazenda {
   recusas: string[];
   avisos: string[];
 }
-export interface Explicacao { classe: 'a' | 'b' | 'c' | 'd'; fazendaId: string; sexo: Sexo | null; cab: number; texto: string }
+/** (a) morte/consumo não declarado · (b) falta lançar no sistema · (c) saída/entrada sem GTA · (d) sexo/faixa declarado errado ·
+ *  (e) GTA/nota com quantidade diferente do embarque (F3 v3: nunca sugere morte; retifica a GTA no órgão e acerta a nota). */
+export interface Explicacao { classe: 'a' | 'b' | 'c' | 'd' | 'e'; fazendaId: string; sexo: Sexo | null; cab: number; texto: string }
+/** 'AAAA-MM-DD' → 'dd/mm/aaaa' (os textos das explicações vão à tela e ao relatório). */
+const dataBR = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
 const SEXO_DA_CATEGORIA: Record<string, Sexo> = {
   mamotes_f: 'F', desmama_f: 'F', novilhas: 'F', vacas: 'F',
@@ -256,7 +260,7 @@ export function propostaDaDeclaracao(e: EntradaDaProposta): { fazendas: Proposta
   const explicacoes: Explicacao[] = [];
   for (const a of e.ajustes.filter((x) => x.data > e.desde)) {
     explicacoes.push({ classe: 'b', fazendaId: a.fazendaId, sexo: sexoDaCategoria(a.categoria), cab: a.sentido === 'entrada' ? a.cab : -a.cab,
-      texto: `Ajuste de contagem de ${a.categoria} (${a.sentido === 'entrada' ? '+' : '−'}${a.cab}) em ${a.data}: lance a causa (nascimento, morte, saída).` });
+      texto: `Ajuste de contagem de ${a.categoria} (${a.sentido === 'entrada' ? '+' : '−'}${a.cab}) em ${dataBR(a.data)}: lance a causa (nascimento, morte, saída).` });
   }
   for (const r of e.reclassificacoes.filter((x) => x.data > e.desde)) {
     const de = sexoDaCategoria(r.de); const para = sexoDaCategoria(r.para);
@@ -264,13 +268,31 @@ export function propostaDaDeclaracao(e: EntradaDaProposta): { fazendas: Proposta
     const nascidoNaEtapa = ehMamote(r.de) && ehMamote(r.para);
     if (nascidoNaEtapa) continue;   // a R3 já declara o nascido com o sexo de hoje
     explicacoes.push({ classe: 'd', fazendaId: r.fazendaId, sexo: de, cab: r.cab,
-      texto: `${r.cab} ${r.de} viraram ${r.para} em ${r.data}: o órgão os tem com o sexo antigo — retificar.` });
+      texto: `${r.cab} ${r.de} viraram ${r.para} em ${dataBR(r.data)}: o órgão os tem com o sexo antigo — retificar.` });
   }
   return { fazendas: saida, explicacoes };
 }
 
-/** R7 (c): os movimentos do sistema sem eGTA no extrato (saída sem GTA, ou eGTA de número/data fora). */
-export function explicacoesDeGta(fazendaId: string, semEgta: readonly { id: string; data: string; cab: number; sentido: 'saida' | 'entrada' }[]): Explicacao[] {
-  return semEgta.map((m) => ({ classe: 'c', fazendaId, sexo: null, cab: m.sentido === 'saida' ? -m.cab : m.cab,
-    texto: `${m.sentido === 'saida' ? 'Saída' : 'Entrada'} de ${m.cab} cab em ${m.data} sem eGTA no extrato: confira a GTA.` }));
+/**
+ * R7 (c) e (e): os movimentos do sistema sem eGTA no extrato. F3 v3 (Gabriel 27/11, "nota de 20, embarcaram 18"): se há uma eGTA que SOBROU
+ * (não casou com nada) do mesmo sentido, a ±10 dias, com OUTRA quantidade, a causa é (e) — a GTA/nota saiu com quantidade diferente do
+ * embarque: NÃO é morte; retificar a GTA no órgão e acertar a nota com o frigorífico/contador. Cada eGTA sobrando explica um movimento só
+ * (a mais próxima na data). Sem ela, (c): saída/entrada sem GTA.
+ */
+export function explicacoesDeGta(fazendaId: string, semEgta: readonly { id: string; data: string; cab: number; sentido: 'saida' | 'entrada' }[],
+  egtasSobrando: readonly { documento: string; data: string; sentido: 'saida' | 'entrada'; cab: number }[] = []): Explicacao[] {
+  const dias = (a: string, b: string) => Math.abs(Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000));
+  const usadas = new Set<string>();
+  return [...semEgta].sort((a, b) => a.data.localeCompare(b.data)).map((m): Explicacao => {
+    const g = egtasSobrando.filter((e) => !usadas.has(e.documento) && e.sentido === m.sentido && e.cab !== m.cab && dias(e.data, m.data) <= 10)
+      .sort((a, b) => dias(a.data, m.data) - dias(b.data, m.data) || a.documento.localeCompare(b.documento))[0];
+    if (g) {
+      usadas.add(g.documento);
+      const dif = m.cab - g.cab;
+      return { classe: 'e', fazendaId, sexo: null, cab: m.sentido === 'saida' ? -dif : dif,
+        texto: `${m.sentido === 'saida' ? 'Saída' : 'Entrada'} de ${m.cab} cab em ${dataBR(m.data)} × eGTA ${g.documento} com ${g.cab} cab: a GTA/nota pode ter saído com quantidade diferente do embarque. Não é morte: retifique a GTA no órgão e acerte a nota com o frigorífico e o contador.` };
+    }
+    return { classe: 'c', fazendaId, sexo: null, cab: m.sentido === 'saida' ? -m.cab : m.cab,
+      texto: `${m.sentido === 'saida' ? 'Saída' : 'Entrada'} de ${m.cab} cab em ${dataBR(m.data)} sem eGTA no extrato: confira a GTA.` };
+  });
 }

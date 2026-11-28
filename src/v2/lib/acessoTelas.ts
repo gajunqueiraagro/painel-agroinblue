@@ -105,6 +105,8 @@ export const TELAS_DO_GESTOR: readonly V2Section[] = [
   'planejamento-home', 'lancamentos-meta-fin',
   'fechamento-periodo', 'indicadores-zoot',
   'config-fazendas', 'produtores', 'safras', 'locais-estoque', 'dividendos',
+  /* REBANHO-ORGAO-01 F3 v3 (D3, Gabriel 27/11: "o gestor do cliente vê e edita"): a Declaração ao órgão — só o gestor (e o proprietário) */
+  'declaracao-orgao',
 ];
 const SO_GESTOR: Record<PerfilCliente, NivelTela> = { proprietario: 'editar', gestor_cliente: 'editar', financeiro: 'nao', campo: 'nao', leitura: 'nao' };
 

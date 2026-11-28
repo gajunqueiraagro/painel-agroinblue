@@ -207,9 +207,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'mapa-geo-pastos',         label: 'Geo pastos',           status: 'ready', liberadaClientes: true },
           /* LOTES-03 F1 (Gabriel 06/11): o cadastro de lotes por assistente + a ficha (mock lotes-03-assistente.html) */
           { id: 'lotes',                   label: 'Lotes',                status: 'ready', liberadaClientes: true },
-          /* REBANHO-ORGAO-01 F3 (mock aprovado 23/11 13:38): maio e novembro, a declaração ao órgão de defesa (MS: IAGRO). Nasce SÓ do
-             admin: abrir ao gestor muda a matriz aprovada de perfil × tela (decisão do Gabriel, pedida no relatório da F3). */
-          { id: 'declaracao-orgao',        label: 'Declaração ao órgão',  status: 'ready' },
+          /* REBANHO-ORGAO-01 F3 v3 (mock v3 aprovado 27/11): maio e novembro, a declaração ao órgão de defesa (MS: IAGRO). D3 (Gabriel 27/11):
+             o gestor do cliente vê e edita (`TELAS_DO_GESTOR`, acessoTelas.ts); financeiro, campo e leitura não abrem. */
+          { id: 'declaracao-orgao',        label: 'Declaração ao órgão',  status: 'ready', liberadaClientes: true },
           { id: 'chuvas',                  label: 'Chuvas',               status: 'ready', liberadaClientes: true },
         ],
       },

@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { faixaNaData, mesesCompletos } from './tipos';
-import { nascimentosComSexo, propostaDaDeclaracao, type EntradaDaProposta, type NascimentoLancado } from './propostaDaDeclaracao';
+import { explicacoesDeGta, nascimentosComSexo, propostaDaDeclaracao, type EntradaDaProposta, type NascimentoLancado } from './propostaDaDeclaracao';
 
 const N = (fazendaId: string, data: string, categoria: string, cab: number): NascimentoLancado => ({ fazendaId, data, categoria, cab });
 const BASE: EntradaDaProposta = {
@@ -136,5 +136,26 @@ describe('R7 — as explicações que o sistema conhece', () => {
       ajustes: [{ fazendaId: 'B', data: '2026-09-30', sentido: 'entrada', categoria: 'mamotes_f', cab: 30 }, { fazendaId: 'B', data: '2026-01-31', sentido: 'saida', categoria: 'vacas', cab: 5 }],
       reclassificacoes: [{ fazendaId: 'B', data: '2026-07-01', de: 'mamotes_f', para: 'desmama_m', cab: 5 }, { fazendaId: 'B', data: '2026-09-01', de: 'mamotes_f', para: 'mamotes_m', cab: 2 }] });
     expect(r.explicacoes.map((x) => [x.classe, x.fazendaId, x.cab])).toEqual([['b', 'B', 30], ['d', 'B', 5]]);
+  });
+});
+
+describe('F3 v3 — a causa da GTA: (e) quantidade diferente do embarque × (c) sem GTA', () => {
+  const egta = (documento: string, data: string, cab: number) => ({ documento, data, sentido: 'saida' as const, cab });
+  it('nota de 20, embarcaram 18: a eGTA que sobrou a ±10 dias com outra quantidade = (e), nunca morte; sem ela = (c)', () => {
+    const r = explicacoesDeGta('A', [
+      { id: 'm1', data: '2026-09-01', cab: 20, sentido: 'saida' },   // a eGTA 1/A tem 18
+      { id: 'm2', data: '2026-10-13', cab: 36, sentido: 'saida' },   // nenhuma eGTA perto
+    ], [egta('1/A', '2026-09-03', 18), egta('2/A', '2026-12-30', 36)]);
+    expect(r.map((x) => [x.classe, x.cab])).toEqual([['e', -2], ['c', -36]]);
+    expect(r[0].texto).toMatch(/01\/09\/2026 × eGTA 1\/A com 18 cab/);
+    expect(r[0].texto).toMatch(/Não é morte: retifique a GTA no órgão/);
+    expect(r[1].texto).toMatch(/13\/10\/2026 sem eGTA/);
+  });
+  it('uma eGTA sobrando explica UM movimento (a mais próxima); a de mesma quantidade não é (e)', () => {
+    const r = explicacoesDeGta('A', [
+      { id: 'm1', data: '2026-09-01', cab: 20, sentido: 'saida' }, { id: 'm2', data: '2026-09-02', cab: 30, sentido: 'saida' },
+    ], [egta('1/A', '2026-09-02', 18)]);
+    expect(r.map((x) => x.classe)).toEqual(['e', 'c']);
+    expect(explicacoesDeGta('A', [{ id: 'm', data: '2026-09-01', cab: 18, sentido: 'saida' }], [egta('1/A', '2026-09-01', 18)])[0].classe).toBe('c');
   });
 });

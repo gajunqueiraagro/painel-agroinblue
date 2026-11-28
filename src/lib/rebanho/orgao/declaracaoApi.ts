@@ -14,11 +14,14 @@ export interface DeclaracaoGravada {
   id: string; fazendaId: string; etapaId: string; status: 'rascunho' | 'declarada';
   saldo: unknown; saldoArquivo: string | null; extrato: unknown; extratoArquivo: string | null; editados: unknown;
   declaradaEm: string | null; versao: number;
+  /** F3 v3: a conta congelada ao marcar como declarado (`propostaCongelada` lê) e o comprovante da declaração (PDF no bucket) */
+  proposta: unknown; comprovanteArquivo: string | null;
 }
-export interface FazendaDoCliente { id: string; nome: string; uf: string | null }
+/** F3 v3: TODA fazenda não administrativa entra (a sem gado aparece no seletor como "sem rebanho"); `temPecuaria` é a marca do cadastro. */
+export interface FazendaDoCliente { id: string; nome: string; uf: string | null; temPecuaria: boolean }
 export interface DeclaracaoApi {
   etapas: () => Promise<Resultado<unknown>>;
-  /** as fazendas com gado do cliente e a UF do cadastro (DX6: sem UF = fora, a tela diz) */
+  /** as fazendas do cliente (menos a administrativa) e a UF do cadastro (DX6: sem UF = fora, a tela diz) */
   fazendas: (clienteId: string) => Promise<Resultado<FazendaDoCliente[]>>;
   /** as declarações do cliente nesta etapa e a última marcada como declarada (a data, 'AAAA-MM-DD') */
   declaracoes: (clienteId: string, etapaId: string) => Promise<Resultado<{ desta: DeclaracaoGravada[]; ultimaDeclarada: string | null }>>;
@@ -29,6 +32,8 @@ export interface DeclaracaoApi {
   /** a prévia (`simular`) e a gravação do nº das eGTAs casadas */
   egtas: (clienteId: string, itens: Record<string, unknown>[], simular: boolean) => Promise<Resultado<{ grava: number; jaEstava: number; recusa: string[] }>>;
   subirPdf: (caminho: string, arquivo: File) => Promise<Resultado<true>>;
+  /** F3 v3: o endereço assinado (5 min) para abrir o comprovante guardado */
+  urlDoArquivo: (caminho: string) => Promise<Resultado<string>>;
 }
 
 const ehObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -50,7 +55,7 @@ export function declaracaoDaLinha(r: unknown): DeclaracaoGravada | null {
   const status = r.status === 'declarada' ? 'declarada' : r.status === 'rascunho' ? 'rascunho' : null;
   if (!id || !fazendaId || !etapaId || versao === null || !status) return null;
   return { id, fazendaId, etapaId, status, saldo: r.saldo, saldoArquivo: txt(r.saldo_arquivo), extrato: r.extrato, extratoArquivo: txt(r.extrato_arquivo),
-    editados: r.editados, declaradaEm: txt(r.declarada_em), versao };
+    editados: r.editados, declaradaEm: txt(r.declarada_em), versao, proposta: r.proposta ?? null, comprovanteArquivo: txt(r.comprovante_arquivo) };
 }
 
 export const declaracaoApiDoBanco: DeclaracaoApi = {
@@ -60,11 +65,11 @@ export const declaracaoApiDoBanco: DeclaracaoApi = {
     if (error) return { ok: false, erro: fraseDoErroDoOrgao(error) };
     const linhas: unknown[] = Array.isArray(data) ? data : [];
     return { ok: true, dados: linhas.flatMap((r) => {
-      if (!ehObj(r) || r.tem_pecuaria !== true || r.eh_administrativa === true) return [];
+      if (!ehObj(r) || r.eh_administrativa === true) return [];
       const id = txt(r.id); const nome = txt(r.nome);
       const cad = Array.isArray(r.fazenda_cadastros) ? r.fazenda_cadastros[0] : r.fazenda_cadastros;
       const uf = ehObj(cad) ? txt(typeof cad.estado === 'string' ? cad.estado.trim().toUpperCase() : null) : null;
-      return id && nome ? [{ id, nome, uf }] : [];
+      return id && nome ? [{ id, nome, uf, temPecuaria: r.tem_pecuaria === true }] : [];
     }).sort((a, b) => a.nome.localeCompare(b.nome)) };
   },
   async etapas() {
@@ -74,7 +79,7 @@ export const declaracaoApiDoBanco: DeclaracaoApi = {
   async declaracoes(clienteId, etapaId) {
     const [desta, ultima] = await Promise.all([
       (supabase as any).from('rebanho_declaracoes')
-        .select('id, fazenda_id, etapa_id, status, saldo, saldo_arquivo, extrato, extrato_arquivo, editados, declarada_em, versao')
+        .select('id, fazenda_id, etapa_id, status, saldo, saldo_arquivo, extrato, extrato_arquivo, editados, proposta, comprovante_arquivo, declarada_em, versao')
         .eq('cliente_id', clienteId).eq('etapa_id', etapaId),
       (supabase as any).from('rebanho_declaracoes').select('declarada_em').eq('cliente_id', clienteId).eq('status', 'declarada')
         .neq('etapa_id', etapaId).order('declarada_em', { ascending: false }).limit(1),
@@ -119,5 +124,10 @@ export const declaracaoApiDoBanco: DeclaracaoApi = {
     const { error } = await supabase.storage.from(BUCKET_DO_ORGAO).upload(caminho, arquivo, { upsert: true, contentType: 'application/pdf' });
     if (error) { console.error('[declaração ao órgão] upload', error); return { ok: false, erro: 'O PDF não subiu: nada foi gravado.' }; }
     return { ok: true, dados: true };
+  },
+  async urlDoArquivo(caminho) {
+    const { data, error } = await supabase.storage.from(BUCKET_DO_ORGAO).createSignedUrl(caminho, 300);
+    if (error || !data?.signedUrl) { console.error('[declaração ao órgão] url', error); return { ok: false, erro: 'Não consegui abrir o comprovante.' }; }
+    return { ok: true, dados: data.signedUrl };
   },
 };
