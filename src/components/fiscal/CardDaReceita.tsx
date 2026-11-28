@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { explicacaoDaParada, fraseDoCard, type EstadoDaReceita } from '@/lib/fiscal/estadoDaReceita';
+import { explicacaoDaParada, fraseDoCard, pausada, type EstadoDaReceita } from '@/lib/fiscal/estadoDaReceita';
 
 const PONTO: Record<EstadoDaReceita['tipo'], string> = {
   carregando: 'bg-slate-300', sem_certificado: 'bg-slate-300', sem_busca: 'bg-slate-300',
@@ -28,13 +28,14 @@ export function CardDaReceita({ estado, podeCadastrar, onAbrir, onCadastrar }: {
   const frase = fraseDoCard(estado);
   const parada = estado.tipo === 'parada' ? estado : null;
   const explicacao = parada ? explicacaoDaParada(parada) : null;
+  const emPausa = pausada(estado);
   return (
     <>
       <div className="flex h-[22px] w-[360px] max-w-full shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-[3px] bg-primary-foreground/15 px-2 text-[10.5px] leading-[20px] text-primary-foreground"
         data-testid="card-da-receita" data-estado={estado.tipo}>
-        <span className={cn('h-[7px] w-[7px] shrink-0 rounded-full', PONTO[estado.tipo])} aria-hidden />
+        <span className={cn('h-[7px] w-[7px] shrink-0 rounded-full', emPausa ? 'bg-amber-300' : PONTO[estado.tipo])} aria-hidden />
         <span className="min-w-0 flex-1 truncate" title={frase} data-testid="card-da-receita-frase">
-          {parada ? <><span className="font-semibold text-red-200">Busca parada</span> · Notas da Receita</> : frase}
+          {parada && !emPausa ? <><span className="font-semibold text-red-200">Busca parada</span>{frase.slice('Busca parada'.length)}</> : frase}
         </span>
         {estado.tipo === 'sem_certificado' && podeCadastrar && onCadastrar && (
           <button type="button" className={ACAO} onClick={onCadastrar} data-testid="card-da-receita-cadastrar">Cadastrar certificado</button>
@@ -45,6 +46,10 @@ export function CardDaReceita({ estado, podeCadastrar, onAbrir, onCadastrar }: {
         {estado.tipo === 'com_notas' && onAbrir && (
           <button type="button" className="h-[18px] shrink-0 rounded-[3px] bg-primary-foreground/20 px-1.5 text-[10.5px] font-semibold leading-[18px] text-primary-foreground hover:bg-primary-foreground/30"
             onClick={onAbrir} data-testid="card-da-receita-abrir" title="Escolher entre as notas que a Receita mandou">Abrir ›</button>
+        )}
+        {/* BLOQUEIO-01: parada ou pausada, a lista das notas JÁ baixadas segue abrível */}
+        {parada && onAbrir && (
+          <button type="button" className={ACAO} onClick={onAbrir} data-testid="card-da-receita-abrir">Abrir</button>
         )}
         {parada && (
           <button type="button" className={ACAO} onClick={() => setMotivoAberto(true)} data-testid="card-da-receita-motivo">ver motivo</button>

@@ -2401,7 +2401,9 @@ if (tela === 'mesclar') {
     const estados: Record<string, import('@/lib/fiscal/estadoDaReceita').EstadoDaReceita> = {
       sem_certificado: { tipo: 'sem_certificado' }, sem_busca: { tipo: 'sem_busca' },
       sem_novas: { tipo: 'sem_novas', ultimaBusca: '2026-11-27T10:23:00Z' }, com_notas: { tipo: 'com_notas', notas: 128, ultimaBusca: '2026-11-27T10:23:00Z' },
-      parada: { tipo: 'parada', motivo: 'cadeia', desde: '2026-11-27T10:35:00Z', voltaEm: null, validoAte: null },
+      parada: { tipo: 'parada', motivo: 'cadeia', desde: '2026-11-27T10:35:00Z', voltaEm: null, validoAte: null, notas: 128 },
+      /* BLOQUEIO-01 — o 656: pausada (âmbar) com a lista abrível */
+      pausada: { tipo: 'parada', motivo: 'bloqueio', desde: '2026-11-27T16:45:00Z', voltaEm: '2026-11-27T17:45:00Z', validoAte: null, notas: 128 },
     };
     montar(<NovoDeXmlDialog open onClose={() => {}} clienteId="cli" fazendas={[{ id: 'f-pur', nome: 'Faz. Sintetica' }]} fornecedores={[forn]}
       onAbrirLancamento={() => {}} onAbrirNota={() => {}} lancadas={new Set()} linhasIniciais={linhas} avisoInicial={`${fraseJaNaLista(LONGO)} ${fraseJaNaLista('46.995.pdf')}`}
@@ -2571,7 +2573,7 @@ if (tela === 'mesclar') {
     const entrada = q.get('caso') === 'sem_endereco' ? API_ENTRADA_BANCADA_SEM_ENDERECO : API_ENTRADA_BANCADA;
     const aoLancarNota = q.get('caso') === 'sem_lancar' ? undefined : () => {};
     montar(<CaixaDeBoletosDialog clienteId="cli" clienteNome="Cliente Bancada" api={API_CAIXA_BANCADA} parcela={PARCELA_BANCADA} ler={LER_CAIXA_BANCADA}
-      entrada={entrada} hoje={HOJE_DA_BANCADA} aoLancarNota={aoLancarNota} aoFechar={() => {}} folha={folha} />);
+      entrada={entrada} hoje={HOJE_DA_BANCADA} aoLancarNota={aoLancarNota} aoFechar={() => {}} folha={folha} intervaloMs={0} />);   /* CAIXA-ATUALIZAR-01: a bancada não relê sozinha (a medição é estável) */
   };
   void montarCaixa();
 } else if (tela === 'declaracao-orgao') {
@@ -3383,6 +3385,9 @@ if (tela === 'mesclar') {
       buscarFaturamento={async () => ({ ok: false, frase: 'bancada' })} />);
   };
   void montarLigar();
+} else if (tela === 'abrindo-a-nota') {
+  /* NOTA-ABRIR-RAPIDO-01 — o "Abrindo a nota…" do clique no "Lançar": o tamanho do Novo Lançamento, a peça da marca */
+  void import('@/components/financeiro-v2/AbrindoANota').then(({ AbrindoANota }) => montar(<AbrindoANota aberto aoFechar={() => {}} />));
 } else if (tela === 'danfe-guardadas') {
   /* NOTA-RECEITA-DANFE-ANEXO-01 — o gesto "DANFE das notas já guardadas" com dado SINTÉTICO: 21 notas (emitentes compridos, a 8.702 em 4
      parcelas, 2 sem o XML no armazenamento) ou `v=curta` (2 notas, nomes curtos — o 2º cliente da UI-LARGURA-FIXA-01) */
@@ -3398,7 +3403,9 @@ if (tela === 'mesclar') {
     const gerar = async (_c: string, c: { doc: { id: string } }): Promise<{ ok: true; bytes: number } | { ok: false; frase: string }> => (['x5', 'x13'].includes(c.doc.id)
       ? { ok: false, frase: 'sem XML guardado' } : { ok: true, bytes: 78000 + c.doc.id.length * 1500 });
     raiz.render(<DanfeDasNotasGuardadasDialog clienteId="cli" onClose={() => {}} ler={async () => ({ ok: true, valor: cands })} gerar={gerar}
-      titulares={async () => ['t1']} buscar={async () => ({ ok: false, frase: 'bancada' })} />);
+      titulares={async () => ['t1']} buscar={async () => ({ ok: false, frase: 'bancada' })}
+      /* BLOQUEIO-01 — `&prox=1`: o produtor na espera da Receita (o botão diz "próxima às HH:MM" e não chama) */
+      proxima={async () => (new URLSearchParams(location.search).get('prox') === '1' ? new Date(Date.now() + 40 * 60_000).toISOString() : null)} />);
   };
   void montarDanfes();
 } else if (tela === 'custeio-txt') {

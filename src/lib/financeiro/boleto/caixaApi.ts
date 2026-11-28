@@ -14,6 +14,7 @@
  *   Gabriel 14/11: só titulares).
  */
 import { supabase } from '@/integrations/supabase/client';
+import type { LancamentoDoRateio, TerceiroDoRateio } from './rateioNaCaixa';
 
 type Linha = Record<string, unknown>;
 const txt = (v: unknown): string | null => (typeof v === 'string' ? v : null);
@@ -156,12 +157,16 @@ export interface CaixaApi {
   /** Gabriel 18/11 14:40 ("o PDF não aparece no lançamento"): o arquivo que já está no bucket vira DOCUMENTO do lançamento, pelo
    *  gravador de sempre (`fin_documento_registrar`; a mesma NF + o mesmo tipo de arquivo ele recusa com 23505 = "já estava"). */
   registrarDocumento: (clienteId: string, lancamentoId: string, doc: DocumentoDaCaixa) => Promise<Resultado<'gravado' | 'ja_estava'>>;
+  /** CAIXA-FOLHA-RATEIO-01: os acordos de rateio ATIVOS do cliente, do lado do terceiro (nome e CPF/CNPJ dele, a parte do cliente). */
+  acordosDeRateio?: (clienteId: string) => Promise<Resultado<TerceiroDoRateio[]>>;
+  /** CAIXA-FOLHA-RATEIO-01: os lançamentos vivos do cliente nessas competências ('AAAA-MM'), com o nome do fornecedor. */
+  lancamentosDoRateio?: (clienteId: string, competencias: readonly string[]) => Promise<Resultado<LancamentoDoRateio[]>>;
 }
 
 /** O documento que a caixa anexa: o PDF do boleto (`boleto`), o PDF/DANFE da nota (`nf`, com a chave e o número) ou o PDF ORIGINAL de
  *  vários boletos (`outro`, BOLETO-SEPARAR-01: "PDF original (N boletos)", guardado no 1º lançamento; a parcela leva só o seu). */
 export interface DocumentoDaCaixa {
-  especie: 'boleto' | 'nf' | 'outro'; nome: string; url: string; tamanhoBytes: number | null;
+  especie: 'boleto' | 'nf' | 'outro' | 'comprovante'; nome: string; url: string; tamanhoBytes: number | null;
   numero?: string | null; chaveAcesso?: string | null;
   /** o tipo do arquivo (padrão PDF); a nota vai em PDF (o DANFE) E em XML (Gabriel 14:47: "o XML do e-mail não entrou") */
   tipo?: 'application/pdf' | 'application/xml';
@@ -201,7 +206,7 @@ export const caixaApiDoBanco: CaixaApi = {
       if ((ja.count ?? 0) > 0) return { ok: true, dados: 'ja_estava' };
     }
     /* o original de vários boletos: o MESMO arquivo no mesmo lançamento entra uma vez só */
-    if (doc.especie === 'outro') {
+    if (doc.especie === 'outro' || doc.especie === 'comprovante') {
       const ja = await (supabase as any).from('financeiro_lancamento_documentos').select('id', { count: 'exact', head: true })
         .eq('cliente_id', clienteId).eq('lancamento_id', lancamentoId).eq('url', doc.url).eq('cancelado', false);
       if (ja.error) return { ok: false, erro: fraseDoErroDaCaixa(ja.error) };
@@ -218,6 +223,32 @@ export const caixaApiDoBanco: CaixaApi = {
     if (error && linha(error).code === '23505') return { ok: true, dados: 'ja_estava' };
     if (error) return { ok: false, erro: fraseDoErroDaCaixa(error) };
     return { ok: true, dados: 'gravado' };
+  },
+  async acordosDeRateio(clienteId) {
+    const { data, error } = await (supabase as any).from('fiscal_acordos_rateio')
+      .select('id, nome, parte_produtor, terceiro:fiscal_titulares!fiscal_acordos_rateio_terceiro_id_fkey(nome, documento)')
+      .eq('cliente_id', clienteId).eq('ativo', true);
+    if (error) { console.error('[caixa de boletos] acordos de rateio', error); return { ok: false, erro: 'Não consegui ler os acordos de rateio.' }; }
+    return { ok: true, dados: linhas(data).flatMap((a): TerceiroDoRateio[] => {
+      const t = ehLinha(a.terceiro) ? a.terceiro : null;
+      const id = txt(a.id); const nome = t ? txt(t.nome) : null;
+      if (!id || !nome) return [];
+      const parte = Number(a.parte_produtor);
+      return [{ acordoId: id, acordo: txt(a.nome) ?? '', terceiro: nome, documento: t ? txt(t.documento) : null, parteDoCliente: Number.isFinite(parte) ? parte : null }];
+    }) };
+  },
+  async lancamentosDoRateio(clienteId, competencias) {
+    if (!competencias.length) return { ok: true, dados: [] };
+    const { data, error } = await (supabase as any).from('financeiro_lancamentos_v2')
+      .select('id, descricao, valor, data_competencia, data_vencimento, status_transacao, favorecido:financeiro_fornecedores!fk_flv2_favorecido_tenant(nome)')
+      .eq('cliente_id', clienteId).eq('cancelado', false).in('data_competencia', competencias.map((c) => `${c}-01`));
+    if (error) { console.error('[caixa de boletos] lançamentos do rateio', error); return { ok: false, erro: 'Não consegui ler os lançamentos do mês.' }; }
+    return { ok: true, dados: linhas(data).flatMap((l): LancamentoDoRateio[] => {
+      const id = txt(l.id); const comp = txt(l.data_competencia); const valor = Number(l.valor);
+      if (!id || !comp || !Number.isFinite(valor)) return [];
+      const f = ehLinha(l.favorecido) ? txt(l.favorecido.nome) : null;
+      return [{ id, descricao: txt(l.descricao) ?? '', favorecido: f, valor: Math.abs(valor), competencia: comp.slice(0, 7), vencimento: txt(l.data_vencimento), status: txt(l.status_transacao) ?? '' }];
+    }) };
   },
   async marcar(boletoId, situacao, motivo) {
     const { error } = await (supabase as any).rpc('fn_boleto_marcar', { p_id: boletoId, p_situacao: situacao, p_motivo: motivo, p_simular: false });

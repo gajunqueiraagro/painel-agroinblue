@@ -32,6 +32,8 @@ import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { lerDaCaixa, type LerArquivoDaCaixa, type LeituraDaCaixa } from '@/lib/financeiro/boleto/lerDaCaixa';
 import { daGravada, paraGravar } from '@/lib/financeiro/boleto/leituraGravada';
+import { novosEmails, ultimaChegada } from '@/lib/financeiro/boleto/chegadasDaCaixa';
+import { comRateio, competenciasDoRateio, type LancamentoDoRateio, type TerceiroDoRateio } from '@/lib/financeiro/boleto/rateioNaCaixa';
 /* ENTRADA-CENTRAL-01 F1: o leitor mudou para `lerDaCaixa.ts` (puro, o mesmo da Lambda); os chamadores de sempre seguem importando daqui */
 export { FRASE_PDF_IMAGEM, lerDaCaixa, lerDaCaixaCom, notaPelaChave, pdfPareceFolha, type LeituraDaCaixa, type LerArquivoDaCaixa } from '@/lib/financeiro/boleto/lerDaCaixa';
 
@@ -56,6 +58,8 @@ const SEM_PARTE: ParteDoBoleto = { documento: null, nome: null, confira: false }
 
 export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   api?: CaixaApi; parcela?: ParcelaApi; ler?: LerArquivoDaCaixa; entrada?: EntradaEmailApi; hoje?: string; podeLancar?: boolean;
+  /** CAIXA-ATUALIZAR-01: de quanto em quanto a Caixa aberta pergunta se chegou algo (padrão 30 s; o teste passa curto; 0 = não pergunta) */
+  intervaloMs?: number;
 } = {}) {
   const api = opcoes.api ?? caixaApiDoBanco;
   const parcela = opcoes.parcela ?? parcelaApiDoBanco;
@@ -76,10 +80,19 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   const [feitos, setFeitos] = useState<ReadonlySet<string>>(new Set());
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [sugestoes, setSugestoes] = useState<string[]>([]);
+  /* CAIXA-FOLHA-RATEIO-01: os acordos de rateio, os CPF/CNPJ dos titulares e os lançamentos das competências dos pacotes */
+  const [terceiros, setTerceiros] = useState<TerceiroDoRateio[]>([]);
+  const [titulares, setTitulares] = useState<string[]>([]);
+  const [lancsDoRateio, setLancsDoRateio] = useState<{ chave: string; dados: LancamentoDoRateio[] } | null>(null);
   const vivo = useRef(true);
   const fontes = useRef(new Map<string, DaFonte>());
   const pedidos = useRef(new Set<string>());
   useEffect(() => { vivo.current = true; return () => { vivo.current = false; }; }, []);
+
+  /* CAIXA-ATUALIZAR-01: as linhas da leitura anterior (para contar o que é NOVO) e o aviso "N novo(s) e-mail(s) · agora" */
+  const idsAnteriores = useRef<ReadonlySet<string> | null>(null);
+  const [avisoDeNovo, setAvisoDeNovo] = useState<{ n: number; em: number } | null>(null);
+  const [atualizando, setAtualizando] = useState(false);
 
   /* ── carregar ── */
   const recarregar = useCallback(async () => {
@@ -90,16 +103,51 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     ]);
     if (!vivo.current) return;
     if (l.ok) setLista(l.dados);
-    if (e.ok) setEntradas(e.dados);
+    if (e.ok) {
+      setEntradas(e.dados);
+      const n = idsAnteriores.current ? novosEmails(idsAnteriores.current, e.dados) : 0;
+      idsAnteriores.current = new Set(e.dados.map((x) => x.id));
+      if (n > 0) setAvisoDeNovo({ n, em: Date.now() });
+    }
     setErro(l.ok === false ? l.erro : e.ok === false ? e.erro : null);
     /* 118610: o detalhe de Resolvidos (falhou = a coluna fica sem o detalhe; a lista de sempre continua) */
     const d = entradaApi.resolvidos ? await entradaApi.resolvidos(clienteId).catch(() => null) : null;
     if (vivo.current && d && d.ok) setDetalhes(d.dados);
   }, [api, clienteId, entradaApi]);
   useEffect(() => { void recarregar(); }, [recarregar]);
+
+  /** CAIXA-ATUALIZAR-01: "↻ Atualizar" — relê a lista sem fechar nada (a aba e a seleção são do diálogo e ficam) */
+  const atualizar = useCallback(async () => {
+    setAtualizando(true);
+    try { await recarregar(); } finally { if (vivo.current) setAtualizando(false); }
+  }, [recarregar]);
+  /* a atualização automática enquanto a Caixa está aberta: pergunta só "quando chegou o último?" e relê se mudou (sem a pergunta, relê) */
+  const intervaloMs = opcoes.intervaloMs ?? 30_000;
+  const ultimaVista = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!clienteId || intervaloMs <= 0) return;
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (!entradaApi.ultimaChegada) { void recarregar(); return; }
+      void entradaApi.ultimaChegada(clienteId).then((r) => {
+        if (!vivo.current || r.ok === false) return;
+        const mudou = ultimaVista.current !== undefined && r.dados !== ultimaVista.current;
+        ultimaVista.current = r.dados;
+        if (mudou) void recarregar();
+      });
+    }, intervaloMs);
+    return () => clearInterval(id);
+  }, [clienteId, intervaloMs, entradaApi, recarregar]);
+  /* o aviso some sozinho em 60 s */
+  useEffect(() => {
+    if (!avisoDeNovo) return;
+    const id = setTimeout(() => { if (vivo.current) setAvisoDeNovo(null); }, 60_000);
+    return () => clearTimeout(id);
+  }, [avisoDeNovo]);
   useEffect(() => {
     if (!clienteId) return;
-    void api.documentosDosTitulares(clienteId).then((r) => { if (vivo.current && r.ok) setSugestoes(sugestoesDeSenha(r.dados)); });
+    void api.documentosDosTitulares(clienteId).then((r) => { if (vivo.current && r.ok) { setSugestoes(sugestoesDeSenha(r.dados)); setTitulares(r.dados); } });
+    if (api.acordosDeRateio) void api.acordosDeRateio(clienteId).then((r) => { if (vivo.current && r.ok) setTerceiros(r.dados); });
   }, [api, clienteId]);
 
   /* ── ler uma fonte (o e-mail baixa; o arrastado já tem o arquivo) ── */
@@ -112,7 +160,9 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
         ? { deCada: r.paginaDeCada, total: r.totalDePaginas } : null,
     });
     const lido: Lido = r.k === 'boletos'
-      ? { k: 'boletos', boletos: r.boletos.map((b) => ({ codigoBarras: b.codigo_barras, linha: b.linha, vencimento: b.vencimento, valor: b.valor, beneficiario: r.beneficiario.nome })) }
+      ? { k: 'boletos', boletos: r.boletos.map((b) => ({ codigoBarras: b.codigo_barras, linha: b.linha, vencimento: b.vencimento, valor: b.valor, beneficiario: r.beneficiario.nome,
+          /* CAIXA-FOLHA-RATEIO-01: o pagador (no DARF, o contribuinte) decide se é comprovante de outro */
+          pagador: r.pagador.documento || r.pagador.nome ? { documento: r.pagador.documento, nome: r.pagador.nome } : null })) }
       : r;
     setLidos((x) => ({ ...x, [chave]: lido }));
   }, []);
@@ -211,30 +261,77 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
   }, [api, clienteId, lista]);
 
   /* ── os grupos ── */
-  const grupos: GrupoDaCaixa[] = useMemo(() => {
+  const gruposLidos: GrupoDaCaixa[] = useMemo(() => {
     const doEmail = entradas ? gruposDosEmails(entradas, lidos, notas, boletos, hoje, podeLancar, feitos) : [];
     const arrastados: FonteParaMontar[] = locais.map((l) => ({ chave: l.chave, nome: l.arquivo.name, tipoDoArquivo: tipoDoNome(l.arquivo.name), lido: lidos[l.chave] ?? { k: 'lendo' } }));
     const gLocal: GrupoDaCaixa[] = arrastados.length ? [{
-      chave: 'locais', tipo: 'local', titulo: 'Arrastados por você', assunto: 'os arquivos que você soltou aqui (nada gravado até o gesto)',
+      chave: 'locais', tipo: 'local', titulo: 'Arrastados por você', assunto: 'guardando na Caixa… (o que não guardar fica só nesta tela)',
       linhas: linhasDasFontes(arrastados, notas, boletos, hoje, podeLancar, feitos), fontesAntigas: [],
     }] : [];
     const gGuardados = lista ? grupoDosGuardados(lista.itens, boletos, hoje, feitos) : null;
     /* CAIXA-GUARDAR-01: os guardados PRIMEIRO (no NJ ficavam depois de 15 e-mails, fora da janela) */
     return [...(gGuardados ? [gGuardados] : []), ...gLocal, ...doEmail];
   }, [entradas, lidos, notas, boletos, hoje, podeLancar, feitos, locais, lista]);
+  /* CAIXA-FOLHA-RATEIO-01: o documento da outra parte de um rateio = comprovante (um pacote por terceiro e competência, "Anexar ao rateio") */
+  const competenciasDoPacote = useMemo(() => competenciasDoRateio(gruposLidos.flatMap((g) => g.linhas), terceiros).join(','), [gruposLidos, terceiros]);
+  useEffect(() => {
+    if (!clienteId || !competenciasDoPacote || !api.lancamentosDoRateio) return;
+    if (lancsDoRateio?.chave === competenciasDoPacote) return;
+    const chave = competenciasDoPacote;
+    void api.lancamentosDoRateio(clienteId, chave.split(',')).then((r) => {
+      if (!vivo.current) return;
+      if (r.ok) setLancsDoRateio({ chave, dados: r.dados });
+      else { console.error('[caixa] lançamentos do rateio', r.erro); setLancsDoRateio({ chave, dados: [] }); }
+    });
+  }, [api, clienteId, competenciasDoPacote, lancsDoRateio]);
+  const grupos: GrupoDaCaixa[] = useMemo(() => {
+    if (!terceiros.length && !titulares.length) return gruposLidos;
+    const lancamentos = !competenciasDoPacote ? [] : lancsDoRateio?.chave === competenciasDoPacote ? lancsDoRateio.dados : null;
+    return gruposLidos.map((g) => ({ ...g, linhas: comRateio(g.linhas, { terceiros, titulares, lancamentos }) }));
+  }, [gruposLidos, terceiros, titulares, competenciasDoPacote, lancsDoRateio]);
 
   const resolvidos = useMemo(() => (entradas ?? []).filter((e) => e.estado === 'boleto' || e.estado === 'nota' || e.estado === 'folha'), [entradas]);
   const ignorados = useMemo(() => (entradas ?? []).filter((e) => e.estado === 'dispensado'), [entradas]);
   const descartados = useMemo(() => (lista?.itens ?? []).filter((i) => i.boleto.situacao === 'descartado'), [lista]);
 
   /* ── arrastar ── */
+  /** CAIXA-FOLHA-VERA (Gabriel 15:10: os 3 arquivos arrastados SUMIRAM ao fechar e reabrir) — o arquivo ARRASTADO é GUARDADO NA HORA, como o do
+   *  e-mail: registra (`fn_entrada_registrar_arrastado`: o mesmo arquivo = a mesma linha), sobe para o storage do cliente e entra em
+   *  "A resolver" (grupo "Arrastados para a Caixa"); o que espera o gesto é só lançar, vincular ou aplicar. A leitura sai do arquivo que já
+   *  está na memória (não baixa de novo). Falhou = fica só nesta tela, como antes, e a frase diz por quê. Sem a API (bancada antiga): como antes. */
+  const guardarArrastados = useCallback(async (novos: readonly Local[]) => {
+    if (!clienteId || !entradaApi.registrarArrastado) return;
+    const registrar = entradaApi.registrarArrastado;
+    let algum = false;
+    for (const n of novos) {
+      const bytes = await n.arquivo.arrayBuffer();
+      const tipo = tipoDoNome(n.arquivo.name);
+      const reg = await registrar(clienteId, { nome: n.arquivo.name, tipo, tamanho: bytes.byteLength, md5: md5(bytes) });
+      if (!vivo.current) return;
+      if (reg.ok === false) { setErro(`"${n.arquivo.name}" não ficou guardado na Caixa (fica só nesta tela): ${reg.erro}`); continue; }
+      if (!reg.dados.jaExistia) {
+        const up = await api.subirArquivo(reg.dados.storagePath, n.arquivo);
+        if (!vivo.current) return;
+        if (up.ok === false) { setErro(`"${n.arquivo.name}" não subiu para a Caixa (fica só nesta tela): ${up.erro}`); continue; }
+      }
+      /* já resolvido ou ignorado antes: a linha de lá vale; aqui fica só a desta sessão */
+      if (reg.dados.estado !== 'a_ler' && reg.dados.estado !== 'nao_reconhecido') continue;
+      pedidos.current.add(`ler:${reg.dados.id}`);
+      void lerFonte(reg.dados.id, async () => ({ bytes, nome: n.arquivo.name }), tipo, undefined, reg.dados.id);
+      setLocais((xs) => xs.filter((x) => x.chave !== n.chave));
+      algum = true;
+    }
+    if (algum) await recarregar();
+  }, [api, clienteId, entradaApi, lerFonte, recarregar]);
+
   const receber = useCallback((arquivos: readonly File[]) => {
     const novos = arquivos.map((arquivo) => { sequencia += 1; return { chave: `local:${sequencia}`, arquivo }; });
     setLocais((xs) => [...xs, ...novos]);
     for (const n of novos) {
       void lerFonte(n.chave, async () => ({ bytes: await n.arquivo.arrayBuffer(), nome: n.arquivo.name }), tipoDoNome(n.arquivo.name));
     }
-  }, [lerFonte]);
+    void guardarArrastados(novos);
+  }, [lerFonte, guardarArrastados]);
 
   /* ── o arquivo de uma fonte (ver, lançar) ── */
   const arquivoDe = useCallback(async (fonte: string): Promise<File | null> => {
@@ -419,6 +516,30 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
     return m ?? semDoc ?? semOriginal ?? g.aviso;
   }), [fazer, garantirNaCaixa, parcela, anexarAosLancamentos, entradas, resolverSeCompleto, recarregar]);
 
+  /** CAIXA-FOLHA-RATEIO-01 — "Anexar ao rateio": cada arquivo do pacote (o mesmo terceiro e competência) vai como COMPROVANTE aos lançamentos
+   *  dele e a linha vai para Resolvidos (estado 'folha', sem lançamento: são vários). Nada cria lançamento nem boleto. */
+  const anexarRateio = useCallback((l: LinhaDaCaixa) => fazer(l.chave, async () => {
+    if (!clienteId || !l.rateio) return 'Esta linha não é de rateio.';
+    const pacote = l.rateio.pacote;
+    const doPacote = grupos.flatMap((g) => g.linhas).filter((x) => !x.feito && x.rateio?.pacote === pacote && x.rateio.alvos.length > 0);
+    let n = 0;
+    for (const x of doPacote) {
+      const fonte = x.fontes[0];
+      const e = entradas?.find((y) => y.id === fonte);
+      if (!e?.storagePath) return `${n} de ${doPacote.length} anexados; "${x.arquivo}" ainda não está guardado na Caixa: tente de novo.`;
+      for (const alvo of x.rateio?.alvos ?? []) {
+        const r = await api.registrarDocumento(clienteId, alvo.id, { especie: 'comprovante', nome: x.arquivoTitulo || x.arquivo, url: e.storagePath, tamanhoBytes: e.tamanhoBytes });
+        if (r.ok === false) { await recarregar(); return `${n} de ${doPacote.length} anexados; "${x.arquivo}" não entrou em "${alvo.descricao}": ${r.erro}`; }
+      }
+      const r = await entradaApi.resolver(fonte, 'folha', null, null);
+      if (r.ok === false) { await recarregar(); return `"${x.arquivo}" foi anexado, mas não foi para Resolvidos: ${r.erro}`; }
+      marcarFeito(x.chave);
+      n++;
+    }
+    await recarregar();
+    return `${n} ${n === 1 ? 'documento anexado' : 'documentos anexados'} aos lançamentos de ${l.rateio.rotuloCompetencia} (rateio com ${l.rateio.terceiro}); nada foi criado.`;
+  }), [fazer, clienteId, grupos, entradas, api, entradaApi, recarregar]);
+
   const guardar = useCallback((l: LinhaDaCaixa) => fazer(l.chave, async () => {
     /* CAIXA-GUARDAR-01: o boleto tirado da caixa volta a ser o MESMO (`novo`) — o índice (cliente, código de barras) nunca duplica */
     if (l.boletoGuardadoId && l.previa?.ok === true && l.previa.jaExiste && l.previa.boleto.situacao === 'descartado') {
@@ -533,6 +654,7 @@ export function useCaixaDeBoletos(clienteId: string | null, opcoes: {
 
   return {
     lista, entradas, detalhes, erro, grupos, resolvidos, ignorados, descartados, sugestoes, ocupado,
-    receber, arquivoDe, nomeDaFonte, tentarSenha, vincularBoleto, guardar, vincularNota, folhaFeita, ignorar, voltar, desfazerGuardado, recarregar,
+    receber, arquivoDe, nomeDaFonte, tentarSenha, vincularBoleto, guardar, anexarRateio, vincularNota, folhaFeita, ignorar, voltar, desfazerGuardado, recarregar,
+    atualizar, atualizando, avisoDeNovo, ultimaChegada: entradas ? ultimaChegada(entradas) : null,
   };
 }

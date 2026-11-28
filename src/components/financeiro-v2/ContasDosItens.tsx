@@ -65,7 +65,7 @@ function PerguntaDoItem({ nItem, resposta, onResponder, disabled }: { nItem: num
 }
 
 export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoje, sugeridas, gravando, somenteLeitura, onDividir, atividadeSugerida = null, aoSalvar = false,
-  pendente = null, onMudou, sugestoes, onJuntar, onEscolhas }: {
+  pendente = null, onMudou, sugestoes, onJuntar, onEscolhas, todasNaConta = null }: {
   itens: readonly Pick<ItemFiscal, 'nItem' | 'descricao' | 'liquidoCent'>[];
   classificacoes: ClassificacaoItem[];
   tipoOperacao: string;
@@ -91,10 +91,14 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
   onJuntar?: (planoContaId: string) => void;
   /** Q3 — as contas que o OPERADOR escolheu (a resposta da pergunta, a conta trocada): viram regra do item depois do Salvar */
   onEscolhas?: (escolhas: ReadonlyMap<number, string>) => void;
+  /** SUGESTAO-ITENS-BUG-01 (Gabriel 27/11) — UMA conta tem UM dono: sem divisão ativa, a conta do lançamento (a da Geral) É a de todos os
+   *  itens — inclusive os que perguntariam obra × manutenção. A sugestão fica só como texto na Origem; "Usar divisão" some. */
+  todasNaConta?: string | null;
 }) {
   const sugestaoDe = useMemo(() => new Map((sugestoes ?? []).map((s) => [s.nItem, s])), [sugestoes]);
   const inicial = useMemo(() => {
     const m = new Map<number, string>();
+    if (todasNaConta) { for (const i of itens) m.set(i.nItem, todasNaConta); return m; }
     for (const i of itens) {
       /* o item que PERGUNTA não nasce na conta de hoje: espera a resposta */
       if (sugestaoDe.get(i.nItem)?.pergunta) continue;
@@ -102,7 +106,7 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
       if (c) m.set(i.nItem, c);
     }
     return m;
-  }, [itens, sugeridas, contaDeHoje, sugestaoDe]);
+  }, [itens, sugeridas, contaDeHoje, sugestaoDe, todasNaConta]);
   const [mapa, setMapa] = useState<ReadonlyMap<number, string>>(pendente ?? inicial);
   const [respostas, setRespostas] = useState<ReadonlyMap<number, RespostaDaPergunta>>(new Map());
   const [escolhas, setEscolhas] = useState<ReadonlyMap<number, string>>(new Map());
@@ -151,6 +155,8 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
   /* Q2 — "Juntar tudo numa conta" abre na conta de MAIOR valor */
   const contasParaJuntar = [...porConta].sort((a, b) => b.liquidoCent - a.liquidoCent);
   const nContas = Math.max(2, porConta.length + (aDecidir.length ? 1 : 0));
+  /* todos os itens na conta do lançamento e nada mudado: não há divisão a usar (o botão some; volta se o operador trocar um item) */
+  const semDivisaoPedida = !!todasNaConta && porConta.length <= 1 && !aDecidir.length;
   /* NADA SE DESLOCA (UI-SEM-DESLOCAR-01): responder a pergunta troca a linha "a decidir" por uma conta (ou some numa que já está): o total
      reserva as linhas de partida (as contas sugeridas + uma por item que pergunta) e o que está embaixo não anda */
   const linhasReservadas = useMemo(() => new Set(inicial.values()).size + itens.filter((i) => sugestaoDe.get(i.nItem)?.pergunta).length, [inicial, itens, sugestaoDe]);
@@ -206,7 +212,9 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button type="button" size="sm" className={cn('h-[20px] shrink-0 px-2 text-[10px]', aoSalvar && onJuntar ? 'w-[150px]' : 'w-[190px]')}
+          <Button type="button" size="sm" className={cn('h-[20px] shrink-0 px-2 text-[10px]', aoSalvar && onJuntar ? 'w-[150px]' : 'w-[190px]',
+            /* sem divisão pedida (os itens seguem a Geral) o botão some — no lugar reservado, nada se desloca */
+            semDivisaoPedida && 'invisible')} aria-hidden={semDivisaoPedida ? true : undefined}
             disabled={!!recusa || gravando || somenteLeitura} title={aDecidir.length ? `Responda obra ou manutenção (${aDecidir.length === 1 ? 'item' : 'itens'} ${aDecidir.map((i) => i.nItem).join(', ')}).` : undefined}
             onClick={() => onDividir(mapa)} data-testid="contas-dividir">
             {gravando ? (aoSalvar ? 'Salvando…' : 'Dividindo…')
@@ -236,7 +244,9 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
                 const c = mapa.get(i.nItem) ?? '';
                 const s = sugestaoDe.get(i.nItem);
                 const esperando = !!s?.pergunta && !c;
-                const origem = escolhas.has(i.nItem) ? (s?.pergunta ? 'você escolheu' : 'você trocou') : s?.origem ?? (s ? '—' : null);
+                const origem = escolhas.has(i.nItem) ? (s?.pergunta ? 'você escolheu' : 'você trocou')
+                  : todasNaConta && c === todasNaConta ? (s?.subcentro && s.planoContaId !== todasNaConta ? `a do lançamento (sugestão: ${s.subcentro})` : 'a do lançamento')
+                  : s?.origem ?? (s ? '—' : null);
                 return (
                   <tr key={i.nItem} className="border-b border-border/50 even:bg-muted/30" data-testid="contas-linha">
                     <td className={cn(TD, 'text-right tabular-nums text-muted-foreground')}>{i.nItem}</td>

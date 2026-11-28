@@ -23,6 +23,10 @@ import { fraseDaLinhaDoResumo, rotuloDoResumo } from '@/lib/folha/resumoNaCaixa'
 import { ROTULO_DO_TIPO, competenciaBR, fraseDaLinhaDaFolha } from '@/lib/folha/folhaNaCaixa';
 import type { FolhaAnaliticaLida } from '@/lib/folha/lerFolhaAnalitica';
 import { TITULO_DA_ANALITICA, fraseDaLinhaDaAnalitica, rotuloDaAnalitica } from '@/lib/folha/analiticaNaCaixa';
+import type { FaturaLida } from '@/lib/financeiro/consumo/lerFaturaConsumo';
+import type { PosicaoLida } from '@/lib/financeiro/consumo/lerPosicaoOperacoes';
+import type { GfdLida, QuemPaga, RelacaoFgtsLida } from '@/lib/folha/lerGuiasDaFolha';
+import type { RateioDaLinha } from './rateioNaCaixa';
 
 export type AbaDaCaixaV2 = 'a_resolver' | 'resolvidos' | 'ignorados';
 export const ABAS_DA_CAIXA_V2: readonly { valor: AbaDaCaixaV2; rotulo: string }[] = [
@@ -35,7 +39,11 @@ export interface ResumoDaNota {
   /** O 1º vencimento das duplicatas (sem duplicata: null). */
   vencimento: string | null;
 }
-export interface BoletoLido { codigoBarras: string; linha: string; vencimento: string | null; valor: number | null; beneficiario: string | null }
+export interface BoletoLido {
+  codigoBarras: string; linha: string; vencimento: string | null; valor: number | null; beneficiario: string | null;
+  /** CAIXA-FOLHA-RATEIO-01: o pagador impresso (no DARF, o contribuinte); sem ele = não se sabe */
+  pagador?: QuemPaga | null;
+}
 export type Lido =
   | { k: 'lendo' }
   | { k: 'nota'; nota: ResumoDaNota }
@@ -46,6 +54,14 @@ export type Lido =
   | { k: 'resumo'; resumo: ResumoLido }
   /** FOLHA-VERA-PACOTE-01 F1: o relatório analítico da folha (o espelho): só reconhecido, nada grava */
   | { k: 'analitica'; analitica: FolhaAnaliticaLida }
+  /** CONTAS-CONSUMO-01 C1: a fatura de energia (NF3e) */
+  | { k: 'fatura'; fatura: FaturaLida }
+  /** CAIXA-OCR-01 O4: a posição de operações do banco */
+  | { k: 'posicao'; posicao: PosicaoLida }
+  /** CAIXA-FOLHA-VERA: a guia do FGTS Digital (GFD, paga por PIX) */
+  | { k: 'gfd'; gfd: GfdLida }
+  /** CAIXA-FOLHA-RATEIO-01: a relação de trabalhadores do FGTS */
+  | { k: 'relacao'; relacao: RelacaoFgtsLida }
   | { k: 'nada'; frase: string }
   | { k: 'senha'; errada: boolean }
   | { k: 'erro'; frase: string };
@@ -55,11 +71,11 @@ export type ConsultaDaNota = NotaNoSistema | null | 'erro' | undefined;
 /** A prévia da caixa para UM boleto (a `fn_boleto_entrar` com `p_simular`): `undefined` = perguntando. */
 export type ConsultaDoBoleto = RespostaDeEntrar | { ok: 'erro'; frase: string } | undefined;
 
-export type Acao = 'lancar_nota' | 'vincular_nota' | 'vincular_boleto' | 'guardar' | 'desfazer' | 'ignorar' | 'senha' | 'abrir_folha' | 'abrir_resumo';
+export type Acao = 'lancar_nota' | 'vincular_nota' | 'vincular_boleto' | 'guardar' | 'desfazer' | 'ignorar' | 'senha' | 'abrir_folha' | 'abrir_resumo' | 'anexar_rateio';
 
 /** CAIXA-GUARDAR-01: o motivo do boleto tirado da caixa pelo "Desfazer" do guardado (a trilha do boleto o guarda). */
 export const MOTIVO_DO_DESFEITO = 'guardado por engano — desfeito';
-export type TipoDaLinha = 'nota' | 'boleto' | 'folha' | 'nada' | 'lendo' | 'senha' | 'erro' | 'sem_anexo' | 'recusado' | 'gmail';
+export type TipoDaLinha = 'nota' | 'boleto' | 'folha' | 'fatura' | 'posicao' | 'guia' | 'nada' | 'lendo' | 'senha' | 'erro' | 'sem_anexo' | 'recusado' | 'gmail';
 
 export interface LinhaDaCaixa {
   chave: string;
@@ -80,6 +96,13 @@ export interface LinhaDaCaixa {
   resumo: ResumoLido | null;
   /** FOLHA-VERA-PACOTE-01 F1: o relatório analítico da folha lido */
   analitica: FolhaAnaliticaLida | null;
+  /** CONTAS-CONSUMO-01 / CAIXA-OCR-01: a fatura de consumo e a posição do banco lidas */
+  fatura: FaturaLida | null;
+  posicao: PosicaoLida | null;
+  gfd: GfdLida | null;
+  relacao: RelacaoFgtsLida | null;
+  /** CAIXA-FOLHA-RATEIO-01: o documento é da OUTRA parte de um rateio (comprovante): o pacote e os lançamentos a que ele se anexa */
+  rateio: RateioDaLinha | null;
   /** O boleto que JÁ está gravado na caixa (o grupo "guardados", ou o "já está no sistema"). */
   boletoGuardadoId: string | null;
   /** Nesta sessão já foi resolvido (o PDF com 2 boletos: um feito, o outro não). */
@@ -147,7 +170,7 @@ function base(chave: string, tipo: TipoDaLinha, fontes: string[], arquivo: strin
   noSistema: LinhaDaCaixa['noSistema'], acoes: Acao[]): LinhaDaCaixa {
   return {
     chave, tipo, fontes, arquivo, arquivoTitulo, emitente: null, vencimento: null, valor: null, antigo: false, noSistema, acoes,
-    nota: null, notaNoSistema: null, boleto: null, previa: null, folha: null, resumo: null, analitica: null, boletoGuardadoId: null, feito: false,
+    nota: null, notaNoSistema: null, boleto: null, previa: null, folha: null, resumo: null, analitica: null, fatura: null, posicao: null, gfd: null, relacao: null, rateio: null, boletoGuardadoId: null, feito: false,
   };
 }
 
@@ -230,7 +253,7 @@ export function linhaDoBoleto(chave: string, fontes: string[], arquivo: string, 
 }
 
 /** A linha de um arquivo lido que não é boleto nem nota, ainda lendo, com senha ou com erro. */
-export function linhaSemConteudo(chave: string, fonte: string, nome: string, lido: Exclude<Lido, { k: 'nota' } | { k: 'boletos' } | { k: 'folha' } | { k: 'resumo' } | { k: 'analitica' }>): LinhaDaCaixa {
+export function linhaSemConteudo(chave: string, fonte: string, nome: string, lido: Exclude<Lido, { k: 'nota' } | { k: 'boletos' } | { k: 'folha' } | { k: 'resumo' } | { k: 'analitica' } | { k: 'fatura' } | { k: 'posicao' } | { k: 'gfd' } | { k: 'relacao' }>): LinhaDaCaixa {
   switch (lido.k) {
     case 'lendo': return base(chave, 'lendo', [fonte], nome, nome, { selo: null, texto: 'lendo o arquivo…', titulo: 'lendo o arquivo…' }, []);
     case 'senha': {
@@ -275,6 +298,61 @@ export function linhaDaAnalitica(chave: string, fonte: string, nome: string, f: 
     ...base(chave, 'folha', [fonte], nome, nome,
       { selo: f.confere ? { texto: 'confere', tom: 'ok' } : { texto: 'não confere', tom: 'vermelho' }, texto: t, titulo }, ['ignorar']),
     emitente: rotuloDaAnalitica(f), valor: f.soma.liquido, analitica: f,
+  };
+}
+
+const dataCurta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
+/** CONTAS-CONSUMO-01 C1 — a linha da fatura de energia: "Fatura de energia · 11/2026" · a concessionária, a unidade e o consumo · o valor e o
+ *  vencimento. Só reconhece (a unidade consumidora e o casamento com o previsto vêm no C2/C3); a ação é a de qualquer arquivo. */
+export function linhaDaFatura(chave: string, fonte: string, nome: string, f: FaturaLida): LinhaDaCaixa {
+  const ref = f.referencia ? `${f.referencia.slice(5, 7)}/${f.referencia.slice(0, 4)}` : '—';
+  const t = `${f.concessionaria.nome ?? 'Concessionária'} · UC ${f.uc ?? '—'}${f.consumoKwh !== null ? ` · ${f.consumoKwh} kWh` : ''}`;
+  return {
+    ...base(chave, 'fatura', [fonte], nome, nome,
+      { selo: { texto: 'lida', tom: 'cinza' }, texto: t, titulo: `${t} · NF3e nº ${Number(f.numero)} conferida pela chave de acesso. Ainda não grava nada.` },
+      ['ignorar']),
+    emitente: `Fatura de energia · ${ref}`, valor: f.valor, vencimento: f.vencimento, fatura: f,
+  };
+}
+/** CAIXA-OCR-01 O4 — a linha da posição do banco: "Posição do banco · 26/11/2026" · o(s) contrato(s) · o saldo total. Só reconhece. */
+export function linhaDaPosicao(chave: string, fonte: string, nome: string, p: PosicaoLida): LinhaDaCaixa {
+  const n = p.operacoes.length;
+  const t = n === 1 ? `contrato ${p.operacoes[0].contrato} · ${p.operacoes[0].produto}` : `${n} contratos: ${p.operacoes.map((o) => o.contrato).join(', ')}`;
+  return {
+    ...base(chave, 'posicao', [fonte], nome, nome,
+      { selo: p.confere ? { texto: 'lida', tom: 'cinza' } : { texto: 'não confere', tom: 'vermelho' }, texto: t,
+        titulo: `${t} · saldo do banco em ${dataCurta(p.dataBase)}${p.confere ? '' : ' (a soma das operações não fecha com o total)'}. Ainda não grava nada.` },
+      ['ignorar']),
+    emitente: `Posição do banco · ${dataCurta(p.dataBase)}`, valor: p.total, posicao: p,
+  };
+}
+
+/** CAIXA-FOLHA-VERA — a linha da GFD: "Guia do FGTS · 11/2026" · trabalhadores e o PIX (conferido pelo CRC) · o valor e o vencimento.
+ *  Só reconhece (o vínculo com o previsto do FGTS vem com a regra da guia que substitui o estimado); a ação é a de qualquer arquivo. */
+export function linhaDaGfd(chave: string, fonte: string, nome: string, g: GfdLida): LinhaDaCaixa {
+  const comp = `${g.competencia.slice(5, 7)}/${g.competencia.slice(0, 4)}`;
+  const t = `${g.trabalhadores} ${g.trabalhadores === 1 ? 'trabalhador' : 'trabalhadores'} · ${g.pix ? 'PIX copia e cola conferido' : 'sem PIX válido'}`;
+  return {
+    ...base(chave, 'guia', [fonte], nome, nome,
+      { selo: g.confere ? { texto: 'lida', tom: 'cinza' } : { texto: 'não confere', tom: 'vermelho' }, texto: t,
+        titulo: `${t}${g.confere ? '' : ` · ${g.naoConfere.join(' ')}`}. Ainda não grava nada.` },
+      ['ignorar']),
+    emitente: `Guia do FGTS · ${comp}`, valor: g.valor, vencimento: g.vencimento, gfd: g,
+  };
+}
+
+/** CAIXA-FOLHA-RATEIO-01 — a linha da relação de trabalhadores do FGTS: "Relação do FGTS · 11/2026" · estabelecimentos e trabalhadores ·
+ *  o total da guia. Só reconhece (antes: "Não sei · sem linha digitável nem chave"); a ação é a de qualquer arquivo. */
+export function linhaDaRelacao(chave: string, fonte: string, nome: string, r: RelacaoFgtsLida): LinhaDaCaixa {
+  const comp = `${r.competencia.slice(5, 7)}/${r.competencia.slice(0, 4)}`;
+  const n = r.estabelecimentos.reduce((s, e) => s + e.trabalhadores.length, 0);
+  const t = `${r.estabelecimentos.length} ${r.estabelecimentos.length === 1 ? 'estabelecimento' : 'estabelecimentos'} · ${n} ${n === 1 ? 'trabalhador' : 'trabalhadores'}`;
+  return {
+    ...base(chave, 'guia', [fonte], nome, nome,
+      { selo: r.confere ? { texto: 'lida', tom: 'cinza' } : { texto: 'não confere', tom: 'vermelho' }, texto: t,
+        titulo: `${t}${r.confere ? '' : ` · ${r.naoConfere.join(' ')}`}. Ainda não grava nada.` },
+      ['ignorar']),
+    emitente: `Relação do FGTS · ${comp}`, valor: r.totalGuia, vencimento: r.vencimento, relacao: r,
   };
 }
 
@@ -326,6 +404,14 @@ export function linhasDasFontes(fontes: readonly FonteParaMontar[], notas: Recor
       linhas.push(feitos.has(linha.chave) ? comoFeito(linha) : linha);
     } else if (l.k === 'analitica') {
       linhas.push(linhaDaAnalitica(`analitica:${f.chave}`, f.chave, f.nome, l.analitica));
+    } else if (l.k === 'fatura') {
+      linhas.push(linhaDaFatura(`fatura:${f.chave}`, f.chave, f.nome, l.fatura));
+    } else if (l.k === 'posicao') {
+      linhas.push(linhaDaPosicao(`posicao:${f.chave}`, f.chave, f.nome, l.posicao));
+    } else if (l.k === 'gfd') {
+      linhas.push(linhaDaGfd(`gfd:${f.chave}`, f.chave, f.nome, l.gfd));
+    } else if (l.k === 'relacao') {
+      linhas.push(linhaDaRelacao(`relacao:${f.chave}`, f.chave, f.nome, l.relacao));
     } else {
       linhas.push(linhaSemConteudo(f.chave, f.chave, f.nome, l));
     }
@@ -360,7 +446,11 @@ export function gruposDosEmails(entradas: readonly EntradaDoEmail[], lidos: Reco
   boletos: Record<string, ConsultaDoBoleto>, hoje: string, podeLancar: boolean, feitos: ReadonlySet<string>): GrupoDaCaixa[] {
   const abertas = entradas.filter((e) => ['a_ler', 'nao_reconhecido', 'sem_anexo', 'recusado', 'confirmacao_gmail'].includes(e.estado));
   const porMensagem = new Map<string, EntradaDoEmail[]>();
-  for (const e of abertas) porMensagem.set(e.mensagemId, [...(porMensagem.get(e.mensagemId) ?? []), e]);
+  /* CAIXA-FOLHA-VERA: os ARRASTADOS (guardados na hora) ficam num grupo só, "Arrastados para a Caixa" */
+  for (const e of abertas) {
+    const k = e.origem === 'arrastado' ? ARRASTADOS : e.mensagemId;
+    porMensagem.set(k, [...(porMensagem.get(k) ?? []), e]);
+  }
   const grupos: GrupoDaCaixa[] = [];
   for (const [mensagem, es] of porMensagem) {
     const ordenadas = [...es].sort((a, b) => (a.arquivoNome ?? '').localeCompare(b.arquivoNome ?? ''));
@@ -371,17 +461,23 @@ export function gruposDosEmails(entradas: readonly EntradaDoEmail[], lidos: Reco
       comArquivo.push({ chave: e.id, nome: e.arquivoNome ?? 'arquivo', tipoDoArquivo: e.tipo, lido: lidos[e.id] ?? { k: 'lendo' } });
     }
     const linhas = [...linhasDasFontes(comArquivo, notas, boletos, hoje, podeLancar, feitos), ...semArquivo];
-    const primeira = es[0];
+    const primeira = mensagem === ARRASTADOS ? [...es].sort((a, b) => (b.recebidoEm ?? '').localeCompare(a.recebidoEm ?? ''))[0] : es[0];
     grupos.push({
-      chave: `email:${mensagem}`, tipo: 'email', titulo: `${horaBR(primeira.recebidoEm)} · ${nomeDoRemetente(primeira.remetente)}`,
-      assunto: primeira.assunto, linhas, fontesAntigas: fontesAntigas(linhas),
+      chave: `email:${mensagem}`, tipo: 'email',
+      titulo: mensagem === ARRASTADOS ? 'Arrastados para a Caixa' : `${horaBR(primeira.recebidoEm)} · ${nomeDoRemetente(primeira.remetente)}`,
+      assunto: mensagem === ARRASTADOS ? 'guardados na hora; o que espera o gesto é só lançar, vincular ou aplicar' : primeira.assunto,
+      linhas, fontesAntigas: fontesAntigas(linhas),
       /* a ordem: o mais novo primeiro (pelo recebido_em do 1º anexo) */
     });
   }
   const quando = (g: GrupoDaCaixa) => es0(entradas, g)?.recebidoEm ?? '';
   return grupos.sort((a, b) => quando(b).localeCompare(quando(a)));
 }
-const es0 = (entradas: readonly EntradaDoEmail[], g: GrupoDaCaixa) => entradas.find((e) => `email:${e.mensagemId}` === g.chave);
+const ARRASTADOS = 'arrastados';
+const es0 = (entradas: readonly EntradaDoEmail[], g: GrupoDaCaixa) =>
+  g.chave === `email:${ARRASTADOS}`
+    ? [...entradas].filter((e) => e.origem === 'arrastado').sort((a, b) => (b.recebidoEm ?? '').localeCompare(a.recebidoEm ?? ''))[0]
+    : entradas.find((e) => `email:${e.mensagemId}` === g.chave);
 
 /** As fontes em que TODA linha (não feita) é antiga: o "Ignorar os N antigos" do grupo (precisa de 2+ linhas). */
 export function fontesAntigas(linhas: readonly LinhaDaCaixa[]): string[] {
@@ -441,7 +537,7 @@ export const contarAResolver = (grupos: readonly GrupoDaCaixa[]): number =>
 /* ═══ os botões ═══ */
 export const ROTULO_DA_ACAO: Record<Acao, string> = {
   lancar_nota: 'Lançar nota', vincular_nota: 'Vincular', vincular_boleto: 'Vincular', guardar: 'Guardar', desfazer: 'Desfazer', ignorar: 'Ignorar',
-  senha: 'Senha', abrir_folha: 'Abrir', abrir_resumo: 'Abrir',
+  senha: 'Senha', abrir_folha: 'Abrir', abrir_resumo: 'Abrir', anexar_rateio: 'Anexar ao rateio',
 };
 /** A prévia diz que o boleto já existe E já está ligado a lançamento (o "Vincular" só resolve a linha). */
 export function boletoJaLigado(p: LinhaDaCaixa['previa']): boolean {
@@ -459,5 +555,8 @@ export function tituloDaAcao(a: Acao, l: LinhaDaCaixa): string {
     case 'senha': return 'digite a senha do PDF (ela não é guardada)';
     case 'abrir_folha': return 'mostra a prévia por funcionário (o que casa, o que cria, o valor e o vencimento): nada grava antes do Aprovar';
     case 'abrir_resumo': return 'mostra o FGTS de cada empresa e a previsão por fazenda (valor e vencimento): nada grava antes do Prever';
+    case 'anexar_rateio': return l.rateio
+      ? `anexa os ${l.rateio.documentos} documentos do pacote aos lançamentos de ${l.rateio.rotuloCompetencia} (rateio com ${l.rateio.terceiro}) e manda para Resolvidos; nada cria lançamento nem boleto`
+      : 'anexa aos lançamentos do rateio';
   }
 }

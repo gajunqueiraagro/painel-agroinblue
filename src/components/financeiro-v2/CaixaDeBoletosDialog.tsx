@@ -44,6 +44,7 @@ import type { Divisao } from '@/lib/pdf/dividirPdf';
 import type { CaixaApi, ItemDaCaixa } from '@/lib/financeiro/boleto/caixaApi';
 import type { ParcelaApi } from '@/lib/financeiro/boleto/boletoDaParcela';
 import { dataBR, valorBR, type Selo, type Tom } from '@/lib/financeiro/boleto/caixaDeBoletos';
+import { textoDaChegada } from '@/lib/financeiro/boleto/chegadasDaCaixa';
 import {
   ABAS_DA_CAIXA_V2, ROTULO_DA_ACAO, contarAResolver, nomeDoRemetente, tituloDaAcao, virouDaEntrada,
   type AbaDaCaixaV2, type Acao, type GrupoDaCaixa, type LinhaDaCaixa, type ResumoDaNota,
@@ -67,7 +68,7 @@ const TH = cn(TH_REGUA, 'sticky top-0 z-10 bg-primary text-left');
 const TH_NUM = cn(TH, 'text-right');
 const LINHA = 'h-[19px] border-b border-border/40';
 const TIPO: Record<LinhaDaCaixa['tipo'], Selo> = {
-  nota: { texto: 'Nota fiscal', tom: 'azul' }, boleto: { texto: 'Boleto', tom: 'ok' }, folha: { texto: 'Folha', tom: 'azul' }, nada: { texto: 'Não sei', tom: 'cinza' },
+  nota: { texto: 'Nota fiscal', tom: 'azul' }, boleto: { texto: 'Boleto', tom: 'ok' }, folha: { texto: 'Folha', tom: 'azul' }, fatura: { texto: 'Fatura', tom: 'azul' }, posicao: { texto: 'Posição', tom: 'cinza' }, guia: { texto: 'Guia', tom: 'ok' }, nada: { texto: 'Não sei', tom: 'cinza' },
   lendo: { texto: 'lendo…', tom: 'cinza' }, senha: { texto: 'Boleto?', tom: 'ambar' }, erro: { texto: 'Erro', tom: 'vermelho' },
   sem_anexo: { texto: 'Sem anexo', tom: 'cinza' }, recusado: { texto: 'Recusado', tom: 'vermelho' }, gmail: { texto: 'Gmail', tom: 'ambar' },
 };
@@ -390,16 +391,18 @@ function LinhaIgnorada({ tipo, arquivo, de, chegou, motivo, em, ocupado, selecio
 const motivoSugerido = (ls: readonly LinhaDaCaixa[]): MotivoDeIgnorar | null =>
   ls.every((l) => l.antigo) ? 'antigo' : ls.every((l) => l.tipo === 'nada' || l.tipo === 'sem_anexo' || l.tipo === 'gmail') ? 'nao_e_documento' : null;
 
-export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, parcela, ler, entrada, hoje, aoLancarNota, folha }: {
+export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, parcela, ler, entrada, hoje, aoLancarNota, folha, intervaloMs }: {
   clienteId: string; clienteNome?: string | null; aoFechar: () => void;
   /** a bancada sintética injeta a API e o leitor; a tela de verdade usa os do banco e do pdfjs */
   api?: CaixaApi; parcela?: ParcelaApi; ler?: LerArquivoDaCaixa; entrada?: EntradaEmailApi; hoje?: string;
   /** D3 — a tela de Lançamentos recebe o arquivo da nota e abre a prévia do "+ Da nota". Sem ele, a nota só se ignora daqui. */
   aoLancarNota?: (arquivo: File) => void;
+  /** CAIXA-ATUALIZAR-01: a pergunta automática "chegou algo?" (padrão 30 s; a bancada passa 0) */
+  intervaloMs?: number;
   /** FOLHA-NA-CAIXA-01: a bancada e o teste injetam o banco da folha e o divisor de PDF */
   folha?: { api?: FolhaCaixaApi; dividir?: (b: Uint8Array, g: number[][]) => Promise<Divisao>; resumo?: ResumoCaixaApi };
 }) {
-  const caixa = useCaixaDeBoletos(clienteId, { api, parcela, ler, entrada, hoje, podeLancar: !!aoLancarNota });
+  const caixa = useCaixaDeBoletos(clienteId, { api, parcela, ler, entrada, hoje, podeLancar: !!aoLancarNota, intervaloMs });
   const largura = useLarguraDaJanela();
   const aoLado = largura >= LARGURA_DO_PAINEL_AO_LADO;
   const [aba, setAba] = useState<AbaDaCaixaV2>('a_resolver');
@@ -496,7 +499,8 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
     if (a === 'desfazer') { if (l.boletoGuardadoId) setFrase(await caixa.desfazerGuardado(l.boletoGuardadoId)); return; }
     const r = a === 'vincular_nota' ? await caixa.vincularNota(l)
       : a === 'vincular_boleto' ? await caixa.vincularBoleto(l, lancamentos ?? [])
-        : a === 'guardar' ? await caixa.guardar(l) : null;
+        : a === 'guardar' ? await caixa.guardar(l)
+          : a === 'anexar_rateio' ? await caixa.anexarRateio(l) : null;
     setFrase(r);
   };
 
@@ -523,6 +527,11 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
                 rotulo: <span>{a.rotulo} <TextoReservado texto={contagem[a.valor] == null ? '—' : String(contagem[a.valor])} reserva="999" /></span>,
               }))} />
             <span className="min-w-0 flex-1 truncate text-[9.5px] text-muted-foreground" title={dica}>{dica}</span>
+            {/* CAIXA-ATUALIZAR-01: a chegada num lugar FIXO (largura reservada: o aviso de novo e a última chegada não empurram nada) */}
+            <TextoReservado texto={textoDaChegada(caixa.avisoDeNovo, Date.now(), caixa.ultimaChegada)} reserva="última chegada: 00/00 00:00"
+              className={cn('flex-none text-[9.5px]', caixa.avisoDeNovo ? 'font-semibold text-amber-700' : 'text-muted-foreground')} testid="chegada-da-caixa" />
+            <Button variant="outline" size="sm" className="h-[22px] flex-none px-2 text-[10px]" onClick={() => void caixa.atualizar()} disabled={caixa.atualizando}
+              title="relê o que chegou (a aba e a seleção ficam)" data-testid="atualizar-caixa">↻ Atualizar</Button>
             <Button variant="outline" size="sm" className="h-[22px] flex-none px-2 text-[10px]" onClick={() => setEnderecoAberto(true)} data-testid="abrir-endereco-de-boletos">
               E-mail de entrada
             </Button>

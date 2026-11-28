@@ -57,8 +57,9 @@ describe('o DARF', () => {
     expect(r.darf.vencimento).toBeNull();
   });
   it('o tipo pela denominação da Receita', () => {
-    expect(['CP PATRONAL - EMPREGADOS', 'CP SEGURADOS - CONTRIBUINTE INDIVIDUAL', 'CP TERCEIROS - SENAR', 'IRRF - ALUGUÉIS', 'COFINS']
-      .map(tipoNoDarf)).toEqual(['inss_patronal', 'inss_segurados', 'terceiros', 'irrf', 'outro']);
+    expect(['CP PATRONAL - EMPREGADOS', 'CP SEGURADOS - CONTRIBUINTE INDIVIDUAL', 'CP TERCEIROS - SENAR', 'IRRF - ALUGUÉIS', 'COFINS',
+      'CONTRIBUIÇÃO TERCEIROS - INCRA', 'CONTR PREV DESCONTA SEGURADO-EMPREGADO/AVULSO', 'TERCEIROS SEM O CP']
+      .map(tipoNoDarf)).toEqual(['inss_patronal', 'inss_segurados', 'terceiros', 'irrf', 'outro', 'terceiros', 'inss_segurados', 'outro']);
   });
   it('não é DARF: sem o título, sem o cabeçalho do período ou sem o valor total', () => {
     const nao = { ok: false, frase: FRASE_NAO_E_DARF };
@@ -191,5 +192,36 @@ describe('o recibo da DCTFWeb', () => {
     expect(r.dctfweb.naoConfere).toEqual(['Os tributos somam 1.229,00; o total da DCTFWeb é 1.230,00.']);
     expect(lerDctfweb([DCTF.slice(1)])).toEqual({ ok: false, frase: FRASE_NAO_E_DCTFWEB });
     expect(lerDctfweb([DCTF.slice(0, -1)])).toEqual({ ok: false, frase: FRASE_NAO_E_DCTFWEB });
+  });
+});
+
+/* CAIXA-FOLHA-RATEIO-01 — quem paga a guia (o contribuinte do DARF, o empregador da GFD e da relação): é por ele que a Caixa sabe que a
+   guia é da outra parte de um rateio. Dado INVENTADO. */
+describe('quem paga a guia', () => {
+  it('o DARF: o contribuinte da linha depois de "CPF | Nome"; sem ela, null', () => {
+    const r = lerDarf([DARF]);
+    if (r.ok === false) throw new Error(r.frase);
+    expect(r.darf.contribuinte).toEqual({ documento: '00000000000', nome: 'FULANO FICTICIO' });
+    const sem = lerDarf([DARF.filter((l) => !/FULANO|^CPF/.test(l))]);
+    if (sem.ok === false) throw new Error(sem.frase);
+    expect(sem.darf.contribuinte).toBeNull();
+  });
+  it('a GFD: o empregador depois de "CPF/CNPJ do Empregador" (a data no meio não conta); CNPJ também', () => {
+    const r = lerGfd([GFD]);
+    if (r.ok === false) throw new Error(r.frase);
+    expect(r.gfd.empregador).toEqual({ documento: '00000000000', nome: 'FULANO FICTICIO' });
+    const pj = lerGfd([GFD.map((l) => l.replace('000.000.000-00', '11.222.333/0001-81'))]);
+    if (pj.ok === false) throw new Error(pj.frase);
+    expect(pj.gfd.empregador?.documento).toBe('11222333000181');
+  });
+  it('a relação: o CPF da MESMA coluna depois de "Empregador:" e o nome depois de "Nome Empregador:" (nunca o CPF de trabalhador)', () => {
+    const cab = [it_('Empregador:', 30, 12), it_('000.000.000-00', 30, 64), it_('Nome Empregador:', 30, 167), it_('FULANO FICTICIO', 30, 244),
+      it_('CPF', 60, 30), it_('999.999.999-99', 60, 40)];
+    const r = lerRelacaoFgts([[...cab, ...P1], P2, RESUMO]);
+    if (r.ok === false) throw new Error(r.frase);
+    expect(r.relacao.empregador).toEqual({ documento: '00000000000', nome: 'FULANO FICTICIO' });
+    const semRotulo = lerRelacaoFgts([P1, P2, RESUMO]);
+    if (semRotulo.ok === false) throw new Error(semRotulo.frase);
+    expect(semRotulo.relacao.empregador).toBeNull();
   });
 });

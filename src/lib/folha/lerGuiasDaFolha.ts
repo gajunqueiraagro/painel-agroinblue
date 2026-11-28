@@ -61,6 +61,15 @@ function depois<T>(linhas: string[], re: RegExp, f: (c: string[]) => T | null): 
   return null;
 }
 
+/* ═══ quem paga a guia (CAIXA-FOLHA-RATEIO-01, Gabriel 27/11 19:45) ═══
+ * O contribuinte do DARF, o empregador da GFD e o da relação do FGTS: é por ele que a Caixa sabe que a guia é da OUTRA parte de um rateio
+ * (comprovante, nunca conta a pagar do cliente). Só o documento (dígitos) e o nome impressos; não veio = null. */
+export interface QuemPaga { documento: string | null; nome: string | null }
+const CPF_OU_CNPJ = /^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
+/** "<CPF ou CNPJ> | <nome…>" → quem paga */
+const quemPagaDaLinha = (c: string[]): QuemPaga | null =>
+  CPF_OU_CNPJ.test(c[0] ?? '') ? { documento: c[0].replace(/\D/g, ''), nome: c.slice(1).join(' ').trim() || null } : null;
+
 /* ═══ o DARF ═══ */
 export type TipoNoDarf = 'inss_segurados' | 'inss_patronal' | 'terceiros' | 'irrf' | 'outro';
 export interface ItemDoDarf { codigo: string; denominacao: string; tipo: TipoNoDarf; principal: number; total: number }
@@ -74,6 +83,8 @@ export interface DarfLido {
   /** o "Nº Recibo Declaração" (liga o DARF à DCTFWeb) */
   reciboDeclaracao: string | null;
   composicao: ItemDoDarf[];
+  /** "CPF | Nome" (ou "CNPJ | Razão Social") e, abaixo, o contribuinte */
+  contribuinte: QuemPaga | null;
   confere: boolean;
   naoConfere: string[];
 }
@@ -83,9 +94,11 @@ export const FRASE_NAO_E_DARF = 'Não é um DARF que eu conheça.';
 export function tipoNoDarf(denominacao: string): TipoNoDarf {
   const t = semAcento(denominacao);
   if (/^irrf\b/.test(t)) return 'irrf';
-  if (/^cp\b.*\bterceiros\b/.test(t)) return 'terceiros';
-  if (/^cp\b.*\bsegurado/.test(t) || /^contr prev desconta segurado/.test(t)) return 'inss_segurados';
-  if (/^cp\b.*\bpatronal\b/.test(t)) return 'inss_patronal';
+  /* "CP TERCEIROS - …" ou "CONTRIBUIÇÃO TERCEIROS - …" (o DARF de nov/2026 escreve por extenso) */
+  const cp = /^(cp|contr|contribuicao)\b/.test(t);
+  if (cp && /\bterceiros\b/.test(t)) return 'terceiros';
+  if (cp && /\bsegurado/.test(t)) return 'inss_segurados';
+  if (cp && /\bpatronal\b/.test(t)) return 'inss_patronal';
   return 'outro';
 }
 
@@ -121,7 +134,8 @@ export function lerDarf(paginas: string[][]): { ok: true; darf: DarfLido } | { o
   if (!composicao.length) naoConfere.push('A composição do DARF não veio.');
   const soma = composicao.reduce((s, x) => s + centavos(x.total), 0);
   if (composicao.length && soma !== centavos(valor)) naoConfere.push(`A composição soma ${brl(reais(soma))}; o DARF diz ${brl(valor)}.`);
-  return { ok: true, darf: { ...cab, valor, reciboDeclaracao: recibo, composicao, confere: naoConfere.length === 0, naoConfere } };
+  const contribuinte = depois(linhas, /^(cpf|cnpj) \| (nome|razao social)$/, quemPagaDaLinha);
+  return { ok: true, darf: { ...cab, valor, reciboDeclaracao: recibo, composicao, contribuinte, confere: naoConfere.length === 0, naoConfere } };
 }
 
 /* ═══ a GFD (guia do FGTS Digital) ═══ */
@@ -135,6 +149,8 @@ export interface GfdLida {
   mensal: number; rescisorio: number; indenizacao: number; encargos: number; total: number;
   /** o PIX copia e cola (só com o CRC certo); null = não veio ou não confere */
   pix: string | null;
+  /** "CPF/CNPJ do Empregador | Nome/Razão Social do Empregador" e, abaixo (depois da data), o empregador */
+  empregador: QuemPaga | null;
   confere: boolean;
   naoConfere: string[];
 }
@@ -172,6 +188,7 @@ export function lerGfd(paginas: string[][]): { ok: true; gfd: GfdLida } | { ok: 
   return {
     ok: true,
     gfd: { competencia: competenciaMmAaaa(comp[0]) ?? '', vencimento, valor, identificador, trabalhadores: Number(comp[1]), mensal, rescisorio, indenizacao, encargos, total, pix,
+      empregador: depois(linhas, /^cpf\/cnpj do empregador \| nome\/razao social do empregador$/, quemPagaDaLinha),
       confere: naoConfere.length === 0, naoConfere },
   };
 }
@@ -196,6 +213,8 @@ export interface RelacaoFgtsLida {
   /** a coluna "Total FGTS" (a guia inteira) */
   totalGuia: number | null;
   estabelecimentos: EstabelecimentoDoFgts[];
+  /** "Empregador:" e "Nome Empregador:" (a mesma coluna da página deitada; o valor vem depois do rótulo) */
+  empregador: QuemPaga | null;
   confere: boolean;
   naoConfere: string[];
 }
@@ -263,7 +282,23 @@ export function lerRelacaoFgts(paginas: ItemDoDanfe[][]): { ok: true; relacao: R
   const soma = estabelecimentos.reduce((s, e) => s + centavos(e.totalFgts ?? e.somaFgts), 0);
   if (totalGuia === null) naoConfere.push('O total da guia não veio na relação.');
   else if (soma !== centavos(totalGuia)) naoConfere.push(`Os estabelecimentos somam ${brl(reais(soma))}; a guia diz ${brl(totalGuia)}.`);
-  return { ok: true, relacao: { competencia, vencimento, totalGuia, estabelecimentos, confere: naoConfere.length === 0, naoConfere } };
+  return { ok: true, relacao: { competencia, vencimento, totalGuia, estabelecimentos, empregador: empregadorDaRelacao(paginas), confere: naoConfere.length === 0, naoConfere } };
+}
+
+/** O empregador da relação: na 1ª página que tem o rótulo "Empregador:", o CPF/CNPJ da MESMA coluna depois dele (antes do "Nome
+ *  Empregador:") e o nome depois do "Nome Empregador:". Sem o rótulo ou sem o documento = null. */
+function empregadorDaRelacao(paginas: ItemDoDanfe[][]): QuemPaga | null {
+  for (const itens of paginas) {
+    const rot = itens.find((i) => semAcento(i.str).trim() === 'empregador:');
+    if (!rot) continue;
+    const daColuna = itens.filter((i) => Math.abs(i.x - rot.x) <= MESMA_COLUNA && i.str.trim() !== '').sort((a, b) => a.y - b.y);
+    const rotNome = daColuna.find((i) => semAcento(i.str).trim() === 'nome empregador:');
+    const doc = daColuna.find((i) => i.y > rot.y && (!rotNome || i.y < rotNome.y) && CPF_OU_CNPJ.test(i.str.trim()));
+    if (!doc) continue;
+    const nome = rotNome ? daColuna.find((i) => i.y > rotNome.y && !/:$/.test(i.str.trim())) : undefined;
+    return { documento: doc.str.replace(/\D/g, ''), nome: nome ? nome.str.trim() : null };
+  }
+  return null;
 }
 
 /* ═══ o recibo da DCTFWeb ═══ */

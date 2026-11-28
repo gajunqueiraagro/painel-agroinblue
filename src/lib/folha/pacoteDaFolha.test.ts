@@ -15,12 +15,12 @@ function analitica(empresa: string, pessoas: PessoaDaAnalitica[]): FolhaAnalitic
   const s = (f: (p: PessoaDaAnalitica) => number) => Math.round(pessoas.reduce((t, p) => t + f(p) * 100, 0)) / 100;
   const soma = { funcionarios: pessoas.length, proventos: s((p) => p.proventos ?? 0), descontos: s((p) => p.descontos ?? 0), liquido: s((p) => p.liquido ?? 0),
     fgts: s((p) => p.fgts ?? 0), inss: s((p) => p.inss), irrf: s((p) => p.irrf) };
-  return { empresa, competencia: '2026-03', emissao: null, pessoas, soma, resumo: null, confere: true, naoConfere: [] };
+  return { empresa, competencia: '2026-03', tipo: 'mensal', emissao: null, pessoas, soma, resumo: null, confere: true, naoConfere: [] };
 }
 const A = analitica('FULANO FICTICIO FAZENDA UM', [pessoa('00011', 1000, 100, 90, 10), pessoa('00012', 2000, 200, 180, 20)]);
 const B = analitica('FULANO FICTICIO FAZENDA DOIS', [pessoa('00031', 1500, 120, 100, 0)]);
 const RELACAO: RelacaoFgtsLida = {
-  competencia: '2026-03', vencimento: '2026-04-20', totalGuia: 420, confere: true, naoConfere: [],
+  competencia: '2026-03', vencimento: '2026-04-20', totalGuia: 420, empregador: null, confere: true, naoConfere: [],
   estabelecimentos: [
     { caepf: '11122233300144', totalFgts: 300, totalBase: 3750, somaFgts: 300, somaBase: 3750, confere: true, paginas: [1],
       trabalhadores: [{ matricula: '00001-11', codigo: '00011', base: 1250, fgts: 100 }, { matricula: '00001-12', codigo: '00012', base: 2500, fgts: 200 }] },
@@ -28,9 +28,9 @@ const RELACAO: RelacaoFgtsLida = {
       trabalhadores: [{ matricula: '00002-31', codigo: '00031', base: 1500, fgts: 120 }] },
   ],
 };
-const GFD: GfdLida = { competencia: '2026-03', vencimento: '2026-04-20', valor: 420, identificador: null, trabalhadores: 3, mensal: 420, rescisorio: 0,
+const GFD: GfdLida = { competencia: '2026-03', vencimento: '2026-04-20', valor: 420, identificador: null, empregador: null, trabalhadores: 3, mensal: 420, rescisorio: 0,
   indenizacao: 0, encargos: 0, total: 420, pix: 'pix', confere: true, naoConfere: [] };
-const DARF: DarfLido = { periodo: '2026-03', vencimento: '2026-04-20', numero: null, valor: 500, reciboDeclaracao: null, confere: true, naoConfere: [],
+const DARF: DarfLido = { periodo: '2026-03', vencimento: '2026-04-20', numero: null, valor: 500, reciboDeclaracao: null, contribuinte: null, confere: true, naoConfere: [],
   composicao: [
     { codigo: '1082', denominacao: 'CP SEGURADOS', tipo: 'inss_segurados', principal: 370, total: 370 },
     { codigo: '1170', denominacao: 'CP TERCEIROS - SALÁRIO EDUCAÇÃO', tipo: 'terceiros', principal: 70, total: 70 },

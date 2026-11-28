@@ -57,8 +57,11 @@ export function documentoValido(s: string): boolean {
 
 /** Os documentos com DV certo de um texto: pontuados, ou soltos quando o texto é SÓ o número (nunca um pedaço de número maior). */
 const DOC_PONTUADO = /(?<![0-9A-Z])(?:[0-9A-Z]{2}\.[0-9A-Z]{3}\.[0-9A-Z]{3}\/[0-9A-Z]{4}-\d{2}|\d{3}\.\d{3}\.\d{3}-\d{2})(?![0-9A-Z])/gi;
+/** CAIXA-OCR-01: o CNPJ impresso com 15 dígitos, um zero na FRENTE ("011.869.123/0001-80", Bradesco): vale o de 14 sem o zero, se o DV fechar. */
+const CNPJ_15 = /(?<![0-9A-Z])0(\d{2})\.?(\d{3})\.(\d{3})\/(\d{4})-(\d{2})(?![0-9A-Z])/g;
 export function documentosDoTexto(s: string): string[] {
   const achados = [...s.matchAll(DOC_PONTUADO)].map((m) => chaveDoDocumento(m[0]));
+  for (const m of s.matchAll(CNPJ_15)) achados.push(`${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}`);
   const solto = /^\s*(?:CPF|CNPJ|CPF\/CNPJ)?[:\s]*([0-9A-Z]{14}|\d{11})\s*$/i.exec(s);
   if (solto) achados.push(chaveDoDocumento(solto[1]));
   return [...new Set(achados.filter(documentoValido))];

@@ -33,7 +33,7 @@ export interface EntradaDoEmail {
   /** BOLETO D3d (118180) — o motivo de ignorar ("dispensado" = ignorado), o detalhe, quando; e o que a linha virou ao resolver. */
   ignoradoMotivo: MotivoDeIgnorar | 'anterior_a_regra' | null; ignoradoDetalhe: string | null; ignoradoEm: string | null;
   boletoId: string | null; lancamentoId: string | null; resolvidoEm: string | null;
-  /** 118610: 'arrastado' = o arquivo solto na Caixa e registrado no gesto (sem remetente; quem arrastou vem de `resolvidos`) */
+  /** 118610: 'arrastado' = o arquivo solto na Caixa (CAIXA-FOLHA-VERA: registrado NA HORA, não mais no gesto; sem remetente; quem arrastou vem de `resolvidos`) */
   origem?: 'email' | 'arrastado';
   /** ENTRADA-CENTRAL-01 F1 (118880): a leitura guardada, crua do banco (quem usa confere: `daGravada`); null = ainda não lida */
   leitura?: unknown;
@@ -117,12 +117,22 @@ export interface EntradaEmailApi {
   resolvidos?: (clienteId: string) => Promise<Resultado<Record<string, DetalheDoResolvido>>>;
   /** ENTRADA-CENTRAL-01 F1 (118880): guarda o resultado da leitura feita no navegador (só se a linha não tem a desta versão; o texto nunca) */
   guardarLeitura?: (id: string, leitura: LeituraGravada) => Promise<Resultado<true>>;
+  /** CAIXA-ATUALIZAR-01: a pergunta barata da atualização automática — quando entrou a linha mais nova do cliente (null = nenhuma) */
+  ultimaChegada?: (clienteId: string) => Promise<Resultado<string | null>>;
 }
 
 const COLUNAS = 'id, mensagem_id, remetente, assunto, recebido_em, arquivo_nome, tipo, tamanho_bytes, storage_path, estado, motivo, chegou_de_novo, '
   + 'ignorado_motivo, ignorado_detalhe, dispensado_em, boleto_id, lancamento_id, lido_em, origem, leitura';
 
 export const entradaEmailApiDoBanco: EntradaEmailApi = {
+  async ultimaChegada(clienteId) {
+    const { data, error } = await (supabase as any).from('entrada_arquivos').select('criado_em, ultima_chegada_em').eq('cliente_id', clienteId)
+      .order('criado_em', { ascending: false }).limit(1);
+    if (error) return { ok: false, erro: fraseDoErroDaEntrada(error) };
+    const r: unknown = Array.isArray(data) ? data[0] : null;
+    const em = r && typeof r === 'object' && 'criado_em' in r && typeof r.criado_em === 'string' ? r.criado_em : null;
+    return { ok: true, dados: em };
+  },
   async endereco(clienteId) {
     const [d, e] = await Promise.all([
       (supabase as any).rpc('_fn_entrada_dominio'),

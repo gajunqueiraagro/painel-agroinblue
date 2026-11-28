@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { doFechamento } from '@/lib/fechamento/naoEntraNoFechamento';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
@@ -297,7 +298,7 @@ const PILL_STATUS = 'rounded-full border px-2 py-0.5 text-[10px] leading-tight';
 
 
 
-function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }: {
+export function StatusFechamentoBanda({ status: statusDoBanco, isGlobal, loading, mesLabel, onIrPara }: {
   status: StatusFazenda[];
   isGlobal: boolean;
   loading: boolean;
@@ -306,6 +307,9 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
 }) {
   // useState ANTES de qualquer return: hook nao pode ficar atras de saida antecipada.
   const [modalAberto, setModalAberto] = useState(false);
+  /* REBANHO-SEM-GADO-01: a fazenda sem rebanho no mês (o banco devolve os 2 pilares 'nao_aplicavel') não entra na faixa, no modal
+     nem na contagem — a regra é do banco (`_fn_fazenda_rebanho_no_mes`); a marca tem_pecuaria não decide. */
+  const status = doFechamento(statusDoBanco);
 
   if (loading) {
     return (

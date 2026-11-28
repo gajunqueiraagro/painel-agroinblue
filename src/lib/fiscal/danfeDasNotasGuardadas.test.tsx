@@ -39,7 +39,7 @@ describe('G2 — o modal', () => {
   it('Simular gera sem gravar; Gerar e anexar grava só as que geraram; a falha diz a frase', async () => {
     const gerar = vi.fn(async (_cli: string, c: CandidataDoDanfe, simular: boolean): Promise<ResultadoDoDanfe> =>
       (c.doc.id === 'b' ? { ok: false, frase: 'XML não encontrado no armazenamento' } : { ok: true, bytes: simular ? 81920 : 81920 }));
-    render(<DanfeDasNotasGuardadasDialog clienteId="cli" onClose={() => {}} gerar={gerar}
+    render(<DanfeDasNotasGuardadasDialog clienteId="cli" onClose={() => {}} gerar={gerar} proxima={async () => null}
       ler={async () => ({ ok: true, valor: [C('a', 1), C('b', 2), C('c', 3)] })} />);
     expect(await screen.findAllByTestId('danfe-guardadas-linha')).toHaveLength(3);
     expect(screen.getByTestId('danfe-guardadas-gravar').hasAttribute('disabled')).toBe(true);
@@ -60,7 +60,7 @@ describe('G3 — "Buscar na Receita" (FILA 12:04)', () => {
     const gerar = vi.fn(async (): Promise<ResultadoDoDanfe> => (temXml ? { ok: true, bytes: 70000 } : { ok: false, frase: FRASE_SEM_XML }));
     const buscar = vi.fn(async () => { temXml = true; return { ok: true, frase: 'XML trazido da Receita.' }; });
     render(<DanfeDasNotasGuardadasDialog clienteId="cli" onClose={() => {}} gerar={gerar} buscar={buscar} titulares={async () => ['tit-1']}
-      ler={async () => ({ ok: true, valor: [C('a', 1)] })} />);
+      proxima={async () => null} ler={async () => ({ ok: true, valor: [C('a', 1)] })} />);
     await screen.findAllByTestId('danfe-guardadas-linha');
     fireEvent.click(screen.getByTestId('danfe-guardadas-simular'));
     const botao = await screen.findByTestId('danfe-buscar-receita');
@@ -70,8 +70,21 @@ describe('G3 — "Buscar na Receita" (FILA 12:04)', () => {
     expect(buscar).toHaveBeenCalledWith('tit-1', chave(1));
     expect(screen.queryByTestId('danfe-buscar-receita')).toBeNull();
   });
+  it('BLOQUEIO-01: antes da hora liberada pela Receita o botão diz "próxima às HH:MM", fica apagado e NÃO chama a Receita', async () => {
+    const buscar = vi.fn(async () => ({ ok: true, frase: 'x' }));
+    const futuro = new Date(Date.now() + 40 * 60_000).toISOString();
+    render(<DanfeDasNotasGuardadasDialog clienteId="cli" onClose={() => {}} buscar={buscar} titulares={async () => ['tit-1']} proxima={async () => futuro}
+      gerar={async () => ({ ok: false, frase: FRASE_SEM_XML })} ler={async () => ({ ok: true, valor: [C('a', 1)] })} />);
+    await screen.findAllByTestId('danfe-guardadas-linha');
+    fireEvent.click(screen.getByTestId('danfe-guardadas-simular'));
+    const botao = await screen.findByTestId('danfe-buscar-receita');
+    await waitFor(() => expect(botao.textContent).toMatch(/^próxima às \d\d:\d\d$/));
+    expect(botao.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(botao);
+    expect(buscar).not.toHaveBeenCalled();
+  });
   it('sem produtor com certificado o botão fica apagado (e diz por quê)', async () => {
-    render(<DanfeDasNotasGuardadasDialog clienteId="cli" onClose={() => {}} titulares={async () => []} buscar={vi.fn()}
+    render(<DanfeDasNotasGuardadasDialog clienteId="cli" onClose={() => {}} titulares={async () => []} buscar={vi.fn()} proxima={async () => null}
       gerar={async () => ({ ok: false, frase: FRASE_SEM_XML })} ler={async () => ({ ok: true, valor: [C('a', 1)] })} />);
     await screen.findAllByTestId('danfe-guardadas-linha');
     fireEvent.click(screen.getByTestId('danfe-guardadas-simular'));

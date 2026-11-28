@@ -28,6 +28,10 @@ describe('documento com DV certo', () => {
     expect(documentosDoTexto(' 11222333000181 ')).toEqual(['11222333000181']);
     expect(documentosDoTexto('00011222333000181999')).toEqual([]);
     expect(documentosDoTexto('CNPJ 11.222.333/0001-82')).toEqual([]);
+    /* CAIXA-OCR-01: o CNPJ com 15 dígitos (zero na frente) vale sem o zero, se o DV fechar; o resto não */
+    expect(documentosDoTexto('CPF/CNPJ: 011.222.333/0001-81')).toEqual(['11222333000181']);
+    expect(documentosDoTexto('CPF/CNPJ: 011.222.333/0001-82')).toEqual([]);
+    expect(documentosDoTexto('CPF/CNPJ: 111.222.333/0001-81')).toEqual([]);
   });
 });
 

@@ -9,6 +9,7 @@ import {
   FORMA_POR_TPAG, fraseParcelasComoNaNota, FRASE_FAZENDA_NAO_IDENTIFICADA, FRASE_NOTA_DE_VENDA, FRASE_SEM_DUPLICATAS,
   FRASE_SEM_PROTOCOLO, descricaoDaNota, duplicatasCabemNoParcelamentoDeHoje, proporLancamento, somarMeses,
   type FazendaComIE, type PropostaDeLancamento, type UltimaClassificacao,
+  AVISO_CONTA_DESCARTADA, AVISO_DA_VENDA,
 } from './proporLancamento';
 import { resolverEmitente, type FornecedorParaResolver, type ResolucaoEmitente } from './resolverEmitente';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais } from './formatos';
@@ -234,3 +235,28 @@ describe('formatos', () => {
     expect([dataCurta('2026-09-30'), dataCurta(''), dataCurta(null)]).toEqual(['30/09/26', '—', '—']);
   });
 });
+
+/* NOTA-TIPO-ABATE-01 (Gabriel 27/11, erro grave) — a VENDA do titular (NF de entrada do frigorífico com o titular no destinatário) */
+describe('NOTA-TIPO-ABATE-01 — a venda do titular entra como RECEITA; a sugestão nunca vence o tipo', () => {
+  it('V1 venda: Entrada + o aviso; a conta sugerida de DESPESA é descartada (mutação: sem a venda continua Saída)', () => {
+    const venda = propor({}, { vendaDoTitular: { contaSugeridaEhEntrada: false } });
+    expect(venda.tipoOperacao).toBe('1-Entradas');
+    expect(venda.avisos[0]).toBe(AVISO_DA_VENDA);
+    expect(venda.classificacao).toBeNull();
+    expect(venda.avisos).toContain(AVISO_CONTA_DESCARTADA);
+    expect(venda.origens.subcentro).toBeUndefined();
+    const compra = propor({}, {});
+    expect(compra.tipoOperacao).toBe('2-Saídas');
+    expect(compra.classificacao).not.toBeNull();
+  });
+  it('V2 venda com conta sugerida de ENTRADA (ex.: Abates de Fêmeas): a conta fica', () => {
+    const venda = propor({}, { vendaDoTitular: { contaSugeridaEhEntrada: true } });
+    expect(venda.tipoOperacao).toBe('1-Entradas');
+    expect(venda.classificacao).not.toBeNull();
+    expect(venda.avisos).not.toContain(AVISO_CONTA_DESCARTADA);
+  });
+  it('V3 tipo da conta desconhecido (consulta falhou) = descarta (na dúvida, a despesa nunca entra numa venda)', () => {
+    expect(propor({}, { vendaDoTitular: { contaSugeridaEhEntrada: null } }).classificacao).toBeNull();
+  });
+});
+

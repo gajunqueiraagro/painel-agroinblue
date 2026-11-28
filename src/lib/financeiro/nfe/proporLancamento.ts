@@ -45,6 +45,9 @@ export const ORIGEM_FAZENDA_PELO_TOMADOR = 'pelo tomador da nota';
 /** O tomador é titular em mais de uma fazenda: ninguém escolhe por ele. */
 export const fraseTomadorEmVarias = (n: number) => `O tomador da nota é titular em ${n} fazendas: escolha a fazenda.`;
 export const FRASE_SEM_DUPLICATAS = 'Nota sem duplicatas. Preencha o vencimento.';
+/** NOTA-TIPO-ABATE-01 — a venda do titular (a NF de entrada do comprador) */
+export const AVISO_DA_VENDA = 'É a sua venda: o comprador emitiu a NF de entrada — entra como RECEITA.';
+export const AVISO_CONTA_DESCARTADA = 'A conta sugerida era de despesa e foi descartada (venda entra como receita): escolha a conta de receita.';
 export const FRASE_SEM_PROTOCOLO = 'Nota sem protocolo de autorização.';
 /** NOTA-NFSE-LEITURA-02 (Gabriel 08/11) — o aviso que pede um campo SOME quando o campo foi preenchido: a lista da proposta e' calculada
  *  na abertura; a tela passa o estado de agora. */
@@ -125,7 +128,8 @@ export type ParcelamentoProposto =
 
 export interface PropostaDeLancamento {
   rotuloNota: string;                 // "NF 000.178.766"
-  tipoOperacao: '2-Saídas';
+  /** NOTA-TIPO-ABATE-01 — a venda do titular (NF de entrada do comprador com o titular no destinatário) entra como RECEITA */
+  tipoOperacao: '2-Saídas' | '1-Entradas';
   competencia: string;
   favorecidoId: string | null;
   fazendaId: string | null;
@@ -267,6 +271,9 @@ export function proporLancamento(entrada: {
   fazendaDoHistorico?: string | null;
   /** NOTA-NFSE-LEITURA-02 (12:36) — as fazendas do titular com o CPF/CNPJ do tomador (a tela as busca); passa na frente do historico. */
   fazendasDoTomador?: readonly string[];
+  /** NOTA-TIPO-ABATE-01 (Gabriel 27/11) — a tela confere o PAPEL do titular (`ehVendaDoTitular`): é a VENDA dele. `contaSugeridaEhEntrada` =
+   *  o tipo do plano da conta sugerida (a sugestão NUNCA vence o tipo: conta de despesa é descartada numa venda) */
+  vendaDoTitular?: { contaSugeridaEhEntrada: boolean | null } | null;
 }): ResultadoDaProposta {
   const { nota, avisosDoLeitor, fazendas, emitente, favorecidoId, ultima } = entrada;
 
@@ -342,9 +349,19 @@ export function proporLancamento(entrada: {
   /* A CLASSIFICACAO: NOTA-ITENS-SUGESTAO — a dos ITENS (a escada única do banco: itens > NCM > família > fornecedor > nada); sem ela,
      o caminho antigo (a do ultimo lancamento do fornecedor). */
   const sugItens = entrada.sugestaoDosItens ?? null;
-  const classificacao = sugItens ? sugItens.classificacao : ultima;
+  let classificacao = sugItens ? sugItens.classificacao : ultima;
   if (sugItens) { if (sugItens.classificacao && sugItens.origem) origens.subcentro = sugItens.origem; }
   else if (ultima) origens.subcentro = `último · ${dataCurta(ultima.data)}`;
+  /* NOTA-TIPO-ABATE-01 — a VENDA do titular entra como RECEITA; a conta sugerida que não é de entrada é DESCARTADA (o tipo manda) */
+  const venda = entrada.vendaDoTitular ?? null;
+  if (venda) {
+    avisos.unshift(AVISO_DA_VENDA);
+    if (classificacao && venda.contaSugeridaEhEntrada !== true) {
+      classificacao = null;
+      delete origens.subcentro;
+      avisos.push(AVISO_CONTA_DESCARTADA);
+    }
+  }
 
   /* A FORMA: o primeiro tPag que o mapa conhece. */
   const formaPagamento = semCompra ? '' : nota.pagamentos.map((p) => FORMA_POR_TPAG[p.tPag]).find((f) => !!f) ?? '';
@@ -354,7 +371,7 @@ export function proporLancamento(entrada: {
     ok: true,
     proposta: {
       rotuloNota: `NF ${numeroDaNota(nota.numero)}`,
-      tipoOperacao: '2-Saídas',
+      tipoOperacao: venda ? '1-Entradas' : '2-Saídas',
       /* P174: a NFS-e tem competencia propria (o mes do servico); a NF-e segue na emissao */
       competencia: nota.servico?.competencia || nota.emissao,
       favorecidoId,

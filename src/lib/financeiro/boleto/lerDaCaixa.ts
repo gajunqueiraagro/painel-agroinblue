@@ -13,6 +13,10 @@ import { lerFolha, pareceFolha, type FolhaLida } from '@/lib/folha/lerFolha';
 import { acharChaveNFe } from '@/lib/oc/leitura/chaveNFe';
 import { lerResumoDoContador, type ResumoLido } from '@/lib/folha/lerResumoDoContador';
 import { lerFolhaAnalitica, type FolhaAnaliticaLida } from '@/lib/folha/lerFolhaAnalitica';
+import { lerFaturaConsumo, type FaturaLida } from '@/lib/financeiro/consumo/lerFaturaConsumo';
+import { lerPosicaoOperacoes, type PosicaoLida } from '@/lib/financeiro/consumo/lerPosicaoOperacoes';
+import { lerDarf, lerGfd, lerRelacaoFgts, type GfdLida, type RelacaoFgtsLida } from '@/lib/folha/lerGuiasDaFolha';
+import type { ItemDoDanfe } from '@/lib/financeiro/nfe/danfe';
 
 /** A leitura de UM arquivo pela caixa (injetável: a bancada e os testes passam a sua). */
 export type LeituraDaCaixa =
@@ -21,6 +25,11 @@ export type LeituraDaCaixa =
   | { k: 'folha'; folha: FolhaLida }
   | { k: 'resumo'; resumo: ResumoLido }
   | { k: 'analitica'; analitica: FolhaAnaliticaLida }
+  | { k: 'fatura'; fatura: FaturaLida }
+  | { k: 'posicao'; posicao: PosicaoLida }
+  | { k: 'gfd'; gfd: GfdLida }
+  /** CAIXA-FOLHA-RATEIO-01: a relação de trabalhadores do FGTS (antes "Não sei": o leitor existia e a Caixa não o chamava) */
+  | { k: 'relacao'; relacao: RelacaoFgtsLida }
   | { k: 'nada'; frase: string }
   | { k: 'senha'; errada: boolean }
   | { k: 'erro'; frase: string };
@@ -58,11 +67,26 @@ export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (
     }
     return { k: 'erro', frase: b.frase };
   }
-  if (b.leitura.boletos.length) return { k: 'boletos', ...b.leitura };
+  /* CONTAS-CONSUMO-01 C1: a fatura de energia (NF3e) ANTES do boleto — a linha digitável dela fica dentro da fatura */
+  const lidas = await linhasDasPaginas(bytes, senha, pdfjs);
+  const paginas = lidas ? lidas.linhas : null;
+  const fatura = paginas ? lerFaturaConsumo(paginas) : null;
+  if (fatura && fatura.ok === true) return { k: 'fatura', fatura: fatura.fatura };
+  if (b.leitura.boletos.length) {
+    /* CAIXA-FOLHA-VERA (Gabriel 15:10): o DARF não tem "Beneficiário" impresso — o beneficiário é a Receita Federal (o nome; o "confira"
+       fica), e a sugestão por nome acha o previsto "Receita Federal" de mesmo valor (antes: "sem lançamento, nenhum parecido") */
+    const darf = paginas ? lerDarf(paginas) : null;
+    const semBeneficiario = !b.leitura.beneficiario.documento && !b.leitura.beneficiario.nome;
+    const beneficiario = darf && darf.ok === true && semBeneficiario ? { documento: null, nome: 'Receita Federal', confira: true } : b.leitura.beneficiario;
+    /* CAIXA-FOLHA-RATEIO-01: o PAGADOR do DARF é o contribuinte impresso ("CPF | Nome"): é por ele que a guia da outra parte de um rateio
+       vira comprovante (nunca "Guardar" como conta do cliente) */
+    const contribuinte = darf && darf.ok === true ? darf.darf.contribuinte : null;
+    const pagador = contribuinte && !b.leitura.pagador.documento ? { documento: contribuinte.documento, nome: contribuinte.nome, confira: false } : b.leitura.pagador;
+    return { k: 'boletos', ...b.leitura, beneficiario, pagador };
+  }
   const n = await lerNota(bytes.slice(0), { pdfjs });
   if (n.ok && n.nota.chave) return { k: 'nota', nota: resumoDaNota(n.nota) };
   /* FOLHA-NA-CAIXA-01: o recibo do contador (3º tipo); o que só PARECE folha (layout que o lerFolha não lê) avisa */
-  const paginas = await linhasDasPaginas(bytes, senha, pdfjs);
   const f = paginas ? lerFolha(paginas) : null;
   if (f && f.ok === true) return { k: 'folha', folha: f.folha };
   if (f && f.ok === false && f.motivo === 'nao_fecha') return { k: 'nada', frase: `Folha que não fecha: ${f.frase} Fale com o consultor.` };
@@ -72,16 +96,25 @@ export const lerDaCaixaCom = (pdfjs?: PdfjsMinimo): LerArquivoDaCaixa => async (
   /* FOLHA-VERA-PACOTE-01 F1: o relatório analítico da folha (o espelho; antes caía no "Folha ainda não é lida aqui") */
   const analitica = paginas ? lerFolhaAnalitica(paginas) : null;
   if (analitica && analitica.ok === true) return { k: 'analitica', analitica: analitica.folha };
+  /* CAIXA-OCR-01 O4: a posição de operações do banco */
+  const posicao = paginas ? lerPosicaoOperacoes(paginas) : null;
+  if (posicao && posicao.ok === true) return { k: 'posicao', posicao: posicao.posicao };
+  /* CAIXA-FOLHA-VERA: a guia do FGTS Digital (GFD) — só PIX, sem linha digitável (antes: "Não sei · sem linha digitável nem chave") */
+  const gfd = paginas ? lerGfd(paginas) : null;
+  if (gfd && gfd.ok === true) return { k: 'gfd', gfd: gfd.gfd };
+  /* CAIXA-FOLHA-RATEIO-01: a relação de trabalhadores do FGTS (página deitada: lê os ITENS, com posição) */
+  const relacao = lidas ? lerRelacaoFgts(lidas.itens) : null;
+  if (relacao && relacao.ok === true) return { k: 'relacao', relacao: relacao.relacao };
   const pelaChave = notaPelaChave(paginas ? paginas.flat().join('\n') : null, nomeDoArquivo);
   if (pelaChave) return { k: 'nota', nota: pelaChave };
   return { k: 'nada', frase: paginas && pareceFolha(paginas) ? FRASE_FOLHA_AINDA_NAO : FRASE_NEM_BOLETO_NEM_NOTA };
 };
 export const lerDaCaixa: LerArquivoDaCaixa = lerDaCaixaCom();
 /** As linhas de cada página (as do `montarLinhas`, como o `lerFolha` pede); falhou a leitura = null (fica o "sem linha digitável"). */
-async function linhasDasPaginas(bytes: ArrayBuffer, senha?: string, pdfjs?: PdfjsMinimo): Promise<string[][] | null> {
+async function linhasDasPaginas(bytes: ArrayBuffer, senha?: string, pdfjs?: PdfjsMinimo): Promise<{ linhas: string[][]; itens: ItemDoDanfe[][] } | null> {
   try {
     const { paginas } = await itensDoPdf(bytes.slice(0), pdfjs, { senha });
-    return paginas.map((p) => montarLinhas([p]));
+    return { linhas: paginas.map((p) => montarLinhas([p])), itens: paginas };
   } catch {
     return null;
   }
@@ -89,7 +122,7 @@ async function linhasDasPaginas(bytes: ArrayBuffer, senha?: string, pdfjs?: Pdfj
 /** CAIXA-FOLHA-AVISO-01: o PDF parece recibo de pagamento? */
 export async function pdfPareceFolha(bytes: ArrayBuffer, senha?: string, pdfjs?: PdfjsMinimo): Promise<boolean> {
   const p = await linhasDasPaginas(bytes, senha, pdfjs);
-  return !!p && pareceFolha(p);
+  return !!p && pareceFolha(p.linhas);
 }
 function resumoDaNota(n: { chave: string; numero: string; emitente: { nome: string }; totais: { notaCent: number }; duplicatas: { vencimento: string }[] }): ResumoDaNota {
   return { chave: n.chave, numero: n.numero, emitente: n.emitente.nome || null, valor: n.totais.notaCent / 100, vencimento: n.duplicatas[0]?.vencimento ?? null };

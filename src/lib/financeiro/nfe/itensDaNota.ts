@@ -16,7 +16,9 @@ import { decodificarPeloCharsetDeclarado } from '@/lib/financeiro/parser/decodif
 import { centavosDoTexto } from './centavos';
 import type { NotaLida, ServicoDaNfse } from './tipos';
 
-export interface ImpostoDoItem { cst?: string | null; bcCent?: number; aliquota?: string | null; valorCent?: number }
+/** `desoneradoCent`/`deduzDesonerado` (SUGESTAO-ITENS-03 §3, Gabriel 27/11): o ICMS DESONERADO do item (`vICMSDeson`) e se a nota o DEDUZ do
+ *  total (`indDeduzDeson` = 1; nas notas antigas, sem a tag, quando é a dedução que fecha a soma com o vNF). Só no `icms`. */
+export interface ImpostoDoItem { cst?: string | null; bcCent?: number; aliquota?: string | null; valorCent?: number; desoneradoCent?: number; deduzDesonerado?: boolean }
 
 export interface ItemFiscal {
   nItem: number;
@@ -80,9 +82,12 @@ export interface ItensLidos {
 }
 
 /** O liquido do item: produto - desconto + frete + seguro + outras + IPI + ST + FCP-ST. */
-export function liquidoDoItem(i: Pick<ItemFiscal, 'produtoCent' | 'descontoCent' | 'freteCent' | 'seguroCent' | 'outrasCent' | 'ipi' | 'icmsSt' | 'fcpSt'>): number {
+export function liquidoDoItem(i: Pick<ItemFiscal, 'produtoCent' | 'descontoCent' | 'freteCent' | 'seguroCent' | 'outrasCent' | 'ipi' | 'icmsSt' | 'fcpSt'>
+  & { icms?: ImpostoDoItem | null }): number {
   return i.produtoCent - i.descontoCent + i.freteCent + i.seguroCent + i.outrasCent
-    + (i.ipi?.valorCent ?? 0) + (i.icmsSt?.valorCent ?? 0) + (i.fcpSt?.valorCent ?? 0);
+    + (i.ipi?.valorCent ?? 0) + (i.icmsSt?.valorCent ?? 0) + (i.fcpSt?.valorCent ?? 0)
+    /* o ICMS desonerado que a nota deduz do total (o vNF já vem sem ele): o que se paga é o líquido sem ele */
+    - (i.icms?.deduzDesonerado ? i.icms.desoneradoCent ?? 0 : 0);
 }
 
 /** A prova: a soma dos liquidos = o valor da nota (a diferenca, em centavos; 0 = confere). */
@@ -164,7 +169,7 @@ export function itensDoXml(bytes: ArrayBuffer): ItensLidos | null {
       unidadeTrib: texto(prod, 'uTrib'), quantidadeTrib: texto(prod, 'qTrib'), unitarioTrib: texto(prod, 'vUnTrib'),
       produtoCent: cent(prod, 'vProd'), descontoCent: cent(prod, 'vDesc'), freteCent: cent(prod, 'vFrete'), seguroCent: cent(prod, 'vSeg'),
       outrasCent: cent(prod, 'vOutro'), rateado: false,
-      icms: imposto(icmsG, 'vBC', 'pICMS', 'vICMS'),
+      icms: icmsComDesonerado(imposto(icmsG, 'vBC', 'pICMS', 'vICMS'), icmsG),
       icmsSt: icmsG && (texto(icmsG, 'vICMSST') != null || texto(icmsG, 'vBCST') != null)
         ? { cst: null, bcCent: cent(icmsG, 'vBCST'), aliquota: texto(icmsG, 'pICMSST'), valorCent: cent(icmsG, 'vICMSST') } : null,
       fcp: icmsG && texto(icmsG, 'vFCP') != null ? { cst: null, bcCent: cent(icmsG, 'vBCFCP'), aliquota: texto(icmsG, 'pFCP'), valorCent: cent(icmsG, 'vFCP') } : null,
@@ -178,7 +183,29 @@ export function itensDoXml(bytes: ArrayBuffer): ItensLidos | null {
     };
     return { ...base, liquidoCent: liquidoDoItem(base) };
   });
-  return { origem: 'xml', regime: texto(inf, 'emit', 'CRT'), totais, itens };
+  return { origem: 'xml', regime: texto(inf, 'emit', 'CRT'), totais, itens: comDesoneradoDasNotasAntigas(itens, totais.notaCent) };
+}
+
+/** O ICMS desonerado do item: `vICMSDeson` e `indDeduzDeson` (NT 2023.004; 1 = a nota deduz). Sem desonerado, o `icms` fica como estava. */
+function icmsComDesonerado(icms: ImpostoDoItem | null, g: Element | null): ImpostoDoItem | null {
+  const deson = cent(g, 'vICMSDeson');
+  if (!deson) return icms;
+  const ind = texto(g, 'indDeduzDeson');
+  return { ...(icms ?? { cst: texto(g, 'CST') ?? texto(g, 'CSOSN'), bcCent: 0, aliquota: null, valorCent: 0 }), desoneradoCent: deson, deduzDesonerado: ind === '1' };
+}
+
+/** Nota anterior à NT 2023.004 (sem `indDeduzDeson`): a dedução vale quando é ela que fecha a soma dos itens com o vNF. */
+function comDesoneradoDasNotasAntigas(itens: ItemFiscal[], notaCent: number): ItemFiscal[] {
+  const semTag = itens.filter((i) => (i.icms?.desoneradoCent ?? 0) > 0 && !i.icms?.deduzDesonerado);
+  if (!semTag.length) return itens;
+  const soma = itens.reduce((s, i) => s + i.liquidoCent, 0);
+  const deson = semTag.reduce((s, i) => s + (i.icms?.desoneradoCent ?? 0), 0);
+  if (soma === notaCent || soma - deson !== notaCent) return itens;
+  return itens.map((i) => {
+    if (!semTag.includes(i) || !i.icms) return i;
+    const icms = { ...i.icms, deduzDesonerado: true };
+    return { ...i, icms, liquidoCent: liquidoDoItem({ ...i, icms }) };
+  });
 }
 
 /* ── PDF ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -278,7 +305,10 @@ const txt = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? 
 const objeto = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v)) : null);
 function impostoDoBanco(v: unknown): ImpostoDoItem | null {
   const o = objeto(v);
-  return o ? { cst: txt(o.cst), bcCent: num(o.bcCent), aliquota: txt(o.aliquota), valorCent: num(o.valorCent) } : null;
+  if (!o) return null;
+  const deson = num(o.desoneradoCent);
+  return { cst: txt(o.cst), bcCent: num(o.bcCent), aliquota: txt(o.aliquota), valorCent: num(o.valorCent),
+    ...(deson ? { desoneradoCent: deson, deduzDesonerado: o.deduzDesonerado === true } : {}) };
 }
 function textosDoBanco(v: unknown): Record<string, string> | null {
   const o = objeto(v);
