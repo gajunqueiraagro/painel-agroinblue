@@ -194,3 +194,34 @@ describe('o recibo da DCTFWeb', () => {
     expect(lerDctfweb([DCTF.slice(0, -1)])).toEqual({ ok: false, frase: FRASE_NAO_E_DCTFWEB });
   });
 });
+
+/* CAIXA-FOLHA-RATEIO-01 — quem paga a guia (o contribuinte do DARF, o empregador da GFD e da relação): é por ele que a Caixa sabe que a
+   guia é da outra parte de um rateio. Dado INVENTADO. */
+describe('quem paga a guia', () => {
+  it('o DARF: o contribuinte da linha depois de "CPF | Nome"; sem ela, null', () => {
+    const r = lerDarf([DARF]);
+    if (r.ok === false) throw new Error(r.frase);
+    expect(r.darf.contribuinte).toEqual({ documento: '00000000000', nome: 'FULANO FICTICIO' });
+    const sem = lerDarf([DARF.filter((l) => !/FULANO|^CPF/.test(l))]);
+    if (sem.ok === false) throw new Error(sem.frase);
+    expect(sem.darf.contribuinte).toBeNull();
+  });
+  it('a GFD: o empregador depois de "CPF/CNPJ do Empregador" (a data no meio não conta); CNPJ também', () => {
+    const r = lerGfd([GFD]);
+    if (r.ok === false) throw new Error(r.frase);
+    expect(r.gfd.empregador).toEqual({ documento: '00000000000', nome: 'FULANO FICTICIO' });
+    const pj = lerGfd([GFD.map((l) => l.replace('000.000.000-00', '11.222.333/0001-81'))]);
+    if (pj.ok === false) throw new Error(pj.frase);
+    expect(pj.gfd.empregador?.documento).toBe('11222333000181');
+  });
+  it('a relação: o CPF da MESMA coluna depois de "Empregador:" e o nome depois de "Nome Empregador:" (nunca o CPF de trabalhador)', () => {
+    const cab = [it_('Empregador:', 30, 12), it_('000.000.000-00', 30, 64), it_('Nome Empregador:', 30, 167), it_('FULANO FICTICIO', 30, 244),
+      it_('CPF', 60, 30), it_('999.999.999-99', 60, 40)];
+    const r = lerRelacaoFgts([[...cab, ...P1], P2, RESUMO]);
+    if (r.ok === false) throw new Error(r.frase);
+    expect(r.relacao.empregador).toEqual({ documento: '00000000000', nome: 'FULANO FICTICIO' });
+    const semRotulo = lerRelacaoFgts([P1, P2, RESUMO]);
+    if (semRotulo.ok === false) throw new Error(semRotulo.frase);
+    expect(semRotulo.relacao.empregador).toBeNull();
+  });
+});

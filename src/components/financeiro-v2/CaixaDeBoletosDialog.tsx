@@ -499,7 +499,8 @@ export function CaixaDeBoletosDialog({ clienteId, clienteNome, aoFechar, api, pa
     if (a === 'desfazer') { if (l.boletoGuardadoId) setFrase(await caixa.desfazerGuardado(l.boletoGuardadoId)); return; }
     const r = a === 'vincular_nota' ? await caixa.vincularNota(l)
       : a === 'vincular_boleto' ? await caixa.vincularBoleto(l, lancamentos ?? [])
-        : a === 'guardar' ? await caixa.guardar(l) : null;
+        : a === 'guardar' ? await caixa.guardar(l)
+          : a === 'anexar_rateio' ? await caixa.anexarRateio(l) : null;
     setFrase(r);
   };
 

@@ -15,7 +15,7 @@ import type { BoletoNormalizado } from '@/lib/financeiro/linhaDigitavel';
 import type { ParteDoBoleto } from './lerBoleto';
 import type { ResumoDaNota } from './caixaPorEmail';
 
-export const LEITOR_VERSAO = 'caixa-2';
+export const LEITOR_VERSAO = 'caixa-3';
 /** O teto do que se guarda por arquivo (o banco confere o mesmo). Um PDF com dezenas de boletos cabe com folga. */
 export const LEITURA_MAX_BYTES = 32768;
 
@@ -48,6 +48,8 @@ export function paraGravar(l: LeituraDaCaixa): LeituraGravada | null {
     case 'fatura': return null;
     case 'posicao': return null;
     case 'gfd': return null;
+    /* CAIXA-FOLHA-RATEIO-01: a relação do FGTS (trabalhador por trabalhador) também não se guarda */
+    case 'relacao': return null;
     case 'nada': return { v, k: 'nada', frase: l.frase };
     case 'senha': return { v, k: 'senha' };
     case 'erro': return null;

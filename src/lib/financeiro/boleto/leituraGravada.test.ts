@@ -89,7 +89,10 @@ function fechoDoLeitor(): string[] {
    antes do push da F1; a coluna estava vazia). Depois do 1º push, leitor mudado = versão nova, nunca troca do md5 de uma versão. */
 /* caixa-2 (Code 6, 27/11): a fatura de energia (NF3e), a posição do banco, a GFD e o DARF com o beneficiário "Receita Federal" entraram no
    leitor; o título do 13º e o "I.R.R.F." do analítico; o CNPJ impresso com 15 dígitos. As leituras caixa-1 guardadas se releem. */
-const ASSINATURA: Record<string, string> = { 'caixa-1': '8591035d6c3d97bd2416cca1cab31c89', 'caixa-2': '2a52029f6bef4efdb2d5603281974aca' };
+/* caixa-3 (Code 6, 27/11, CAIXA-FOLHA-RATEIO-01): o DARF sai com o pagador (o contribuinte impresso), a GFD e a relação do FGTS com o
+   empregador, e a relação de trabalhadores do FGTS passa a ser lida na Caixa (antes "Não sei"). As leituras caixa-2 guardadas se releem. */
+const ASSINATURA: Record<string, string> = { 'caixa-1': '8591035d6c3d97bd2416cca1cab31c89', 'caixa-2': '2a52029f6bef4efdb2d5603281974aca',
+  'caixa-3': '5bc9417f740e11bb8f85dfdb14150dbf' };
 
 describe('a versão do leitor', () => {
   it('o leitor de hoje tem a assinatura desta versão (mudou um arquivo do leitor = suba LEITOR_VERSAO)', () => {

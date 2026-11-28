@@ -25,7 +25,8 @@ import type { FolhaAnaliticaLida } from '@/lib/folha/lerFolhaAnalitica';
 import { TITULO_DA_ANALITICA, fraseDaLinhaDaAnalitica, rotuloDaAnalitica } from '@/lib/folha/analiticaNaCaixa';
 import type { FaturaLida } from '@/lib/financeiro/consumo/lerFaturaConsumo';
 import type { PosicaoLida } from '@/lib/financeiro/consumo/lerPosicaoOperacoes';
-import type { GfdLida } from '@/lib/folha/lerGuiasDaFolha';
+import type { GfdLida, QuemPaga, RelacaoFgtsLida } from '@/lib/folha/lerGuiasDaFolha';
+import type { RateioDaLinha } from './rateioNaCaixa';
 
 export type AbaDaCaixaV2 = 'a_resolver' | 'resolvidos' | 'ignorados';
 export const ABAS_DA_CAIXA_V2: readonly { valor: AbaDaCaixaV2; rotulo: string }[] = [
@@ -38,7 +39,11 @@ export interface ResumoDaNota {
   /** O 1º vencimento das duplicatas (sem duplicata: null). */
   vencimento: string | null;
 }
-export interface BoletoLido { codigoBarras: string; linha: string; vencimento: string | null; valor: number | null; beneficiario: string | null }
+export interface BoletoLido {
+  codigoBarras: string; linha: string; vencimento: string | null; valor: number | null; beneficiario: string | null;
+  /** CAIXA-FOLHA-RATEIO-01: o pagador impresso (no DARF, o contribuinte); sem ele = não se sabe */
+  pagador?: QuemPaga | null;
+}
 export type Lido =
   | { k: 'lendo' }
   | { k: 'nota'; nota: ResumoDaNota }
@@ -55,6 +60,8 @@ export type Lido =
   | { k: 'posicao'; posicao: PosicaoLida }
   /** CAIXA-FOLHA-VERA: a guia do FGTS Digital (GFD, paga por PIX) */
   | { k: 'gfd'; gfd: GfdLida }
+  /** CAIXA-FOLHA-RATEIO-01: a relação de trabalhadores do FGTS */
+  | { k: 'relacao'; relacao: RelacaoFgtsLida }
   | { k: 'nada'; frase: string }
   | { k: 'senha'; errada: boolean }
   | { k: 'erro'; frase: string };
@@ -64,7 +71,7 @@ export type ConsultaDaNota = NotaNoSistema | null | 'erro' | undefined;
 /** A prévia da caixa para UM boleto (a `fn_boleto_entrar` com `p_simular`): `undefined` = perguntando. */
 export type ConsultaDoBoleto = RespostaDeEntrar | { ok: 'erro'; frase: string } | undefined;
 
-export type Acao = 'lancar_nota' | 'vincular_nota' | 'vincular_boleto' | 'guardar' | 'desfazer' | 'ignorar' | 'senha' | 'abrir_folha' | 'abrir_resumo';
+export type Acao = 'lancar_nota' | 'vincular_nota' | 'vincular_boleto' | 'guardar' | 'desfazer' | 'ignorar' | 'senha' | 'abrir_folha' | 'abrir_resumo' | 'anexar_rateio';
 
 /** CAIXA-GUARDAR-01: o motivo do boleto tirado da caixa pelo "Desfazer" do guardado (a trilha do boleto o guarda). */
 export const MOTIVO_DO_DESFEITO = 'guardado por engano — desfeito';
@@ -93,6 +100,9 @@ export interface LinhaDaCaixa {
   fatura: FaturaLida | null;
   posicao: PosicaoLida | null;
   gfd: GfdLida | null;
+  relacao: RelacaoFgtsLida | null;
+  /** CAIXA-FOLHA-RATEIO-01: o documento é da OUTRA parte de um rateio (comprovante): o pacote e os lançamentos a que ele se anexa */
+  rateio: RateioDaLinha | null;
   /** O boleto que JÁ está gravado na caixa (o grupo "guardados", ou o "já está no sistema"). */
   boletoGuardadoId: string | null;
   /** Nesta sessão já foi resolvido (o PDF com 2 boletos: um feito, o outro não). */
@@ -160,7 +170,7 @@ function base(chave: string, tipo: TipoDaLinha, fontes: string[], arquivo: strin
   noSistema: LinhaDaCaixa['noSistema'], acoes: Acao[]): LinhaDaCaixa {
   return {
     chave, tipo, fontes, arquivo, arquivoTitulo, emitente: null, vencimento: null, valor: null, antigo: false, noSistema, acoes,
-    nota: null, notaNoSistema: null, boleto: null, previa: null, folha: null, resumo: null, analitica: null, fatura: null, posicao: null, gfd: null, boletoGuardadoId: null, feito: false,
+    nota: null, notaNoSistema: null, boleto: null, previa: null, folha: null, resumo: null, analitica: null, fatura: null, posicao: null, gfd: null, relacao: null, rateio: null, boletoGuardadoId: null, feito: false,
   };
 }
 
@@ -243,7 +253,7 @@ export function linhaDoBoleto(chave: string, fontes: string[], arquivo: string, 
 }
 
 /** A linha de um arquivo lido que não é boleto nem nota, ainda lendo, com senha ou com erro. */
-export function linhaSemConteudo(chave: string, fonte: string, nome: string, lido: Exclude<Lido, { k: 'nota' } | { k: 'boletos' } | { k: 'folha' } | { k: 'resumo' } | { k: 'analitica' } | { k: 'fatura' } | { k: 'posicao' } | { k: 'gfd' }>): LinhaDaCaixa {
+export function linhaSemConteudo(chave: string, fonte: string, nome: string, lido: Exclude<Lido, { k: 'nota' } | { k: 'boletos' } | { k: 'folha' } | { k: 'resumo' } | { k: 'analitica' } | { k: 'fatura' } | { k: 'posicao' } | { k: 'gfd' } | { k: 'relacao' }>): LinhaDaCaixa {
   switch (lido.k) {
     case 'lendo': return base(chave, 'lendo', [fonte], nome, nome, { selo: null, texto: 'lendo o arquivo…', titulo: 'lendo o arquivo…' }, []);
     case 'senha': {
@@ -331,6 +341,21 @@ export function linhaDaGfd(chave: string, fonte: string, nome: string, g: GfdLid
   };
 }
 
+/** CAIXA-FOLHA-RATEIO-01 — a linha da relação de trabalhadores do FGTS: "Relação do FGTS · 11/2026" · estabelecimentos e trabalhadores ·
+ *  o total da guia. Só reconhece (antes: "Não sei · sem linha digitável nem chave"); a ação é a de qualquer arquivo. */
+export function linhaDaRelacao(chave: string, fonte: string, nome: string, r: RelacaoFgtsLida): LinhaDaCaixa {
+  const comp = `${r.competencia.slice(5, 7)}/${r.competencia.slice(0, 4)}`;
+  const n = r.estabelecimentos.reduce((s, e) => s + e.trabalhadores.length, 0);
+  const t = `${r.estabelecimentos.length} ${r.estabelecimentos.length === 1 ? 'estabelecimento' : 'estabelecimentos'} · ${n} ${n === 1 ? 'trabalhador' : 'trabalhadores'}`;
+  return {
+    ...base(chave, 'guia', [fonte], nome, nome,
+      { selo: r.confere ? { texto: 'lida', tom: 'cinza' } : { texto: 'não confere', tom: 'vermelho' }, texto: t,
+        titulo: `${t}${r.confere ? '' : ` · ${r.naoConfere.join(' ')}`}. Ainda não grava nada.` },
+      ['ignorar']),
+    emitente: `Relação do FGTS · ${comp}`, valor: r.totalGuia, vencimento: r.vencimento, relacao: r,
+  };
+}
+
 export const FRASE_NEM_BOLETO_NEM_NOTA = 'Sem linha digitável nem chave de nota.';
 /** CAIXA-FOLHA-AVISO-01: o PDF que parece recibo de pagamento, enquanto a Folha não é lida pela Caixa. */
 export const FRASE_FOLHA_AINDA_NAO = 'Folha ainda não é lida aqui — fale com o consultor.';
@@ -385,6 +410,8 @@ export function linhasDasFontes(fontes: readonly FonteParaMontar[], notas: Recor
       linhas.push(linhaDaPosicao(`posicao:${f.chave}`, f.chave, f.nome, l.posicao));
     } else if (l.k === 'gfd') {
       linhas.push(linhaDaGfd(`gfd:${f.chave}`, f.chave, f.nome, l.gfd));
+    } else if (l.k === 'relacao') {
+      linhas.push(linhaDaRelacao(`relacao:${f.chave}`, f.chave, f.nome, l.relacao));
     } else {
       linhas.push(linhaSemConteudo(f.chave, f.chave, f.nome, l));
     }
@@ -510,7 +537,7 @@ export const contarAResolver = (grupos: readonly GrupoDaCaixa[]): number =>
 /* ═══ os botões ═══ */
 export const ROTULO_DA_ACAO: Record<Acao, string> = {
   lancar_nota: 'Lançar nota', vincular_nota: 'Vincular', vincular_boleto: 'Vincular', guardar: 'Guardar', desfazer: 'Desfazer', ignorar: 'Ignorar',
-  senha: 'Senha', abrir_folha: 'Abrir', abrir_resumo: 'Abrir',
+  senha: 'Senha', abrir_folha: 'Abrir', abrir_resumo: 'Abrir', anexar_rateio: 'Anexar ao rateio',
 };
 /** A prévia diz que o boleto já existe E já está ligado a lançamento (o "Vincular" só resolve a linha). */
 export function boletoJaLigado(p: LinhaDaCaixa['previa']): boolean {
@@ -528,5 +555,8 @@ export function tituloDaAcao(a: Acao, l: LinhaDaCaixa): string {
     case 'senha': return 'digite a senha do PDF (ela não é guardada)';
     case 'abrir_folha': return 'mostra a prévia por funcionário (o que casa, o que cria, o valor e o vencimento): nada grava antes do Aprovar';
     case 'abrir_resumo': return 'mostra o FGTS de cada empresa e a previsão por fazenda (valor e vencimento): nada grava antes do Prever';
+    case 'anexar_rateio': return l.rateio
+      ? `anexa os ${l.rateio.documentos} documentos do pacote aos lançamentos de ${l.rateio.rotuloCompetencia} (rateio com ${l.rateio.terceiro}) e manda para Resolvidos; nada cria lançamento nem boleto`
+      : 'anexa aos lançamentos do rateio';
   }
 }
