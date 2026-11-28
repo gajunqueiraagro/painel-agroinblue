@@ -6,8 +6,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const avisos = vi.hoisted(() => ({ notificar: vi.fn() }));
 vi.mock('@/hooks/useFornecedoresDoCliente', () => ({ notificarFornecedoresMudaram: (...a: unknown[]) => avisos.notificar(...a) }));
 vi.mock('@/integrations/supabase/client', () => {
-  const linha = (data: unknown) => { const b: Record<string, unknown> = {}; for (const m of ['select', 'eq', 'or', 'update', 'in']) b[m] = () => b;
-    b.maybeSingle = async () => ({ data, error: null }); b.then = (ok: (x: { error: null }) => unknown) => Promise.resolve({ error: null }).then(ok); return b; };
+  const linha = (data: unknown) => { const b: Record<string, unknown> = {}; for (const m of ['select', 'eq', 'or', 'update', 'in', 'order', 'limit']) b[m] = () => b;
+    /* FORN-NOTA-ATUALIZAR-01 — a conferência do CNPJ antes de gravar lê a lista: vazia (nenhum outro cadastro com ele) */
+    b.maybeSingle = async () => ({ data, error: null }); b.then = (ok: (x: { data: unknown[]; error: null }) => unknown) => Promise.resolve({ data: [], error: null }).then(ok); return b; };
   return { supabase: {
     rpc: async () => ({ data: { alteracao_id: 'alt-1' }, error: null }),
     from: (t: string) => linha(t === 'fornecedor_campos_alteracoes' ? { fornecedor_id: 'elos' } : { nome_fantasia: null, inscricao_estadual: null }),

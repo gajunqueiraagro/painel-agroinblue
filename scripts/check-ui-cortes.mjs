@@ -2301,8 +2301,8 @@ const CENARIOS = [
   { nome: 'financeiro-barra-lote', url: 'tela=financeiro', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
     antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().click(); await p.waitForTimeout(500); } },
   /* BPO-FUNCIONAR-01 — o "Enviar para aprovação" SAIU da barra (entra sozinho pela regra, 118500): as cenas dele saíram junto */
-  /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar" */
-  ...['', 'mesmo', 'errado'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+  /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar"; FORN-NOTA-ATUALIZAR-01: `provavel` */
+  ...['', 'mesmo', 'errado', 'provavel'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' } })),
   /* FORN-ACHAR-CNPJ-01 — o confirmar é o do cadastro que É o da nota (o de nome à mão não oferece o CNPJ: nada vem marcado) */
   { nome: 'comparar-cadastro-confirmar', url: 'tela=comparar-cadastro&v=mesmo', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' },

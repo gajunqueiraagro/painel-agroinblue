@@ -1041,6 +1041,8 @@ const CENARIOS = [
   { nome: 'comparar-cadastro', url: 'tela=comparar-cadastro&v=mesmo', estados: [
     ['pedindo a confirmacao', clicar('[data-testid="comparar-atualizar"]')],
     ['cadastro que nao parece o certo', { url: 'tela=comparar-cadastro&v=errado' }],
+    /* FORN-NOTA-ATUALIZAR-01 — "provável o mesmo · completar o CNPJ" (a frase e o "Criar novo com os dados da nota" no mesmo lugar) */
+    ['provavel o mesmo', { url: 'tela=comparar-cadastro&v=provavel' }],
   ] },
   /* PARC-DOCS-TABELA-01 — Editar obrigação da compra parcelada (18 parcelas, uma nota): trocar de aba e voltar a Documentos não mexe no
      cabeçalho do modal, nas abas, no rodapé nem no cabeçalho da tabela das parcelas; e a densidade é a mesma na volta */

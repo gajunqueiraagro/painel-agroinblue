@@ -697,6 +697,50 @@ describe('tela B — a faixa do fornecedor', () => {
     fireEvent.click(screen.getByTestId('xml-criar-fornecedor'));
     await waitFor(() => expect(m.onCriarFornecedor).toHaveBeenCalledWith('AGROPECUARIA EXEMPLO LTDA', null, '11.222.333/0001-81'));
   });
+  /* FORN-NOTA-ATUALIZAR-01 (Gabriel 28/11 07:00) — achado pelo nome, SEM CNPJ: o comparar mostra SEMPRE o CNPJ/razão; o mesmo endereço e a mesma
+     cidade = "provável o mesmo · completar o CNPJ" (o CNPJ vem marcado); "Criar novo com os dados da nota" cria com o nome/CNPJ do XML e o escolhe */
+  it('FORN-NOTA-ATUALIZAR-01 — mesma cidade e endereço, razão escrita diferente: "provável o mesmo", o CNPJ marcado → "Atualizar" grava o CNPJ', async () => {
+    const d = doXmlDe({}, [AGRO_SEM_DOC], { idPeloNome: 'agro' });
+    consultas.cadastroParaComparar.mockResolvedValue(cadastroIgualANota(d, { nome: 'Agro e Pecuaria Exemplo', cpf_cnpj: null, inscricao_estadual: null }));
+    montarModal({ prefill: prefillDaNota(d) }, [AGRO_SEM_DOC]);
+    await screen.findByDisplayValue('16.238,00');
+    fireEvent.click(screen.getByTestId('xml-comparar-cadastro'));
+    const modal = await screen.findByTestId('comparar-cadastro');
+    expect(within(modal).getByTestId('comparar-aviso').getAttribute('data-situacao')).toBe('provavel');
+    expect(within(modal).getByTestId('comparar-aviso').textContent).toContain('completar o CNPJ');
+    expect(within(modal).getByTestId('comparar-marcar-cnpj').getAttribute('data-state')).toBe('checked');
+    expect(within(modal).getByTestId('comparar-marcar-razao').getAttribute('data-state')).toBe('unchecked');
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    await waitFor(() => expect(consultas.atualizarCamposDoCadastro).toHaveBeenCalledTimes(1));
+    expect(consultas.atualizarCamposDoCadastro.mock.calls[0][1]).toMatchObject({ cpf_cnpj: '11.222.333/0001-81' });
+    expect(consultas.atualizarCamposDoCadastro.mock.calls[0][1]).not.toHaveProperty('nome');
+  });
+  it('FORN-NOTA-ATUALIZAR-01 — "parece outro fornecedor": "Criar novo com os dados da nota" cria com o nome e o CNPJ do XML, completa os campos e o escolhe', async () => {
+    consultas.cadastroParaComparar.mockResolvedValue({ nome: 'Posto Qualquer Combustiveis', cpf_cnpj: null, municipio: 'Outra Cidade', uf: 'MS' });
+    const m = montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO_SEM_DOC], { idPeloNome: 'agro' })) }, [AGRO_SEM_DOC]);
+    await screen.findByDisplayValue('16.238,00');
+    fireEvent.click(screen.getByTestId('xml-comparar-cadastro'));
+    const modal = await screen.findByTestId('comparar-cadastro');
+    expect(within(modal).getByTestId('comparar-aviso').getAttribute('data-situacao')).toBe('outro');
+    expect(within(modal).getAllByTestId('comparar-linha').map((l) => l.firstElementChild?.textContent)).toContain('CNPJ/CPF');
+    fireEvent.click(within(modal).getByTestId('comparar-cadastrar-novo'));
+    await waitFor(() => expect(m.onCriarFornecedor).toHaveBeenCalledWith('AGROPECUARIA EXEMPLO LTDA', 'f-pur', '11.222.333/0001-81'));
+    await waitFor(() => expect(consultas.completarCadastroPeloXml).toHaveBeenCalledWith('cli', 'novo', expect.anything()));
+    expect(screen.queryByTestId('comparar-cadastro')).toBeNull();
+    expect(consultas.atualizarCamposDoCadastro).not.toHaveBeenCalled();
+  });
+  it('FORN-NOTA-ATUALIZAR-01 — "Criar novo" NUNCA duplica o CNPJ: já é de outro cadastro (conferido no banco antes) → "usar este", nada criado', async () => {
+    consultas.cadastroParaComparar.mockResolvedValue({ nome: 'Posto Qualquer Combustiveis', cpf_cnpj: null });
+    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ ok: true, valor: null })
+      .mockResolvedValueOnce({ ok: true, valor: { id: 'agro-ja', nome: 'Agropecuaria Exemplo (cadastro antigo)', ativo: true } });
+    const m = montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO_SEM_DOC], { idPeloNome: 'agro' })) }, [AGRO_SEM_DOC]);
+    await screen.findByDisplayValue('16.238,00');
+    fireEvent.click(screen.getByTestId('xml-comparar-cadastro'));
+    fireEvent.click(within(await screen.findByTestId('comparar-cadastro')).getByTestId('comparar-cadastrar-novo'));
+    expect((await screen.findByTestId('xml-conflito')).textContent).toContain('Nada foi criado');
+    expect(m.onCriarFornecedor).not.toHaveBeenCalled();
+  });
   it('NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ ja\' e\' de um cadastro (conferido no banco antes): a frase pronta, nada criado, e "usar este"', async () => {
     consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ ok: true, valor: { id: 'agro-ja', nome: 'Agropecuaria Exemplo (cadastro antigo)', ativo: true } });
     const m = montarModal({ prefill: prefillDaNota(doXmlDe({}, [], { ultima: null })) }, []);

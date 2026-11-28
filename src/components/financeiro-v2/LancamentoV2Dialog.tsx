@@ -4576,6 +4576,9 @@ export function LancamentoV2Dialog({
           proposta={propostaDoEmitente(xml.emitente ?? { documento: xml.emitenteDocumento, nome: xml.emitenteNome, fantasia: null, ie: null })}
           emitente={{ documento: xml.emitenteDocumento, nomes: [xml.emitenteNome, xml.emitente?.fantasia] }}
           onConfirmar={gravarComparacaoDoXml} onClose={() => setXmlComparar(null)}
+          /* FORN-NOTA-ATUALIZAR-01 (3) — o mesmo "criar pela nota" da faixa: confere o CNPJ no banco antes (conflito = "Usar este"), nasce com os
+             campos do emitente e fica escolhido */
+          onCadastrarNovo={() => { setXmlComparar(null); void criarFornecedorDoXml(); }}
           onEscolherOutro={() => {
             setXmlComparar(null); setXmlFaixaFechada(true);
             document.getElementById('campo-fornecedor-financeiro')?.querySelector('button')?.focus();

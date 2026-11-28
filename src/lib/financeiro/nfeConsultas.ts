@@ -356,6 +356,13 @@ export async function cadastroParaComparar(clienteId: string, fornecedorId: stri
 /** NOTA-FORNECEDOR-COMPARAR-01 — grava SO' os campos marcados, com a trilha por campo (`fn_fornecedor_atualizar_campos`). */
 export async function atualizarCamposDoCadastro(fornecedorId: string, campos: Record<string, string>, origem: 'nota' | 'receita', referencia: string | null,
   clienteId: string): Promise<{ ok: true; alteracaoId: string | null } | { ok: false; frase: string }> {
+  /* FORN-NOTA-ATUALIZAR-01 (3) — o CNPJ que vai ao cadastro NUNCA é o de outro cadastro vivo (a trava do banco é adiada: a função grava). A
+     conferência que falha não grava (P146). */
+  if (campos.cpf_cnpj) {
+    const ja = await fornecedorPeloDocumento(clienteId, campos.cpf_cnpj);
+    if (ja.ok === false) return { ok: false, frase: `Não consegui conferir o CNPJ no cadastro (${ja.motivo}). Nada foi gravado — tente de novo.` };
+    if (ja.valor && ja.valor.id !== fornecedorId) return { ok: false, frase: `Este CNPJ já é do cadastro "${ja.valor.nome}". Nada foi gravado — escolha esse cadastro.` };
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
   const { data, error } = await (supabase as any).rpc('fn_fornecedor_atualizar_campos', {
     p_fornecedor: fornecedorId, p_campos: campos, p_origem: origem, p_referencia: referencia, p_simular: false,
