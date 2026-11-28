@@ -21,6 +21,8 @@ import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
 import { FormaPeloExtratoDialog } from '@/components/financeiro-v2/FormaPeloExtratoDialog';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import { ListaDeFinanciamentos } from '@/components/financiamentos/ListaDeFinanciamentos';
+import { VincularAUmContrato } from '@/components/financiamentos/VincularAUmContrato';
+import { PendenciasDeVinculo } from '@/components/financiamentos/PendenciasDeVinculo';
 import { LinhaCreditoDialog } from '@/components/financiamentos/LinhaCreditoDialog';
 import { faixaDaLinha } from '@/lib/financiamentos/linhaDeCredito';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
@@ -582,6 +584,30 @@ if (tela === 'mesclar') {
   montar(<FornecedorFormDialog open onClose={() => {}} editing={linha as any} allFornecedores={[]} fazendas={[{ id: 'f1', nome: 'Faz. Exemplo' }] as any} clienteId="cli" onSaved={() => {}}
     lerCadastro={async () => []} lerLinha={async () => linha}
     lerUso={async () => ({ cadastradoEm: '2026-01-05T10:00:00Z', lancamentos: 6, comprasParceladas: 1, documentos: 4, ultimoLancamento: '2026-09-30' } as any)} />);
+} else if (tela === 'vinculo-contrato') {
+  /* FINANC-VINCULO-OBRIGATORIO-01 FASE 1 (mock aprovado com ajuste) — `v=lista`: "Vincular a um contrato" (nenhum escolhido; o de parcela de valor
+     igual com o selo), `v=escolhido`: um escolhido (a frase do encargo), `v=pendencias`: a lista de todas, com o ano. Pior caso SINTÉTICO: nº de
+     20, credor de 39, descrição de 43, valores na casa das dezenas de milhões. */
+  const CONTRATOS = [
+    { id: 'f1', numero_contrato: 'C_102.022.070.010200', descricao: 'Custeio pecuário de reforma de pastagem ex', credor_id: 'b1', data_contrato: '2025-11-21', valor_total: 48500000, status: 'ativo', natureza: 'financiamento' },
+    { id: 'f2', numero_contrato: '197006191819500', descricao: 'Custeio agrícola sintético', credor_id: 'b2', data_contrato: '2026-04-30', valor_total: 2000000, status: 'ativo', natureza: 'financiamento' },
+    { id: 'f3', numero_contrato: '237/1702/2025/005', descricao: 'Investimento', credor_id: 'b1', data_contrato: '2025-09-30', valor_total: 3300000, status: 'ativo', natureza: 'financiamento' },
+    { id: 'f4', numero_contrato: '541.203.246', descricao: 'Capital de giro', credor_id: 'b3', data_contrato: '2025-07-23', valor_total: 800000, status: 'quitado', natureza: 'financiamento' },
+  ];
+  const CREDORES = [{ id: 'b1', nome: 'Banco Exemplo de Desenvolvimento Regional' }, { id: 'b2', nome: 'Banco Exemplo BBA' }, { id: 'b3', nome: 'Cooperativa Exemplo' }];
+  const PEND = Array.from({ length: 24 }, (_x, k) => ({ lancamento_id: `l${k}`, data: `20${20 + (k % 7)}-${String((k % 12) + 1).padStart(2, '0')}-15`, valor: 12345678.9 / (k + 1),
+    tipo: ['juros', 'amortizacao', 'captacao'][k % 3], subcentro: ['Juros de Financiamento Pecuária', 'Amortização Financiamento Agricultura', 'Entrada de Financiamento Administrativo'][k % 3],
+    fornecedor: 'Banco Exemplo de Desenvolvimento Regional', descricao: 'Pagamento de juros da operação de custeio pecuário exemplo' }));
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financiamentos' ? CONTRATOS : t === 'financeiro_fornecedores' ? CREDORES : [],
+    rpc: (fn: string) => fn === 'fn_financiamentos_situacao_lote' ? {} : fn === 'fn_financiamento_vinculos_pendentes'
+      ? { ok: true, anos: [2026, 2025, 2024, 2023, 2022, 2021, 2020].map((ano) => ({ ano, n: 88, valor: 2334125.64 })), itens: PEND }
+      : fn === 'fn_lancamento_financiamento' ? null : null,
+  };
+  const exata = { parcelaId: 'q3', financiamentoId: 'f2', numeroContrato: '197006191819500', numeroParcela: 3, vencimento: '2027-04-30', papel: 'juros' };
+  montar(v === 'pendencias' ? <PendenciasDeVinculo clienteId="cli" aoFechar={() => {}} />
+    : <VincularAUmContrato lancamentoId="l1" clienteId="cli" tipo="juros" subcentro="Juros de Financiamento Pecuária" valor={12345678.9} data="2026-10-30"
+        exata={exata} aoFechar={() => {}} aoVincular={() => {}} onCriarContrato={() => {}} />);
 } else if (tela === 'financiamentos-lista') {
   /* FIN-FINANC-LAYOUT-03 — a aba Financiamentos da lista (o `ListaDeFinanciamentos`, que só desenha: os contratos chegam prontos), no
      pior caso SINTÉTICO com os TAMANHOS REAIS do proto (12/11: descrição até 43 caracteres, credor até 39, nº até 20): o nº de contrato mais
@@ -3255,12 +3281,15 @@ if (tela === 'mesclar') {
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente: FORN-ACHAR-CNPJ-01 — "parece outro fornecedor", sem CNPJ/IE/razão) ·
-          `mesmo` o cadastro sem CNPJ com a MESMA razão social (sem o "Ltda": o CNPJ vazio vem marcado) · `errado` o cadastro com OUTRO CNPJ */
+          `mesmo` o cadastro sem CNPJ com a MESMA razão social (sem o "Ltda": o CNPJ vazio vem marcado) · `errado` o cadastro com OUTRO CNPJ ·
+          `provavel` FORN-NOTA-ATUALIZAR-01: sem CNPJ, a razão escrita com um "e" a mais, o MESMO endereço e a mesma cidade ("provável o mesmo") */
   const montarComparar = async () => {
     const { CompararCadastroDialog } = await import('@/components/financeiro-v2/CompararCadastroDialog');
     const hoje = v === 'errado'
       ? { nome: 'Posto Exemplo Combustiveis e Lubrificantes da Regiao Centro Oeste Sintetico Ltda', cpf_cnpj: '11.444.777/0001-61', municipio: 'Campo Grande', uf: 'MS' }
       : v === 'mesmo' ? { nome: 'Cooperativa Agroindustrial Sintética dos Produtores Rurais de Exemplo e Região', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' }
+      : v === 'provavel' ? { nome: 'Cooperativa Agroindustrial e Sintética dos Produtores Rurais de Exemplo e Região', nome_fantasia: 'Coop Exemplo', cpf_cnpj: null,
+        logradouro: 'RODOVIA SINTETICA BR-000 KM 12, GALPAO 3', numero: 'S/N', bairro: 'DISTRITO INDUSTRIAL', cep: '79000000', municipio: 'CAMPO GRANDE', uf: 'MS' }
       : { nome: 'Pec.3M-Esc. Garças Cooperativa Agroindustrial Sintetica dos Produtores de Exemplo', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' };
     const proposta = { nome: 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DE EXEMPLO E REGIAO LTDA', nome_fantasia: 'COOP EXEMPLO',
       cpf_cnpj: '11.222.333/0004-24', inscricao_estadual: '283456789', logradouro: 'Rodovia Sintetica BR-000 Km 12, Galpao 3', numero: 'S/N', bairro: 'Distrito Industrial',
@@ -3783,6 +3812,13 @@ if (m === 'editar' && q.get('resumo') === 'longo') {
   props.lancamento = { ...SAL, valor: 1234567.89, subcentro: CLASSIF[0].subcentro, centro_custo: CLASSIF[0].centro_custo,
     descricao: 'Peças de reposição para trator e implementos, conforme pedido de compra 4521 e orçamento aprovado' };
 }
+/* LANC-IDENTIFICACAO-LARGURA-01 / RESUMO-LATERAL-FORMA-01 (Gabriel 27/11) — `&nome=45|91`: o fornecedor com 45 letras (o limite sem corte a 1280) e
+   com 91 (o mais longo da base, medido 27/11; o nome inteiro vai à linha de baixo); `&forma=`: a forma gravada (o Resumo a mostra curta) */
+if (m === 'editar' && (q.get('nome') === '45' || q.get('nome') === '91')) {
+  AGRO.nome = q.get('nome') === '45' ? 'Cooperativa Agropecuaria de Exemplo do Sul Ltd'.slice(0, 45)
+    : 'Cooperativa Agroindustrial dos Produtores Rurais do Vale do Rio Exemplo e Região Centro Lt'.padEnd(91, 'a').slice(0, 91);
+}
+if (m === 'editar' && q.get('forma')) props.lancamento = { ...(props.lancamento ?? SAL), forma_pagamento: q.get('forma') };
 const NOME_LONGO ='COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA FILIAL CAMPO GRANDE';
 if (v === 'xmlnome') {
   const SEM_DOC = { id: 'agro-nd', nome: NOME_LONGO, cpf_cnpj: null, fazenda_id: null, ativo: true, tipo_recebimento: null } as any;

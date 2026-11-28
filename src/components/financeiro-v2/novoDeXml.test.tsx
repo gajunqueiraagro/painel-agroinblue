@@ -5,6 +5,7 @@
  * ⚠ O `LancamentoV2Dialog` E' MONTADO DE VERDADE; so' as bordas sao falsas (banco, cliente, modais filhos). O que se prova e'
  *   o que a tela MOSTRA e o que ela manda GRAVAR.
  */
+import { propostaDoEmitente } from '@/lib/fornecedores/compararCadastro';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -114,6 +115,14 @@ function doXmlDe(o: OpcoesNota, fornecedores: FornecedorV2[], extra: { idPeloNom
   return { proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente, resolucao, ocorrencias: extra.ocorrencias ?? [], arquivo: arquivoXmlDaNota(bytes, 'NFe-12345.XML') };
 }
 
+/** AVISO-FORNECEDOR-IGUAL-01 — o cadastro de hoje IGUAL ao emitente da nota (só caixa, espaço e pontuação do CEP diferentes) */
+const cadastroIgualANota = (d: ReturnType<typeof doXmlDe>, ajuste: Record<string, string | null> = {}) => {
+  if (!d.emitente) throw new Error('a nota do teste sem emitente');
+  const p = propostaDoEmitente(d.emitente);
+  const caixa = (v: string | null | undefined) => (v ? `  ${v.toUpperCase()} ` : v ?? null);
+  return { ...Object.fromEntries(Object.entries(p).map(([k, v]) => [k, k === 'cep' && v ? v.replace(/\D/g, '') : caixa(v)])), ...ajuste };
+};
+
 beforeEach(() => {
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
@@ -125,6 +134,7 @@ beforeEach(() => {
   consultas.fornecedorPeloNome.mockImplementation(async () => ({ ok: true, valor: null }));
   consultas.sugestaoPelosItens.mockImplementation(async () => ({ ok: true, valor: { itens: [], fornecedor: null } }));
   consultas.notaJaLancada.mockImplementation(async () => ({ ok: true, valor: [] }));
+  consultas.cadastroParaComparar.mockImplementation(async () => ({ nome: 'Agropecuaria Exemplo', cpf_cnpj: null }));
 });
 
 function montarModal(props: Partial<React.ComponentProps<typeof LancamentoV2Dialog>>, fornecedores: FornecedorV2[] = [AGRO]) {
@@ -306,6 +316,7 @@ describe('tela A — a lista de notas', () => {
 /* ═══ TELA B ═══════════════════════════════════════════════════════════════════════ */
 describe('tela B — o Novo lançamento preenchido pela nota', () => {
   it('o prefill inteiro no DOM, com a pilula e as origens', async () => {
+    consultas.cadastroParaComparar.mockResolvedValue(cadastroIgualANota(doXmlDe({}, [AGRO])));
     montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO])) });
     await screen.findByDisplayValue('16.238,00');
     expect(screen.getByTestId('pilula-do-xml').textContent).toBe('do XML · NF 000.012.345');
@@ -629,21 +640,27 @@ describe('tela B — a faixa do fornecedor', () => {
     expect(consultas.cadastroParaComparar).not.toHaveBeenCalled();
   });
 
-  it('achado pelo CNPJ: a faixa so aparece quando a nota completa algo; o Salvar nao preenche o cadastro calado', async () => {
-    consultas.camposQueOEmitenteCompleta.mockResolvedValue(['municipio']);
-    const m = montarModal({ prefill: { ...comConta(doXmlDe({ duplicatas: null }, [AGRO])), data_vencimento: '2026-10-30' } }, [AGRO]);
+  /* AVISO-FORNECEDOR-IGUAL-01 (Gabriel 27/11 17:02, NF 1.119) — a faixa decide pela MESMA comparação do modal (normalizada): o cadastro igual à
+     nota (só maiúscula/acento/espaço/pontuação diferentes) = sem faixa; 1 campo diferente = "1 dado novo" */
+
+  it('achado pelo CNPJ, 1 campo diferente: a faixa "1 dado novo"; o Salvar nao preenche o cadastro calado', async () => {
+    const d = doXmlDe({ duplicatas: null }, [AGRO]);
+    consultas.cadastroParaComparar.mockResolvedValue(cadastroIgualANota(d, { municipio: 'Outra Cidade' }));
+    const m = montarModal({ prefill: { ...comConta(d), data_vencimento: '2026-10-30' } }, [AGRO]);
     await screen.findByDisplayValue('16.238,00');
-    await waitFor(() => expect(screen.getByTestId('xml-faixa-fornecedor').textContent).toBe('Fornecedor achado pelo CNPJ · "Agropecuaria Exemplo" · a nota traz dados que o cadastro não temcomparar e atualizar o cadastro'));
+    await waitFor(() => expect(screen.getByTestId('xml-faixa-fornecedor').textContent).toBe('Fornecedor achado pelo CNPJ · "Agropecuaria Exemplo" · a nota traz 1 dado novo para o cadastrocomparar e atualizar o cadastro'));
     fireEvent.click(botaoSalvar());
     await waitFor(() => expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1));
     expect(consultas.completarCadastroPeloXml).not.toHaveBeenCalled();
-    consultas.camposQueOEmitenteCompleta.mockResolvedValue([]);
   });
 
-  it('achado pelo CNPJ e nada a completar: nenhuma faixa', async () => {
-    montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO])) }, [AGRO]);
+  it('achado pelo CNPJ e o cadastro IGUAL à nota (só caixa/espaço/pontuação diferentes): nenhuma faixa', async () => {
+    const d = doXmlDe({}, [AGRO]);
+    consultas.cadastroParaComparar.mockResolvedValue(cadastroIgualANota(d));
+    montarModal({ prefill: prefillDaNota(d) }, [AGRO]);
     await screen.findByDisplayValue('16.238,00');
-    await waitFor(() => expect(consultas.camposQueOEmitenteCompleta).toHaveBeenCalled());
+    await waitFor(() => expect(consultas.cadastroParaComparar).toHaveBeenCalledWith('cli', 'agro'));
+    await new Promise((r) => setTimeout(r, 30));
     expect(screen.queryByTestId('xml-faixa-fornecedor')).toBeNull();
   });
 
@@ -679,6 +696,50 @@ describe('tela B — a faixa do fornecedor', () => {
     expect(screen.getByTestId('xml-faixa-fornecedor').textContent).toContain('"AGROPECUARIA EXEMPLO LTDA"');
     fireEvent.click(screen.getByTestId('xml-criar-fornecedor'));
     await waitFor(() => expect(m.onCriarFornecedor).toHaveBeenCalledWith('AGROPECUARIA EXEMPLO LTDA', null, '11.222.333/0001-81'));
+  });
+  /* FORN-NOTA-ATUALIZAR-01 (Gabriel 28/11 07:00) — achado pelo nome, SEM CNPJ: o comparar mostra SEMPRE o CNPJ/razão; o mesmo endereço e a mesma
+     cidade = "provável o mesmo · completar o CNPJ" (o CNPJ vem marcado); "Criar novo com os dados da nota" cria com o nome/CNPJ do XML e o escolhe */
+  it('FORN-NOTA-ATUALIZAR-01 — mesma cidade e endereço, razão escrita diferente: "provável o mesmo", o CNPJ marcado → "Atualizar" grava o CNPJ', async () => {
+    const d = doXmlDe({}, [AGRO_SEM_DOC], { idPeloNome: 'agro' });
+    consultas.cadastroParaComparar.mockResolvedValue(cadastroIgualANota(d, { nome: 'Agro e Pecuaria Exemplo', cpf_cnpj: null, inscricao_estadual: null }));
+    montarModal({ prefill: prefillDaNota(d) }, [AGRO_SEM_DOC]);
+    await screen.findByDisplayValue('16.238,00');
+    fireEvent.click(screen.getByTestId('xml-comparar-cadastro'));
+    const modal = await screen.findByTestId('comparar-cadastro');
+    expect(within(modal).getByTestId('comparar-aviso').getAttribute('data-situacao')).toBe('provavel');
+    expect(within(modal).getByTestId('comparar-aviso').textContent).toContain('completar o CNPJ');
+    expect(within(modal).getByTestId('comparar-marcar-cnpj').getAttribute('data-state')).toBe('checked');
+    expect(within(modal).getByTestId('comparar-marcar-razao').getAttribute('data-state')).toBe('unchecked');
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    await waitFor(() => expect(consultas.atualizarCamposDoCadastro).toHaveBeenCalledTimes(1));
+    expect(consultas.atualizarCamposDoCadastro.mock.calls[0][1]).toMatchObject({ cpf_cnpj: '11.222.333/0001-81' });
+    expect(consultas.atualizarCamposDoCadastro.mock.calls[0][1]).not.toHaveProperty('nome');
+  });
+  it('FORN-NOTA-ATUALIZAR-01 — "parece outro fornecedor": "Criar novo com os dados da nota" cria com o nome e o CNPJ do XML, completa os campos e o escolhe', async () => {
+    consultas.cadastroParaComparar.mockResolvedValue({ nome: 'Posto Qualquer Combustiveis', cpf_cnpj: null, municipio: 'Outra Cidade', uf: 'MS' });
+    const m = montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO_SEM_DOC], { idPeloNome: 'agro' })) }, [AGRO_SEM_DOC]);
+    await screen.findByDisplayValue('16.238,00');
+    fireEvent.click(screen.getByTestId('xml-comparar-cadastro'));
+    const modal = await screen.findByTestId('comparar-cadastro');
+    expect(within(modal).getByTestId('comparar-aviso').getAttribute('data-situacao')).toBe('outro');
+    expect(within(modal).getAllByTestId('comparar-linha').map((l) => l.firstElementChild?.textContent)).toContain('CNPJ/CPF');
+    fireEvent.click(within(modal).getByTestId('comparar-cadastrar-novo'));
+    await waitFor(() => expect(m.onCriarFornecedor).toHaveBeenCalledWith('AGROPECUARIA EXEMPLO LTDA', 'f-pur', '11.222.333/0001-81'));
+    await waitFor(() => expect(consultas.completarCadastroPeloXml).toHaveBeenCalledWith('cli', 'novo', expect.anything()));
+    expect(screen.queryByTestId('comparar-cadastro')).toBeNull();
+    expect(consultas.atualizarCamposDoCadastro).not.toHaveBeenCalled();
+  });
+  it('FORN-NOTA-ATUALIZAR-01 — "Criar novo" NUNCA duplica o CNPJ: já é de outro cadastro (conferido no banco antes) → "usar este", nada criado', async () => {
+    consultas.cadastroParaComparar.mockResolvedValue({ nome: 'Posto Qualquer Combustiveis', cpf_cnpj: null });
+    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ ok: true, valor: null })
+      .mockResolvedValueOnce({ ok: true, valor: { id: 'agro-ja', nome: 'Agropecuaria Exemplo (cadastro antigo)', ativo: true } });
+    const m = montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO_SEM_DOC], { idPeloNome: 'agro' })) }, [AGRO_SEM_DOC]);
+    await screen.findByDisplayValue('16.238,00');
+    fireEvent.click(screen.getByTestId('xml-comparar-cadastro'));
+    fireEvent.click(within(await screen.findByTestId('comparar-cadastro')).getByTestId('comparar-cadastrar-novo'));
+    expect((await screen.findByTestId('xml-conflito')).textContent).toContain('Nada foi criado');
+    expect(m.onCriarFornecedor).not.toHaveBeenCalled();
   });
   it('NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ ja\' e\' de um cadastro (conferido no banco antes): a frase pronta, nada criado, e "usar este"', async () => {
     consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ ok: true, valor: { id: 'agro-ja', nome: 'Agropecuaria Exemplo (cadastro antigo)', ativo: true } });
@@ -841,6 +902,7 @@ describe('A — dividir pelos itens no NOVO lançamento', () => {
      texto), "Usar divisão" some; o Salvar não divide e grava a correção como regra dos itens (cliente + fornecedor + produto → Nutrição) */
   it('BUG-01: trocar a conta da Geral leva TODOS os itens junto (sem divisão) e o Salvar aprende a correção', async () => {
     bancoQueAceita();
+    consultas.cadastroParaComparar.mockResolvedValue(cadastroIgualANota(doXmlDe({ duplicatas: null }, [AGRO])));
     const PLANO: ClassificacaoItem[] = [
       { id: 'pl-cant', subcentro: 'Alimentação e Cantina Pecuária', centro_custo: 'Administração', grupo_custo: 'Administração', macro_custo: 'Custeio Produção', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
       { id: 'pl-nutri', subcentro: 'Nutrição Rebanho', centro_custo: 'Nutrição', grupo_custo: 'Nutrição', macro_custo: 'Custeio Produção', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' }];
@@ -862,10 +924,15 @@ describe('A — dividir pelos itens no NOVO lançamento', () => {
     await waitFor(() => expect(bloco.textContent).toContain('Nutrição Rebanho'));
     await aba(/Itens da nota/);
     fireEvent.click(await screen.findByRole('button', { name: 'Contas' }));
-    expect((await screen.findByTestId('contas-frase')).textContent).toBe('Todos os itens estão na mesma conta: não há o que dividir.');
-    expect(within(screen.getByTestId('conta-do-item-1')).getByRole('combobox').textContent).toContain('Nutrição Rebanho');
-    expect(screen.getByTestId('origem-do-item-1').textContent).toBe('a do lançamento (sugestão: Alimentação e Cantina Pecuária)');
-    expect(screen.getByTestId('contas-dividir').className).toContain('invisible');
+    expect((await screen.findByTestId('contas-frase')).textContent).toBe('6 itens em 1 conta');
+    expect(screen.getByTestId('contas-total-linha').textContent).toContain('Nutrição Rebanho');
+    fireEvent.click(screen.getByTestId('classificar-itens'));
+    const modal = await screen.findByTestId('classificar-itens-modal');
+    expect(within(modal).getByTestId('contas-frase').textContent).toBe('Todos os itens estão na mesma conta: não há o que dividir.');
+    expect(within(within(modal).getByTestId('conta-do-item-1')).getByRole('combobox').textContent).toContain('Nutrição Rebanho');
+    expect(within(modal).getByTestId('origem-do-item-1').textContent).toBe('a do lançamento (sugestão: Alimentação e Cantina Pecuária)');
+    expect(within(modal).getByTestId('contas-dividir').className).toContain('invisible');
+    fireEvent.click(within(modal).getByTestId('contas-cancelar'));
     await aba(/Geral/);
     fireEvent.click(botaoSalvar());
     await waitFor(() => expect(m.onClose).toHaveBeenCalled());
@@ -907,7 +974,7 @@ describe('A — dividir pelos itens no NOVO lançamento', () => {
 
   /* NOTA-ITENS-SUGESTAO (Gabriel 27/11, mock aprovado 10:47) — a sugestão da escada única na proposta: o aviso pequeno na faixa, "ver por item"
      abre Itens › Contas com a pergunta obra × manutenção; respondida, "Usar divisão" e o Salvar dividem; a escolha vira regra do item (Q3) */
-  it('NOTA-ITENS-SUGESTAO: aviso "N itens em X classificações · ver por item" → Contas com a pergunta → Usar divisão → Salvar divide e lembra a escolha', async () => {
+  it('NOTA-ITENS-SUGESTAO + ITENS-02: aviso "N itens em X classificações · ver por item" → resumo → Classificar itens (atalho) → Usar divisão → Salvar divide e lembra a escolha', async () => {
     bancoQueAceita();
     const CLASSIF3: ClassificacaoItem[] = [...CLASSIF,
       { id: 'pl-man', subcentro: 'Manutenção de Instalações Pecuária', centro_custo: 'Manutenção', grupo_custo: 'Manutenção', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
@@ -927,10 +994,13 @@ describe('A — dividir pelos itens no NOVO lançamento', () => {
     expect(faixa.textContent).toBe('A nota tem 6 itens em 1 classificação (1 a decidir: obra ou manutenção)ver por item');
     await waitFor(() => expect(screen.getAllByRole('tab').some((t) => /Itens da nota/.test(t.textContent ?? ''))).toBe(true));
     fireEvent.click(screen.getByTestId('ver-por-item'));
-    expect((await screen.findByTestId('contas-frase')).textContent).toBe('6 itens em 1 conta · 1 espera obra ou manutenção (item 1)');
-    expect(screen.getByTestId('origem-do-item-2').textContent).toBe('mesmo produto em 14/08');
-    fireEvent.click(screen.getByTestId('pergunta-1-manutencao'));
-    const usar = screen.getByTestId('contas-dividir');
+    /* SUGESTAO-ITENS-02 — a aba mostra o resumo; a classificação mora no modal "Classificar itens" */
+    expect((await screen.findByTestId('contas-frase')).textContent).toBe('6 itens em 1 conta · 1 sem conta');
+    fireEvent.click(screen.getByTestId('classificar-itens'));
+    const modal = await screen.findByTestId('classificar-itens-modal');
+    expect(within(modal).getByTestId('origem-do-item-2').textContent).toBe('mesmo produto em 14/08');
+    fireEvent.click(within(modal).getByTestId('pergunta-1-manutencao'));
+    const usar = within(modal).getByTestId('contas-dividir');
     expect(usar.textContent).toBe('Usar divisão (2 contas)');
     fireEvent.click(usar);
     await aba(/Geral/);

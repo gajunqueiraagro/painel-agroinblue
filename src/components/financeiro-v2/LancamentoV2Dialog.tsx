@@ -104,11 +104,11 @@ import {
 } from '@/lib/financeiro/valorDoMes';
 import { danfeDaNota, pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import {
-  atualizarCamposDoCadastro, cadastroParaComparar, camposQueOEmitenteCompleta, completarCadastroPeloXml, desfazerCamposDoCadastro, fornecedorPeloDocumento,
+  atualizarCamposDoCadastro, cadastroParaComparar, completarCadastroPeloXml, desfazerCamposDoCadastro, fornecedorPeloDocumento,
   type CadastroComODocumento, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
-import { ContasDosItens } from './ContasDosItens';
+import { ClassificarItens, ContasDosItens } from './ContasDosItens';
 import { PartesDaClassificacao } from './PartesDaClassificacao';
 import { DividirClassificacaoDialog, MotivoDaDivisaoDialog } from './DivisaoDialogs';
 import {
@@ -118,7 +118,7 @@ import {
 } from '@/lib/financeiro/divisaoDaClassificacao';
 import { contasSugeridasDosItens, type ItemSugerido } from '@/lib/financeiro/nfe/sugestaoDosItens';
 import { lembrarContasDosItens, sugestaoDosItensDaNota } from '@/lib/financeiro/nfeConsultas';
-import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
+import { dadosNovosDaNota, propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
 import { fraseParcelasComoNaNota, type CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
 import { AvisosDoXml, CAMPO_AMBAR, FaixaDoFornecedor, OrigemDoXml, PilulaDoXml } from './LancamentoDoXml';
@@ -528,6 +528,11 @@ export async function gravarParcelamento(
   return typeof data === 'string' ? data : null;
 }
 
+/** SUGESTAO-ITENS-02 — a mesma lista de props vai à vista de antes (sem sugestão) ou ao resumo + "Classificar itens ▸" (com ela) */
+function ComOuSemSugestao({ comSugestao, children }: { comSugestao: boolean; children: (Vista: typeof ContasDosItens) => React.ReactNode }) {
+  return <>{children(comSugestao ? ClassificarItens : ContasDosItens)}</>;
+}
+
 function formatNotaFiscal(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 9);
   const padded = digits.padStart(9, '0');
@@ -727,7 +732,8 @@ export function LancamentoV2Dialog({
   const [xmlComparar, setXmlComparar] = useState<CadastroParaComparar | null>(null);
   const [xmlAbrindoComparar, setXmlAbrindoComparar] = useState(false);
   const [xmlCadastroAtualizado, setXmlCadastroAtualizado] = useState(false);
-  const [xmlNotaCompleta, setXmlNotaCompleta] = useState(false);
+  /* AVISO-FORNECEDOR-IGUAL-01 — quantos campos a nota mudaria no cadastro (a MESMA comparação do modal); 0 = sem faixa */
+  const [xmlDadosNovos, setXmlDadosNovos] = useState(0);
   const [xmlFornecedorProposto, setXmlFornecedorProposto] = useState<string | null>(null);
   const [xmlCriandoFornecedor, setXmlCriandoFornecedor] = useState(false);
   /* NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ da nota ja' e' de um cadastro (conferido no banco ANTES de criar): a faixa diz de quem e oferece usar */
@@ -1528,10 +1534,11 @@ export function LancamentoV2Dialog({
   useEffect(() => {
     const d = open && !lancamento ? prefill?.doXml ?? null : null;
     const cli = clienteAtual?.id;
-    setXmlNotaCompleta(false);
+    setXmlDadosNovos(0);
     if (!d?.emitente || !cli || !xmlFornecedorProposto || d.resolucao.achadoPor !== 'documento') return;
     let vivo = true;
-    void camposQueOEmitenteCompleta(cli, xmlFornecedorProposto, d.emitente).then((l) => { if (vivo) setXmlNotaCompleta(l.length > 0); }, () => undefined);
+    const emitente = d.emitente;
+    void cadastroParaComparar(cli, xmlFornecedorProposto).then((hoje) => { if (vivo && hoje) setXmlDadosNovos(dadosNovosDaNota(hoje, propostaDoEmitente(emitente))); }, () => undefined);
     return () => { vivo = false; };
   }, [open, lancamento, prefill, clienteAtual?.id, xmlFornecedorProposto]);
 
@@ -3103,7 +3110,7 @@ export function LancamentoV2Dialog({
               <div className="space-y-1" data-testid="xml-faixas">
                 <FaixaDoFornecedor xml={xml} fechada={xmlFaixaFechada}
                   cadastro={xmlFornecedorProposto && favorecidoId === xmlFornecedorProposto && (xml.resolucao.cadastroSemDocumento || xml.resolucao.achadoPor === 'documento')
-                    ? { oferece: xml.resolucao.cadastroSemDocumento || xmlNotaCompleta, atualizado: xmlCadastroAtualizado, abrindo: xmlAbrindoComparar,
+                    ? { oferece: xml.resolucao.cadastroSemDocumento || xmlDadosNovos > 0, dadosNovos: xmlDadosNovos, atualizado: xmlCadastroAtualizado, abrindo: xmlAbrindoComparar,
                         onComparar: () => { void abrirComparacaoDoXml(); } }
                     : null}
                   onTrocar={() => {
@@ -3393,21 +3400,22 @@ export function LancamentoV2Dialog({
 
             </BlocoFormulario>
             <BlocoFormulario titulo="Identificação" testId="bloco-identificacao" className="gap-1">
-            {/* ── LINHA 2 — Produto e Favorecido ── */}
-            <div className="grid grid-cols-12 gap-2">
+            {/* ── LINHA 2 — Produto e Favorecido ── LANC-IDENTIFICACAO-LARGURA-01 (Gabriel 27/11 17:16): larguras FIXAS, nada depende do dado —
+                Produto 40% · Fornecedor 60% (o campo ≈ 50% + o ✎ e o + de 28px, juntos); nome com mais de 45 letras: inteiro na linha de baixo */}
+            <div className="grid grid-cols-10 gap-2">
               {/* Produto — PR-U2c-1A: <ProdutoAutocomplete /> (fonte única) */}
               <ProdutoAutocomplete
                 value={descricao}
                 onChange={setDescricao}
                 clienteId={clienteAtual?.id}
                 label={xmlRotTexto('Produto / descrição *', 'descricao')}
-                className="col-span-7"
+                className="col-span-4"
                 inputClassName={cn(fieldBg, 'h-7 text-[11px]', xmlCls('descricao'))}
                 tabIndex={5}
                 placeholder="Descrição do produto"
               />
               {/* Fornecedor — PR-U2c-1C: <FavorecidoSelect /> (fonte única) */}
-              <div className="col-span-5" id={xml ? 'campo-fornecedor-financeiro' : undefined}>
+              <div className="col-span-6" id={xml ? 'campo-fornecedor-financeiro' : undefined}>
                 <FavorecidoSelect
                   value={favorecidoId}
                   onChange={setFavorecidoId}
@@ -3430,6 +3438,7 @@ export function LancamentoV2Dialog({
                   label={xmlRotTexto('Fornecedor *', 'fornecedor')}
                   triggerClassName={cn(fieldBg, 'h-7 text-[11px]', xmlCls('fornecedor'))}
                   novoButtonClassName="h-7 w-7"
+                  nomeLongoEmbaixo={45}
                   tabIndex={6}
                   /* ⚠ O FORNECEDOR NAO E SOBERANIA DA OC — FIN-FORNECEDOR-OC-EDIT (B-19),
                      decisao do Gabriel. A OC manda em VALOR, CLASSIFICACAO, TIPO e
@@ -3977,18 +3986,19 @@ export function LancamentoV2Dialog({
                 <ItensDaNota cabecalho={itensDaNota.cabecalho} lidos={itensDaNota.lidos} contaDoLancamento={subcentro || null}
                   visaoInicial={itensEmContas && (podeDividir || podeDividirNaCriacao) ? 'contas' : undefined}
                   vistaContas={podeDividir ? (
-                    <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao}
+                    /* SUGESTAO-ITENS-02 — com sugestão: o resumo + "Classificar itens ▸" (o modal); sem ela, a vista de antes */
+                    <ComOuSemSugestao comSugestao={!lancDividido && !!sugestoesDosItens}>{(Vista) => <Vista itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao}
                       contaDeHoje={lancDividido ? null : (classificacao.plano_conta_id ?? null)} sugeridas={contasIniciaisDosItens} atividadeSugerida={classificacao.atividade}
                       gravando={!!motivoDaDivisao} onDividir={(mapa) => setMotivoDaDivisao({ tipo: 'itens', mapa })}
                       pendente={contasDosItensMudadas} onMudou={setContasDosItensMudadas}
-                      sugestoes={lancDividido ? undefined : sugestoesDosItens ?? undefined} todasNaConta={itensSeguemAGeralNoEditar} />
+                      sugestoes={lancDividido ? undefined : sugestoesDosItens ?? undefined} todasNaConta={itensSeguemAGeralNoEditar} />}</ComOuSemSugestao>
                   ) : podeDividirNaCriacao ? (
                     /* NOTA-CONTAS-NA-CRIACAO-01 A — no NOVO: a mesma vista; "Dividir … ao salvar" deixa a divisao PENDENTE (o Salvar grava) */
-                    <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao} aoSalvar
+                    <ComOuSemSugestao comSugestao={!!sugestoesDosItens}>{(Vista) => <Vista itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao} aoSalvar
                       contaDeHoje={classificacao.plano_conta_id ?? null} sugeridas={divisaoNaCriacao ?? contasAprendidas} atividadeSugerida={classificacao.atividade}
                       gravando={saving} onDividir={aplicarDivisaoNaCriacao}
                       sugestoes={sugestoesDosItens ?? undefined} onJuntar={sugestoesDosItens ? juntarNaCriacao : undefined} onEscolhas={setEscolhasDosItens}
-                      todasNaConta={itensSeguemAGeralNoNovo} />
+                      todasNaConta={itensSeguemAGeralNoNovo} />}</ComOuSemSugestao>
                   ) : undefined} />
               </TabsContent>
             )}
@@ -4566,6 +4576,9 @@ export function LancamentoV2Dialog({
           proposta={propostaDoEmitente(xml.emitente ?? { documento: xml.emitenteDocumento, nome: xml.emitenteNome, fantasia: null, ie: null })}
           emitente={{ documento: xml.emitenteDocumento, nomes: [xml.emitenteNome, xml.emitente?.fantasia] }}
           onConfirmar={gravarComparacaoDoXml} onClose={() => setXmlComparar(null)}
+          /* FORN-NOTA-ATUALIZAR-01 (3) — o mesmo "criar pela nota" da faixa: confere o CNPJ no banco antes (conflito = "Usar este"), nasce com os
+             campos do emitente e fica escolhido */
+          onCadastrarNovo={() => { setXmlComparar(null); void criarFornecedorDoXml(); }}
           onEscolherOutro={() => {
             setXmlComparar(null); setXmlFaixaFechada(true);
             document.getElementById('campo-fornecedor-financeiro')?.querySelector('button')?.focus();

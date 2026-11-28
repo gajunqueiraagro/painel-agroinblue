@@ -7,6 +7,9 @@
  * ⚠ DIÁLOGO DE TAMANHO FIXO (780 × 440), um scrollport (a lista), régua `table-fixed` em px, a prévia num lugar reservado de 30px.
  */
 import { useEffect, useState } from 'react';
+import { VincularAUmContrato } from '@/components/financiamentos/VincularAUmContrato';
+import { PendenciasDeVinculo } from '@/components/financiamentos/PendenciasDeVinculo';
+import { consultarVinculoPendente, type VinculoPendente } from '@/lib/financiamentos/vinculoPendente';
 import { Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -45,8 +48,40 @@ export function FinanciamentoDoLancamento({ lancamentoId, clienteId, onAbrirCont
   const [desfazendo, setDesfazendo] = useState(false);
   /* passo 7: "Criar contrato" abre o cadastro novo já com a data e o valor deste lançamento */
   const [criando, setCriando] = useState<LancamentoNoFinanciamento | null>(null);
+  /* FINANC-VINCULO-OBRIGATORIO-01 — a pendência (a regra do banco): lançamento de financiamento sem contrato */
+  const [pendencia, setPendencia] = useState<VinculoPendente | null>(null);
+  const [releitura, setReleitura] = useState(0);
+  const [vinculando, setVinculando] = useState(false);
+  const [vendoPendencias, setVendoPendencias] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    void consultarVinculoPendente(lancamentoId).then((v) => { if (vivo) setPendencia(v); });
+    return () => { vivo = false; };
+  }, [lancamentoId, releitura]);
   const d = typeof api.dado === 'object' ? api.dado : null;
   if (!d) return null;
+  if (pendencia?.pendente && podeVincular) {
+    const p = pendencia;
+    return (
+      <span className="flex min-w-0 items-center gap-1 text-[10px]" data-testid="vinculo-pendente">
+        <span className="shrink-0 whitespace-nowrap text-amber-800" title="Lançamento de financiamento sem contrato: a pendência fica até vincular.">Sem contrato:</span>
+        <Button variant="outline" size="sm" className="h-[22px] shrink-0 gap-1 border-amber-400 px-[9px] text-[10px] text-amber-900" onClick={() => setVinculando(true)} data-testid="vinculo-abrir">
+          <Link2 className="h-3 w-3" /> vincular a um contrato
+        </Button>
+        <Button variant="ghost" size="sm" className="h-[22px] shrink-0 px-[6px] text-[10px]" onClick={() => setVendoPendencias(true)} data-testid="vinculo-ver-pendencias">Ver pendências</Button>
+        {vinculando && (
+          <VincularAUmContrato lancamentoId={lancamentoId} clienteId={clienteId} tipo={p.tipo} subcentro={p.subcentro} valor={d.valor} data={d.data}
+            exata={p.parcelaExata} aoFechar={() => setVinculando(false)} aoVincular={() => setReleitura((n) => n + 1)}
+            onCriarContrato={() => setCriando(d)} />
+        )}
+        {vendoPendencias && <PendenciasDeVinculo clienteId={clienteId} aoFechar={() => setVendoPendencias(false)} />}
+        {criando && (
+          <CadastroDeContratoDialog aberto aoFechar={() => setCriando(null)}
+            prefill={{ natureza: 'financiamento', valor: criando.valor, data: criando.data, descricao: criando.descricao ?? '' }} />
+        )}
+      </span>
+    );
+  }
   if (d.atual) {
     const a = d.atual;
     return (

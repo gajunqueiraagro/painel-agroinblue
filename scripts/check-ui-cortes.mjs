@@ -301,6 +301,12 @@ const CENARIOS = [
      corta seco, nada rola, e as alturas são as do MESMO lançamento com nomes curtos (`alturasComo`) */
   /* P121b — a NF da compra de 11 dígitos na linha "Nota" do Resumo: o número inteiro, o selo "da compra" cede */
   { nome: 'lancamento-editar-nota-11', url: 'tela=lancamento&m=editar&v=salparcela&nota=11' },
+  /* LANC-IDENTIFICACAO-LARGURA-01 — o Fornecedor até 45 letras sem corte; 91 (o mais longo da base) com o nome inteiro na linha de baixo;
+     RESUMO-LATERAL-FORMA-01 — as formas mais longas (gravadas, inclusive as antigas) curtas no Resumo: 1280/1440/1920, zero corte */
+  ...[['45', 'nome=45'], ['91', 'nome=91'], ['forma-da', 'forma=Débito Automático'], ['forma-pix-ted', 'forma=PIX/Transferência Bancária'],
+    ['forma-cartao', 'forma=Cartão de crédito'], ['forma-dinheiro', 'forma=Dinheiro']].map(([n, p]) => ({
+    nome: `lancamento-identificacao-${n}`, url: `tela=lancamento&m=editar&v=sal&${encodeURI(p)}`,
+    tamanhos: [[1280, 800], [1440, 900], [1920, 1080]] })),
   { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal&resumo=longo', alturasComo: 'tela=lancamento&m=editar&v=sal' },
   /* NOTA-PAGA-POR-TERCEIRO-01 — "Quem paga" na aba Pagamento de uma saída Programada: Nós (o de sempre), Terceiro (o formulário) e já marcado */
   { nome: 'lancamento-terceiro-nos', url: 'tela=lancamento&m=editar&v=sal', antes: clicarTexto('Pagamento') },
@@ -2270,12 +2276,28 @@ const CENARIOS = [
      a pergunta, o "Usar divisão" libera (nada se desloca) */
   { nome: 'lancamento-xml-sugestao-uma', url: 'tela=lancamento&m=novo&v=xmlsug1', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'lancamento-xml-sugestao-varias', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* SUGESTAO-ITENS-02 (mock `sugestao-itens-02-classificar.html` aprovado, fonte 12/11) — a aba fica com o RESUMO + "Classificar itens ▸"; o modal
+     (1180×660) com a Conta larga, o atalho opcional, o Total fixo e o rodapé; respondido o atalho; e o "Escolher outra conta…" do Juntar */
   { nome: 'lancamento-xml-sugestao-itens', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
-    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="contas-total-por-conta"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="classificar-itens"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(300); } },
+  { nome: 'lancamento-xml-sugestao-classificar', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[data-testid="classificar-itens-modal"]', exceto: '[data-testid="contas-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="classificar-itens"]').click(); await p.locator('[data-testid="classificar-itens-modal"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(400); } },
   { nome: 'lancamento-xml-sugestao-respondida', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
-    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="contas-quadro"] .overflow-y-auto, [data-testid="resumo-lancamento"]' },
-    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="pergunta-5-manutencao"]').click(); await p.waitForTimeout(300); } },
+    semRolagem: { dentro: '[data-testid="classificar-itens-modal"]', exceto: '[data-testid="contas-rolagem"]' },
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="classificar-itens"]').click(); await p.locator('[data-testid="pergunta-5-manutencao"]').click(); await p.waitForTimeout(300); } },
+  { nome: 'lancamento-xml-sugestao-outra-conta', url: 'tela=lancamento&m=novo&v=xmlsug3', tamanhos: TAMANHOS_DO_CONSORCIO,
+    antes: async (p) => { await p.locator('[data-testid="ver-por-item"]').click(); await p.locator('[data-testid="classificar-itens"]').click(); await p.locator('[data-testid="contas-juntar"]').click();
+      await p.locator('[data-testid="contas-juntar-outra-conta"]').click(); await p.locator('[data-testid="contas-juntar-outra"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(400); } },
+  /* FINANC-VINCULO-OBRIGATORIO-01 FASE 1 — "Vincular a um contrato" (nenhum escolhido; selo do valor igual), um escolhido, e a lista das pendências */
+  { nome: 'contrato-vinculo-lista', url: 'tela=vinculo-contrato&v=lista', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[data-testid="vincular-a-um-contrato"]', exceto: '[data-testid="vinculo-lista"]' } },
+  { nome: 'contrato-vinculo-escolhido', url: 'tela=vinculo-contrato&v=lista', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[data-testid="vincular-a-um-contrato"]', exceto: '[data-testid="vinculo-lista"]' },
+    antes: async (p) => { await p.locator('[data-testid="vinculo-contrato"]').first().click(); await p.waitForTimeout(300); } },
+  { nome: 'contrato-vinculo-pendencias', url: 'tela=vinculo-contrato&v=pendencias', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[data-testid="pendencias-de-vinculo"]', exceto: '[data-testid="pendencias-lista"]' } },
   { nome: 'lancamento-xml-Geral-dividida', url: 'tela=lancamento&m=novo&v=xml', tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => {
       await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); await clicarTexto('Contas')(p);
@@ -2309,8 +2331,8 @@ const CENARIOS = [
   { nome: 'financeiro-barra-lote', url: 'tela=financeiro', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="barra-lote"]',
     antes: async (p) => { await p.locator('tbody button[role="checkbox"]').first().click(); await p.waitForTimeout(500); } },
   /* BPO-FUNCIONAR-01 — o "Enviar para aprovação" SAIU da barra (entra sozinho pela regra, 118500): as cenas dele saíram junto */
-  /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar" */
-  ...['', 'mesmo', 'errado'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+  /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar"; FORN-NOTA-ATUALIZAR-01: `provavel` */
+  ...['', 'mesmo', 'errado', 'provavel'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' } })),
   /* FORN-ACHAR-CNPJ-01 — o confirmar é o do cadastro que É o da nota (o de nome à mão não oferece o CNPJ: nada vem marcado) */
   { nome: 'comparar-cadastro-confirmar', url: 'tela=comparar-cadastro&v=mesmo', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' },

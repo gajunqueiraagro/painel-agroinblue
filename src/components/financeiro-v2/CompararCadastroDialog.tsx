@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { QUADRO_REGUA, TD_REGUA_TEXTO, TH_REGUA } from '@/components/ui/regua-tabela';
 import {
-  cadastroPareceErrado, camposMarcados, linhasDaComparacao, type CadastroParaComparar,
+  cadastroPareceErrado, camposMarcados, linhasDaComparacao, situacaoDoCadastro, type CadastroParaComparar,
 } from '@/lib/fornecedores/compararCadastro';
 import { cn } from '@/lib/utils';
 
@@ -39,7 +39,10 @@ export function CompararCadastroDialog({
   const [confirmando, setConfirmando] = useState(false);
   const [gravando, setGravando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const errado = useMemo(() => cadastroPareceErrado(hoje, emitente), [hoje, emitente]);
+  /* FORN-NOTA-ATUALIZAR-01 (2) — sem CNPJ no cadastro, com a mesma cidade e o mesmo endereço (ou fantasia + CEP): "provável o mesmo", nunca
+     "outro fornecedor"; o CNPJ vem marcado para completar */
+  const provavel = useMemo(() => situacaoDoCadastro(hoje, proposta) === 'provavel', [hoje, proposta]);
+  const errado = useMemo(() => (provavel ? null : cadastroPareceErrado(hoje, emitente)), [provavel, hoje, emitente]);
   const n = linhas.filter((l) => l.estado !== 'igual' && marcados.has(l.grupo.chave)).length;
   const alternar = (k: string, v: boolean) => { setConfirmando(false); setMarcados((m) => { const x = new Set(m); if (v) x.add(k); else x.delete(k); return x; }); };
   const confirmar = async () => {
@@ -72,13 +75,17 @@ export function CompararCadastroDialog({
               <span className="tabular-nums">{uso ? `${uso.lancamentos} lanç. · último ${dataBr(uso.ultimo)}` : ''}</span>
             </div>
           </div>
-          <div className={cn('flex h-[26px] shrink-0 items-center gap-2 rounded-md px-2', errado ? 'bg-amber-50 text-amber-900' : 'text-muted-foreground')} data-testid="comparar-aviso">
+          <div className={cn('flex h-[26px] shrink-0 items-center gap-2 rounded-md px-2', errado ? 'bg-amber-50 text-amber-900' : provavel ? 'bg-sky-50 text-sky-900' : 'text-muted-foreground')}
+            data-testid="comparar-aviso" data-situacao={errado ? 'outro' : provavel ? 'provavel' : 'mesmo'}>
             <span className="min-w-0 uma-linha-que-rola" title={errado ?? undefined}>
-              {errado ? `⚠ ${errado}` : 'Vazio hoje vem marcado; diferente vem desmarcado — marque só o que deve mudar.'}
+              {errado ? `⚠ ${errado}`
+                : provavel ? 'Provável o mesmo fornecedor (mesma cidade e endereço) · completar o CNPJ.'
+                  : 'Vazio hoje vem marcado; diferente vem desmarcado — marque só o que deve mudar.'}
             </span>
             <span className="ml-auto" />
             {errado && onEscolherOutro && <Button type="button" size="sm" variant="outline" className="h-[20px] shrink-0 px-2 text-[10px]" onClick={onEscolherOutro} data-testid="comparar-escolher-outro">Escolher outro cadastro</Button>}
-            {errado && onCadastrarNovo && <Button type="button" size="sm" variant="outline" className="h-[20px] shrink-0 px-2 text-[10px]" onClick={onCadastrarNovo} data-testid="comparar-cadastrar-novo">Cadastrar novo</Button>}
+            {/* FORN-NOTA-ATUALIZAR-01 (3) — o novo nasce com TODOS os campos da nota e já fica escolhido; o CNPJ de outro cadastro nunca duplica (quem chama confere) */}
+            {(errado || provavel) && onCadastrarNovo && <Button type="button" size="sm" variant="outline" className="h-[20px] shrink-0 px-2 text-[10px]" onClick={onCadastrarNovo} data-testid="comparar-cadastrar-novo">Criar novo com os dados da nota</Button>}
           </div>
           <div className={cn(QUADRO_REGUA, 'min-h-0 flex-1')}>
             <table className="w-full shrink-0 table-fixed border-collapse bg-primary">

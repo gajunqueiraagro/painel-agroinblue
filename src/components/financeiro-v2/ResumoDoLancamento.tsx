@@ -1,3 +1,4 @@
+import { siglaDaForma } from '@/lib/financeiro/aprovacaoV3';
 import type { ReactNode } from 'react';
 import { Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -101,6 +102,14 @@ function Par({ a, b }: { a: LadoDoPar; b: LadoDoPar }) {
   return <tr className="h-[17px] text-[11px] leading-[14px]">{lado(a, false)}{lado(b, true)}</tr>;
 }
 
+/** RESUMO-LATERAL-FORMA-01 (Gabriel 27/11 17:00, NF 469.017: "Forma: Cartão de c…" cortado) — o valor CURTO da Forma, pela classificação
+ *  ÚNICA da forma (`siglaDaForma`, a da Aprovação), nos nomes curtos do sistema: Cartão · Boleto · Pix · TED · Débito · Dinheiro · DA (débito
+ *  automático) · Outro. Cabe nos 69px do Par sem "…"; a forma inteira vai no title. O lugar da Forma não muda (o Par é fixo). */
+export function formaCurta(f: string | null): string | null {
+  if (!f || !f.trim()) return null;
+  const s = siglaDaForma(f).sigla;
+  return s === 'Bol' ? 'Boleto' : s === 'Déb.' ? 'Débito' : s === 'Din.' ? 'Dinheiro' : s;
+}
 /** O valor CURTO da Modalidade (cabe nos 69px do Par sem "…"; o inteiro vai no title). */
 export function modalidadeCurta(m: string | null): string | null {
   if (m === 'Compra parcelada') return 'Parcelada';
@@ -164,7 +173,7 @@ export function ResumoDoLancamento(p: ResumoDoLancamentoProps) {
 
         <Bloco titulo="Pagamento" altura="h-[69px]" testid="resumo-pagamento">
           <Tabela colunas={['41px', '69px', '41px', undefined]}>
-            <Par a={{ rotulo: 'Status', valor: p.status.rotulo, cor: p.status.cor, testid: 'resumo-status' }} b={{ rotulo: 'Forma', valor: p.forma }} />
+            <Par a={{ rotulo: 'Status', valor: p.status.rotulo, cor: p.status.cor, testid: 'resumo-status' }} b={{ rotulo: 'Forma', valor: formaCurta(p.forma), titulo: p.forma ?? undefined, testid: 'resumo-forma' }} />
             <Par a={{ rotulo: 'Venc.', valor: p.vencimento }} b={{ rotulo: 'Pgto.', valor: p.pagamento }} />
             {/* P143 (Code Notas) preenche a Modalidade e as Parcelas na edição; aqui só o lugar e o que o lançamento já tem hoje */}
             {/* Gabriel 18/11 14:40 ("Compra pa…"): o valor da Modalid. é CURTO (cabe nos 69px; o inteiro no title) — `modalidadeCurta` */}

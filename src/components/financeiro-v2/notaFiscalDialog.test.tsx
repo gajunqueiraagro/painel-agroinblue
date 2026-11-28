@@ -889,12 +889,15 @@ describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro
     return screen.findByTestId('comparar-cadastro');
   };
   const linha = (rotulo: string) => screen.getAllByTestId('comparar-linha').find((l) => l.firstElementChild?.textContent === rotulo);
-  /* FORN-ACHAR-CNPJ-01 (URGENTE, Gabriel 19/11) — o nome digitado a mão ("Pec.3M-Esc. Garças …") é OUTRA razão social: CNPJ, IE e razão NÃO se
-     oferecem (o caso COAMO × Auto Posto); o aviso diz "parece outro fornecedor" e o resto vem desmarcado */
-  it('o nome digitado a mao ("Pec.3M-Esc. Garças"): razão social diferente → CNPJ/IE/razão nao se oferecem; "parece outro fornecedor"', async () => {
+  /* FORN-ACHAR-CNPJ-01 (19/11) + FORN-NOTA-ATUALIZAR-01 (28/11) — o nome digitado a mão ("Pec.3M-Esc. Garças …") é OUTRA razão social e o endereço
+     não bate: CNPJ e razão APARECEM (nada escondido), mas NADA vem marcado (o caso COAMO × Auto Posto); o aviso diz "parece outro fornecedor" */
+  it('o nome digitado a mao ("Pec.3M-Esc. Garças"): razão social diferente → CNPJ/razão aparecem DESMARCADOS; "parece outro fornecedor"', async () => {
     await abrirComparar({ nome: 'Pec.3M-Esc. Garças Agro Sintetica', nome_fantasia: null, cpf_cnpj: null, inscricao_estadual: null, municipio: 'Campo Grande', uf: 'MS' });
-    expect([linha('Razão social'), linha('CNPJ/CPF'), linha('IE')]).toEqual([undefined, undefined, undefined]);
+    expect([linha('Razão social')?.getAttribute('data-estado'), linha('CNPJ/CPF')?.getAttribute('data-estado')]).toEqual(['diferente', 'vazio']);
+    expect(screen.getByTestId('comparar-marcar-cnpj').getAttribute('data-state')).toBe('unchecked');
+    expect(screen.getByTestId('comparar-atualizar').textContent).toBe('Atualizar 0 campos');
     expect(screen.getByTestId('comparar-aviso').textContent).toContain('Parece outro fornecedor');
+    expect(screen.getByTestId('comparar-cadastrar-novo').textContent).toBe('Criar novo com os dados da nota');
   });
   it('a MESMA razão social (sem o "Ltda"): o CNPJ vazio vem marcado; o resto como sempre; "igual" sem caixa', async () => {
     await abrirComparar({ nome: 'Agro Sintética Insumos Agropecuários', nome_fantasia: null, cpf_cnpj: null, inscricao_estadual: null, municipio: 'Campo Grande', uf: 'MS' });

@@ -18,8 +18,6 @@ export function eOMesmoFornecedor(hoje: CadastroParaComparar, proposta: Cadastro
   const rh = razaoParaComparar(hoje.nome); const rp = razaoParaComparar(proposta.nome);
   return rh !== '' && rh === rp;
 }
-/** os grupos que IDENTIFICAM o fornecedor: só se oferecem quando o cadastro é o da nota (`eOMesmoFornecedor`) */
-const GRUPOS_DE_IDENTIDADE: ReadonlySet<string> = new Set(['razao', 'cnpj', 'ie']);
 
 export type CampoDoCadastro = 'nome' | 'nome_fantasia' | 'cpf_cnpj' | 'inscricao_estadual' | 'logradouro' | 'numero' | 'complemento' | 'bairro' | 'cep' | 'municipio' | 'uf';
 export type CadastroParaComparar = Partial<Record<CampoDoCadastro, string | null>>;
@@ -57,18 +55,46 @@ const texto = (g: GrupoDoCadastro, c: CadastroParaComparar) => {
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const iguais = (g: GrupoDoCadastro, a: string, b: string) => (g.comparar === 'digitos' ? soDigitos(a) === soDigitos(b) : normal(a) === normal(b));
 
-/** As linhas da tabela: so' os grupos que a nota TRAZ (o vazio da nota nao apaga nada). FORN-ACHAR-CNPJ-01 — cadastro que NÃO é o da nota
- *  (`eOMesmoFornecedor`): CNPJ/CPF, IE e razão social NUNCA se oferecem; o resto vem DESMARCADO (a tela diz "parece outro fornecedor"). */
+/** FORN-NOTA-ATUALIZAR-01 (Gabriel 28/11 07:00, NF da Santa Rita: o cadastro achado pelo nome, SEM CNPJ, com a fantasia, o endereço, o CEP
+ *  e a cidade iguais aos da nota, e a razão social escrita com um "e" a mais) — o cadastro é o da nota (`mesmo`), PROVÁVEL o mesmo (sem CNPJ
+ *  no cadastro, com CNPJ na nota, a MESMA cidade e o MESMO endereço — ou a mesma fantasia e o mesmo CEP: "completar o CNPJ") ou `outro`.
+ *  A fantasia sozinha NÃO basta (o caso COAMO × Auto Posto, FORN-ACHAR-CNPJ-01: a fantasia da nota é a cidade da unidade). */
+export type SituacaoDoCadastro = 'mesmo' | 'provavel' | 'outro';
+const grupo = (chave: string) => GRUPOS_DO_CADASTRO.find((g) => g.chave === chave);
+const igualECheio = (chave: string, hoje: CadastroParaComparar, proposta: CadastroParaComparar) => {
+  const g = grupo(chave); if (!g) return false;
+  const h = texto(g, hoje); const p = texto(g, proposta);
+  return h !== '' && p !== '' && iguais(g, h, p);
+};
+export function situacaoDoCadastro(hoje: CadastroParaComparar, proposta: CadastroParaComparar): SituacaoDoCadastro {
+  if (eOMesmoFornecedor(hoje, proposta)) return 'mesmo';
+  const semDocHoje = soDigitos(hoje.cpf_cnpj ?? '') === '';
+  const comDocNota = soDigitos(proposta.cpf_cnpj ?? '') !== '';
+  if (semDocHoje && comDocNota && igualECheio('cidade', hoje, proposta)
+    && (igualECheio('endereco', hoje, proposta) || (igualECheio('fantasia', hoje, proposta) && igualECheio('cep', hoje, proposta)))) return 'provavel';
+  return 'outro';
+}
+
+/** As linhas da tabela: so' os grupos que a nota TRAZ (o vazio da nota nao apaga nada). FORN-NOTA-ATUALIZAR-01 — os grupos que identificam
+ *  (CNPJ/CPF, razão social, IE) aparecem SEMPRE (escondê-los dava "Atualizar 0 campos" com o CNPJ faltando); o vazio vem marcado quando o
+ *  cadastro é o da nota ou provável o mesmo; com `outro` NADA vem marcado (FORN-ACHAR-CNPJ-01: o CNPJ de uma empresa não vai sozinho ao cadastro
+ *  de outra) e o diferente vem sempre desmarcado, com os dois valores. */
 export function linhasDaComparacao(hoje: CadastroParaComparar, proposta: CadastroParaComparar): LinhaDaComparacao[] {
-  const mesmo = eOMesmoFornecedor(hoje, proposta);
+  const marcaOVazio = situacaoDoCadastro(hoje, proposta) !== 'outro';
   return GRUPOS_DO_CADASTRO.flatMap((grupo) => {
-    if (!mesmo && GRUPOS_DE_IDENTIDADE.has(grupo.chave)) return [];
     const p = texto(grupo, proposta);
     if (!p) return [];
     const h = texto(grupo, hoje);
     const estado: EstadoDoCampo = !h ? 'vazio' : iguais(grupo, h, p) ? 'igual' : 'diferente';
-    return [{ grupo, hoje: h, proposto: p, estado, marcadoPadrao: mesmo && estado === 'vazio' }];
+    return [{ grupo, hoje: h, proposto: p, estado, marcadoPadrao: marcaOVazio && estado === 'vazio' }];
   });
+}
+
+/** AVISO-FORNECEDOR-IGUAL-01 (Gabriel 27/11 17:02, NF 1.119: a faixa dizia "a nota traz dados…" e o modal mostrava os 7 "igual") — quantos
+ *  campos a nota MUDARIA no cadastro, pela MESMA comparação do modal (`linhasDaComparacao`: maiúscula, acento, espaço e pontuação de
+ *  CEP/CNPJ/IE não contam). 0 = a faixa não aparece. */
+export function dadosNovosDaNota(hoje: CadastroParaComparar, proposta: CadastroParaComparar): number {
+  return linhasDaComparacao(hoje, proposta).filter((l) => l.estado !== 'igual').length;
 }
 
 /** O que vai a' RPC: so' as colunas dos grupos marcados (e so' as que a nota traz). */

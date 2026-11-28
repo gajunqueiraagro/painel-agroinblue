@@ -356,6 +356,13 @@ export async function cadastroParaComparar(clienteId: string, fornecedorId: stri
 /** NOTA-FORNECEDOR-COMPARAR-01 — grava SO' os campos marcados, com a trilha por campo (`fn_fornecedor_atualizar_campos`). */
 export async function atualizarCamposDoCadastro(fornecedorId: string, campos: Record<string, string>, origem: 'nota' | 'receita', referencia: string | null,
   clienteId: string): Promise<{ ok: true; alteracaoId: string | null } | { ok: false; frase: string }> {
+  /* FORN-NOTA-ATUALIZAR-01 (3) — o CNPJ que vai ao cadastro NUNCA é o de outro cadastro vivo (a trava do banco é adiada: a função grava). A
+     conferência que falha não grava (P146). */
+  if (campos.cpf_cnpj) {
+    const ja = await fornecedorPeloDocumento(clienteId, campos.cpf_cnpj);
+    if (ja.ok === false) return { ok: false, frase: `Não consegui conferir o CNPJ no cadastro (${ja.motivo}). Nada foi gravado — tente de novo.` };
+    if (ja.valor && ja.valor.id !== fornecedorId) return { ok: false, frase: `Este CNPJ já é do cadastro "${ja.valor.nome}". Nada foi gravado — escolha esse cadastro.` };
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
   const { data, error } = await (supabase as any).rpc('fn_fornecedor_atualizar_campos', {
     p_fornecedor: fornecedorId, p_campos: campos, p_origem: origem, p_referencia: referencia, p_simular: false,
@@ -436,14 +443,15 @@ export async function sugestaoDosItensDaNota(clienteId: string, chave: string | 
 export interface SugestaoDaNota { itens: ItemSugerido[]; fornecedor: SugestaoDoFornecedor | null }
 export async function sugestaoPelosItens(clienteId: string, e: {
   emitenteDocumento: string; destIe: string | null; emissao: string | null; favorecidoId: string | null;
-  itens: readonly { nItem: number; codigo: string | null; descricao: string; ncm: string | null }[];
+  itens: readonly { nItem: number; codigo: string | null; descricao: string; ncm: string | null; unidade?: string | null; quantidade?: string | null }[];
 }): Promise<Consulta<SugestaoDaNota>> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
     const { data, error } = await (supabase as any).rpc('fn_itens_sugerir_conta', {
       p_cliente_id: clienteId, p_emitente_documento: soDigitos(e.emitenteDocumento) || null, p_dest_ie: e.destIe || null,
       p_emissao: e.emissao || null, p_favorecido_id: e.favorecidoId || null,
-      p_itens: e.itens.map((i) => ({ n_item: i.nItem, codigo: i.codigo, descricao: i.descricao, ncm: i.ncm })),
+      /* SUGESTAO-ITENS-03 R4 (lote 114530): a unidade e a quantidade dizem atacado/granel × cantina */
+      p_itens: e.itens.map((i) => ({ n_item: i.nItem, codigo: i.codigo, descricao: i.descricao, ncm: i.ncm, unidade: i.unidade ?? null, quantidade: i.quantidade ?? null })),
     });
     if (error) return falhou(error);
     return deu({ itens: lerItensSugeridos(data), fornecedor: lerSugestaoDoFornecedor(data) });
